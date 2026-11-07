@@ -1,0 +1,10 @@
+{
+  "name": "ERROREX",
+  "description": "Minimal luxury gold calculator that unlocks an end-to-end private social messenger with an 8-digit secret PIN.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

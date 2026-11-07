@@ -1,0 +1,178 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- User Profiles ---
+    match /userProfiles/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isOwner(userId)
+        && isValidId(userId)
+        && incoming().uid == request.auth.uid
+        && incoming().username is string && incoming().username.size() >= 3 && incoming().username.size() <= 32
+        && incoming().displayName is string && incoming().displayName.size() <= 60;
+      allow update: if isOwner(userId)
+        && incoming().uid == request.auth.uid;
+      allow delete: if isOwner(userId);
+    }
+
+    // --- User Settings ---
+    match /userSettings/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // --- User Private Credentials ---
+    match /users/{userId}/private/{docId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // --- Friend Requests ---
+    match /friendRequests/{requestId} {
+      allow read: if isSignedIn() && (
+        resource.data.senderId == request.auth.uid ||
+        resource.data.receiverId == request.auth.uid
+      );
+      allow create: if isSignedIn()
+        && isValidId(requestId)
+        && incoming().senderId == request.auth.uid
+        && incoming().receiverId != request.auth.uid
+        && incoming().status == 'pending';
+      allow update: if isSignedIn() && (
+        // Receiver can accept or reject
+        (resource.data.receiverId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['status'])) ||
+        // Sender can cancel
+        (resource.data.senderId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['status']))
+      );
+      allow delete: if isSignedIn() && (
+        resource.data.senderId == request.auth.uid ||
+        resource.data.receiverId == request.auth.uid
+      );
+    }
+
+    // --- Friendships ---
+    match /friendships/{friendshipId} {
+      allow read: if isSignedIn() && (
+        resource.data.user1Id == request.auth.uid ||
+        resource.data.user2Id == request.auth.uid
+      );
+      allow create: if isSignedIn()
+        && (incoming().user1Id == request.auth.uid || incoming().user2Id == request.auth.uid);
+      allow delete: if isSignedIn() && (
+        resource.data.user1Id == request.auth.uid ||
+        resource.data.user2Id == request.auth.uid
+      );
+    }
+
+    // --- Conversations ---
+    match /conversations/{conversationId} {
+      allow read: if isSignedIn() && (
+        request.auth.uid in resource.data.participants
+      );
+      allow create: if isSignedIn()
+        && isValidId(conversationId)
+        && (request.auth.uid in incoming().participants);
+      allow update: if isSignedIn()
+        && (request.auth.uid in resource.data.participants);
+      allow delete: if isSignedIn()
+        && (request.auth.uid in resource.data.participants);
+
+      // Subcollection Messages
+      match /messages/{messageId} {
+        allow read: if isSignedIn() && (
+          request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants
+        );
+        allow create: if isSignedIn()
+          && isValidId(messageId)
+          && incoming().senderId == request.auth.uid
+          && incoming().conversationId == conversationId
+          && (request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants)
+          && incoming().text is string && incoming().text.size() <= 4000;
+        allow update: if isSignedIn()
+          && (
+            // Message sender editing text/media
+            (resource.data.senderId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['text', 'isEdited', 'isDeleted', 'reactions'])) ||
+            // Or participants adding reactions / readBy
+            (request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants && incoming().diff(existing()).affectedKeys().hasOnly(['readBy', 'reactions']))
+          );
+        allow delete: if isSignedIn() && (
+          resource.data.senderId == request.auth.uid
+        );
+      }
+    }
+
+    // --- Status Stories ---
+    match /statuses/{statusId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && isValidId(statusId)
+        && incoming().userId == request.auth.uid;
+      allow update: if isSignedIn() && (
+        // Allow updating viewers list
+        incoming().diff(existing()).affectedKeys().hasOnly(['viewers'])
+      );
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // --- WebRTC Calls ---
+    match /calls/{callId} {
+      allow read: if isSignedIn() && (
+        resource.data.callerId == request.auth.uid ||
+        resource.data.receiverId == request.auth.uid
+      );
+      allow create: if isSignedIn()
+        && isValidId(callId)
+        && incoming().callerId == request.auth.uid;
+      allow update: if isSignedIn() && (
+        resource.data.callerId == request.auth.uid ||
+        resource.data.receiverId == request.auth.uid
+      );
+      allow delete: if isSignedIn() && (
+        resource.data.callerId == request.auth.uid ||
+        resource.data.receiverId == request.auth.uid
+      );
+    }
+
+    // --- Blocked Users ---
+    match /blockedUsers/{blockedId} {
+      allow read: if isSignedIn() && (
+        resource.data.blockerId == request.auth.uid
+      );
+      allow create: if isSignedIn() && incoming().blockerId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.blockerId == request.auth.uid;
+    }
+
+    // --- Notifications ---
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid
+        && incoming().diff(existing()).affectedKeys().hasOnly(['isRead']);
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+  }
+}

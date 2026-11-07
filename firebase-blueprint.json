@@ -1,0 +1,229 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Public user profile and identity information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "username": { "type": "string", "maxLength": 32, "pattern": "^[a-zA-Z0-9_]{3,30}$" },
+        "displayName": { "type": "string", "maxLength": 60 },
+        "photoURL": { "type": "string", "maxLength": 500 },
+        "bio": { "type": "string", "maxLength": 250 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "isOnline": { "type": "boolean" },
+        "lastSeen": { "type": "string" }
+      },
+      "required": ["uid", "username", "displayName"]
+    },
+    "UserCredential": {
+      "title": "UserCredential",
+      "description": "Internal secret PIN hash verification record stored securely and accessible only via verified endpoints",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "hasPin": { "type": "boolean" },
+        "updatedAt": { "type": "string" },
+        "failedAttempts": { "type": "number" },
+        "lockedUntil": { "type": "string" }
+      },
+      "required": ["uid", "hasPin"]
+    },
+    "FriendRequest": {
+      "title": "FriendRequest",
+      "description": "Friend request invitations between registered users",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string", "maxLength": 128 },
+        "senderName": { "type": "string", "maxLength": 60 },
+        "senderUsername": { "type": "string", "maxLength": 32 },
+        "senderPhoto": { "type": "string", "maxLength": 500 },
+        "receiverId": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["pending", "accepted", "rejected", "cancelled"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["senderId", "receiverId", "status"]
+    },
+    "Friendship": {
+      "title": "Friendship",
+      "description": "Confirmed friendship between two registered users",
+      "type": "object",
+      "properties": {
+        "user1Id": { "type": "string", "maxLength": 128 },
+        "user2Id": { "type": "string", "maxLength": 128 },
+        "users": { "type": "array" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["user1Id", "user2Id", "users"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "Direct message chat or group conversation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "participants": { "type": "array" },
+        "isGroup": { "type": "boolean" },
+        "groupName": { "type": "string", "maxLength": 80 },
+        "groupPhoto": { "type": "string", "maxLength": 500 },
+        "adminIds": { "type": "array" },
+        "lastMessageText": { "type": "string", "maxLength": 2000 },
+        "lastMessageSenderId": { "type": "string", "maxLength": 128 },
+        "lastMessageAt": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["participants", "isGroup"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Individual message in a conversation",
+      "type": "object",
+      "properties": {
+        "conversationId": { "type": "string", "maxLength": 128 },
+        "senderId": { "type": "string", "maxLength": 128 },
+        "senderName": { "type": "string", "maxLength": 60 },
+        "text": { "type": "string", "maxLength": 4000 },
+        "mediaUrl": { "type": "string", "maxLength": 1000 },
+        "mediaType": { "type": "string", "enum": ["none", "image", "video", "file", "audio"] },
+        "audioDuration": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "readBy": { "type": "array" },
+        "replyToMessageId": { "type": "string", "maxLength": 128 },
+        "replyToText": { "type": "string", "maxLength": 200 },
+        "reactions": { "type": "object" },
+        "isEdited": { "type": "boolean" },
+        "isDeleted": { "type": "boolean" }
+      },
+      "required": ["conversationId", "senderId"]
+    },
+    "UserStatus": {
+      "title": "UserStatus",
+      "description": "Ephemeral 24-hour status story update",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "userName": { "type": "string", "maxLength": 60 },
+        "userPhoto": { "type": "string", "maxLength": 500 },
+        "type": { "type": "string", "enum": ["text", "image", "video"] },
+        "text": { "type": "string", "maxLength": 500 },
+        "mediaUrl": { "type": "string", "maxLength": 1000 },
+        "caption": { "type": "string", "maxLength": 300 },
+        "bgColor": { "type": "string", "maxLength": 30 },
+        "viewers": { "type": "array" },
+        "createdAt": { "type": "string" },
+        "expiresAt": { "type": "string" }
+      },
+      "required": ["userId", "type", "createdAt", "expiresAt"]
+    },
+    "CallRecord": {
+      "title": "CallRecord",
+      "description": "WebRTC voice/video call signaling and log",
+      "type": "object",
+      "properties": {
+        "callerId": { "type": "string", "maxLength": 128 },
+        "callerName": { "type": "string", "maxLength": 60 },
+        "callerPhoto": { "type": "string", "maxLength": 500 },
+        "receiverId": { "type": "string", "maxLength": 128 },
+        "callType": { "type": "string", "enum": ["audio", "video"] },
+        "status": { "type": "string", "enum": ["ringing", "accepted", "rejected", "ended", "missed"] },
+        "offer": { "type": "string", "maxLength": 25000 },
+        "answer": { "type": "string", "maxLength": 25000 },
+        "createdAt": { "type": "string" },
+        "endedAt": { "type": "string" },
+        "durationSeconds": { "type": "number" }
+      },
+      "required": ["callerId", "receiverId", "callType", "status"]
+    },
+    "UserSettings": {
+      "title": "UserSettings",
+      "description": "User specific preferences and theme configuration",
+      "type": "object",
+      "properties": {
+        "theme": { "type": "string", "enum": ["gold", "emerald", "ocean", "purple", "rose", "sunset", "electric", "teal"] },
+        "mode": { "type": "string", "enum": ["dark", "light"] },
+        "soundEnabled": { "type": "boolean" },
+        "readReceipts": { "type": "boolean" },
+        "lastSeenPrivacy": { "type": "string", "enum": ["everyone", "friends", "nobody"] },
+        "statusPrivacy": { "type": "string", "enum": ["everyone", "friends", "nobody"] },
+        "profilePhotoPrivacy": { "type": "string", "enum": ["everyone", "friends", "nobody"] },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["theme", "mode"]
+    },
+    "BlockedUser": {
+      "title": "BlockedUser",
+      "description": "User blocked relation",
+      "type": "object",
+      "properties": {
+        "blockerId": { "type": "string", "maxLength": 128 },
+        "blockedId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["blockerId", "blockedId"]
+    },
+    "NotificationItem": {
+      "title": "NotificationItem",
+      "description": "In-app notifications for friends, calls, and messages",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "type": { "type": "string", "enum": ["friend_request", "request_accepted", "call_missed", "group_invite"] },
+        "title": { "type": "string", "maxLength": 100 },
+        "body": { "type": "string", "maxLength": 250 },
+        "senderId": { "type": "string", "maxLength": 128 },
+        "link": { "type": "string", "maxLength": 200 },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId", "type", "title", "body"]
+    }
+  },
+  "firestore": {
+    "/userProfiles/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Public user profile document accessible to registered users"
+    },
+    "/users/{userId}/private/credentials": {
+      "schema": { "$ref": "#/entities/UserCredential" },
+      "description": "Private credentials document only readable/writable by owner"
+    },
+    "/userSettings/{userId}": {
+      "schema": { "$ref": "#/entities/UserSettings" },
+      "description": "User specific application settings and themes"
+    },
+    "/friendRequests/{requestId}": {
+      "schema": { "$ref": "#/entities/FriendRequest" },
+      "description": "Friend requests sent from one user to another"
+    },
+    "/friendships/{friendshipId}": {
+      "schema": { "$ref": "#/entities/Friendship" },
+      "description": "Active friendship links between users"
+    },
+    "/conversations/{conversationId}": {
+      "schema": { "$ref": "#/entities/Conversation" },
+      "description": "Direct message and group conversation metadata"
+    },
+    "/conversations/{conversationId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "Messages inside a conversation"
+    },
+    "/statuses/{statusId}": {
+      "schema": { "$ref": "#/entities/UserStatus" },
+      "description": "24-hour status stories posted by users"
+    },
+    "/calls/{callId}": {
+      "schema": { "$ref": "#/entities/CallRecord" },
+      "description": "Signaling for voice and video calls between users"
+    },
+    "/blockedUsers/{blockedId}": {
+      "schema": { "$ref": "#/entities/BlockedUser" },
+      "description": "Blocked user links"
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/NotificationItem" },
+      "description": "In-app notifications for authenticated users"
+    }
+  }
+}

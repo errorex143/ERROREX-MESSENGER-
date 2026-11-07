@@ -1,0 +1,330 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --font-display: 'Cinzel', serif;
+    --font-sans: 'Plus Jakarta Sans', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+
+    /* Theme colors: default Royal Gold */
+    --accent-primary: #D4AF37;
+    --accent-secondary: #AA7C11;
+    --accent-glow: rgba(212, 175, 55, 0.35);
+    --accent-surface: rgba(212, 175, 55, 0.08);
+    --accent-border: rgba(212, 175, 55, 0.25);
+
+    /* Light Mode Default Variables */
+    --bg-page: #F7F5EE;
+    --bg-sidebar: #FFFFFF;
+    --bg-list: #FAF8F3;
+    --bg-window: #F2EFE8;
+    --bg-card: #FFFFFF;
+    --bg-card-hover: #F8F6F0;
+    --bg-bubble-in: #FFFFFF;
+    --border-bubble-in: #E5E1D5;
+    --text-main: #18181B;
+    --text-muted: #6B7280;
+    --input-bg: #FFFFFF;
+    --input-border: #D1D5DB;
+
+    /* Calculator Light Mode */
+    --calc-card-bg: #FFFFFF;
+    --calc-display-bg: #EAE6DB;
+    --calc-display-text: #18181B;
+    --calc-btn-bg: #FFFFFF;
+    --calc-btn-text: #18181B;
+    --calc-btn-border: rgba(212, 175, 55, 0.3);
+  }
+
+  .dark {
+    /* Dark Mode Overrides */
+    --bg-page: #050507;
+    --bg-sidebar: #0A0A0D;
+    --bg-list: #0D0D11;
+    --bg-window: #070709;
+    --bg-card: #0E0E12;
+    --bg-card-hover: #16161D;
+    --bg-bubble-in: #141418;
+    --border-bubble-in: #27272A;
+    --text-main: #F4F4F5;
+    --text-muted: #A1A1AA;
+    --input-bg: rgba(0, 0, 0, 0.6);
+    --input-border: #27272A;
+
+    /* Calculator Dark Mode */
+    --calc-card-bg: linear-gradient(145deg, rgba(26, 26, 30, 0.95) 0%, rgba(14, 14, 16, 0.98) 100%);
+    --calc-display-bg: #09090B;
+    --calc-display-text: #FFFFFF;
+    --calc-btn-bg: linear-gradient(145deg, #221F17 0%, #15130E 100%);
+    --calc-btn-text: #FFFFFF;
+    --calc-btn-border: var(--accent-border);
+  }
+
+  /* 8 Distinct Luxury Accent Themes */
+  [data-theme="gold"] {
+    --accent-primary: #D4AF37;
+    --accent-secondary: #B8860B;
+    --accent-glow: rgba(212, 175, 55, 0.35);
+    --accent-surface: rgba(212, 175, 55, 0.12);
+    --accent-border: rgba(212, 175, 55, 0.3);
+  }
+
+  [data-theme="emerald"] {
+    --accent-primary: #10B981;
+    --accent-secondary: #059669;
+    --accent-glow: rgba(16, 185, 129, 0.35);
+    --accent-surface: rgba(16, 185, 129, 0.12);
+    --accent-border: rgba(16, 185, 129, 0.3);
+  }
+
+  [data-theme="ocean"] {
+    --accent-primary: #3B82F6;
+    --accent-secondary: #2563EB;
+    --accent-glow: rgba(59, 130, 246, 0.35);
+    --accent-surface: rgba(59, 130, 246, 0.12);
+    --accent-border: rgba(59, 130, 246, 0.3);
+  }
+
+  [data-theme="purple"] {
+    --accent-primary: #A855F7;
+    --accent-secondary: #9333EA;
+    --accent-glow: rgba(168, 85, 247, 0.35);
+    --accent-surface: rgba(168, 85, 247, 0.12);
+    --accent-border: rgba(168, 85, 247, 0.3);
+  }
+
+  [data-theme="rose"] {
+    --accent-primary: #F43F5E;
+    --accent-secondary: #E11D48;
+    --accent-glow: rgba(244, 63, 94, 0.35);
+    --accent-surface: rgba(244, 63, 94, 0.12);
+    --accent-border: rgba(244, 63, 94, 0.3);
+  }
+
+  [data-theme="sunset"] {
+    --accent-primary: #F97316;
+    --accent-secondary: #EA580C;
+    --accent-glow: rgba(249, 115, 22, 0.35);
+    --accent-surface: rgba(249, 115, 22, 0.12);
+    --accent-border: rgba(249, 115, 22, 0.3);
+  }
+
+  [data-theme="electric"] {
+    --accent-primary: #06B6D4;
+    --accent-secondary: #0891B2;
+    --accent-glow: rgba(6, 182, 212, 0.35);
+    --accent-surface: rgba(6, 182, 212, 0.12);
+    --accent-border: rgba(6, 182, 212, 0.3);
+  }
+
+  [data-theme="teal"] {
+    --accent-primary: #14B8A6;
+    --accent-secondary: #0D9488;
+    --accent-glow: rgba(20, 184, 166, 0.35);
+    --accent-surface: rgba(20, 184, 166, 0.12);
+    --accent-border: rgba(20, 184, 166, 0.3);
+  }
+
+  [data-theme="white"] {
+    --accent-primary: #F8FAFC;
+    --accent-secondary: #CBD5E1;
+    --accent-glow: rgba(248, 250, 252, 0.45);
+    --accent-surface: rgba(248, 250, 252, 0.15);
+    --accent-border: rgba(248, 250, 252, 0.35);
+  }
+
+  [data-theme="black"] {
+    --accent-primary: #E4E4E7;
+    --accent-secondary: #71717A;
+    --accent-glow: rgba(255, 255, 255, 0.25);
+    --accent-surface: rgba(255, 255, 255, 0.1);
+    --accent-border: rgba(255, 255, 255, 0.25);
+  }
+
+  [data-theme="crimson"] {
+    --accent-primary: #DC2626;
+    --accent-secondary: #991B1B;
+    --accent-glow: rgba(220, 38, 38, 0.4);
+    --accent-surface: rgba(220, 38, 38, 0.14);
+    --accent-border: rgba(220, 38, 38, 0.35);
+  }
+
+  [data-theme="midnight"] {
+    --accent-primary: #6366F1;
+    --accent-secondary: #4338CA;
+    --accent-glow: rgba(99, 102, 241, 0.4);
+    --accent-surface: rgba(99, 102, 241, 0.14);
+    --accent-border: rgba(99, 102, 241, 0.35);
+  }
+
+  [data-theme="forest"] {
+    --accent-primary: #059669;
+    --accent-secondary: #064E3B;
+    --accent-glow: rgba(5, 150, 105, 0.4);
+    --accent-surface: rgba(5, 150, 105, 0.14);
+    --accent-border: rgba(5, 150, 105, 0.35);
+  }
+
+  [data-theme="bronze"] {
+    --accent-primary: #D97706;
+    --accent-secondary: #92400E;
+    --accent-glow: rgba(217, 119, 6, 0.4);
+    --accent-surface: rgba(217, 119, 6, 0.14);
+    --accent-border: rgba(217, 119, 6, 0.35);
+  }
+
+  body {
+    font-family: var(--font-sans);
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg-page);
+    color: var(--text-main);
+    overflow-x: hidden;
+    transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+}
+
+/* Custom Luxury Gold & Marble Styling Utilities */
+.font-display {
+  font-family: var(--font-display);
+}
+
+.font-mono-calc {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.gold-gradient-text {
+  background: linear-gradient(135deg, #FFFFFF 0%, var(--accent-primary) 60%, var(--accent-secondary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.light .gold-gradient-text {
+  background: linear-gradient(135deg, var(--accent-secondary) 0%, var(--accent-primary) 50%, #18181B 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gold-border {
+  border: 1px solid var(--accent-border);
+}
+
+.gold-glow {
+  box-shadow: 0 0 25px var(--accent-glow);
+}
+
+.gold-glow-sm {
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+/* Luxury button styling */
+.gold-button {
+  background: var(--calc-btn-bg);
+  color: var(--calc-btn-text);
+  border: 1px solid var(--calc-btn-border);
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.gold-button:hover {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 15px var(--accent-glow);
+}
+
+.gold-button:active {
+  transform: scale(0.97);
+}
+
+.gold-button-accent {
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+  color: #000000;
+  font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 2px 14px var(--accent-glow);
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.gold-button-accent:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 4px 20px var(--accent-glow);
+}
+
+.gold-button-accent:active {
+  transform: scale(0.97);
+}
+
+/* Background surfaces */
+.bg-marble-surface {
+  background:
+    radial-gradient(circle at 15% 15%, rgba(212, 175, 55, 0.08) 0%, transparent 40%),
+    radial-gradient(circle at 85% 85%, rgba(0, 0, 0, 0.02) 0%, transparent 40%),
+    linear-gradient(180deg, #F8F5EE 0%, #EDE9DE 100%);
+}
+
+.dark .bg-marble-surface {
+  background:
+    radial-gradient(circle at 15% 15%, rgba(212, 175, 55, 0.04) 0%, transparent 40%),
+    radial-gradient(circle at 85% 85%, rgba(255, 255, 255, 0.02) 0%, transparent 40%),
+    linear-gradient(180deg, #0D0D0E 0%, #060607 100%);
+}
+
+.bg-marble-card {
+  background: var(--calc-card-bg);
+  border-color: var(--accent-border);
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+}
+.dark ::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--accent-border);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-primary);
+}
+
+/* --- Live Animated Emoji Stickers --- */
+@keyframes livePulse {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 4px var(--accent-primary)); }
+  50% { transform: scale(1.22); filter: drop-shadow(0 0 14px var(--accent-primary)); }
+}
+@keyframes liveBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px) scale(1.1); }
+}
+@keyframes liveSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes liveWiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-14deg) scale(1.08); }
+  75% { transform: rotate(14deg) scale(1.08); }
+}
+@keyframes liveFloat {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-6px) rotate(6deg); }
+}
+@keyframes liveShimmer {
+  0%, 100% { filter: brightness(1) drop-shadow(0 0 4px gold); transform: scale(1); }
+  50% { filter: brightness(1.4) drop-shadow(0 0 16px gold); transform: scale(1.15); }
+}
+
+.live-pulse { animation: livePulse 1.8s infinite ease-in-out; display: inline-block; }
+.live-bounce { animation: liveBounce 1.4s infinite ease-in-out; display: inline-block; }
+.live-spin { animation: liveSpin 4s infinite linear; display: inline-block; }
+.live-wiggle { animation: liveWiggle 1.1s infinite ease-in-out; display: inline-block; }
+.live-float { animation: liveFloat 2.2s infinite ease-in-out; display: inline-block; }
+.live-shimmer { animation: liveShimmer 2s infinite ease-in-out; display: inline-block; }
+
