@@ -332,8 +332,11 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, () => {
-    console.log(`ERROREX Standalone Sovereign backend running on port ${PORT}`);
+  const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server listening on port ${PORT}`);
+  });
+  server.on('error', (err: any) => {
+    console.error('Server error:', err);
   });
 }
 

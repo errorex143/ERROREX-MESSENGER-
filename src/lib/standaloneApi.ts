@@ -1,5 +1,6 @@
 // STANDALONE LOCAL API & REACTIVE STORE FOR ERROREX
-// 100% Independent of Firebase - Fast, Reliable, Self-Contained
+// 100% Independent of Firebase - Integrated with Supabase PostgreSQL & Local Storage
+import { supabase, isSupabaseConfigured } from './supabase';
 
 export interface StandaloneUser {
   uid: string;
@@ -243,6 +244,34 @@ class StandaloneAuthService {
   async signInWithEmailAndPassword(email: string, pass: string): Promise<{ user: StandaloneUser }> {
     const cleanEmail = email.toLowerCase().trim();
     
+    // If Supabase is configured with real credentials, authenticate via Supabase
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: cleanEmail,
+          password: pass
+        });
+        if (error) {
+          console.warn('[Supabase Auth] Login notice:', error.message);
+        } else if (data?.user) {
+          const suUser: StandaloneUser = {
+            uid: data.user.id,
+            email: data.user.email || cleanEmail,
+            displayName: data.user.user_metadata?.display_name || cleanEmail.split('@')[0],
+            photoURL: data.user.user_metadata?.avatar_url || '',
+            emailVerified: Boolean(data.user.email_confirmed_at),
+            getIdToken: async () => data.session?.access_token || `token_${data.user.id}`
+          };
+          this._currentUser = suUser;
+          localStorage.setItem('errorex_standalone_user', JSON.stringify(suUser));
+          this.emitAuthChange();
+          return { user: suUser };
+        }
+      } catch (err) {
+        console.warn('[Supabase Auth] Fallback to standalone store:', err);
+      }
+    }
+
     // Check if master user
     if (cleanEmail === 'webdwebd18@gmail.com' && pass === 'noor1434') {
       const masterUser: StandaloneUser = {
@@ -302,6 +331,40 @@ class StandaloneAuthService {
     const uid = `user_${Date.now()}`;
     const displayName = cleanEmail.split('@')[0];
 
+    // If Supabase is configured with real credentials, register via Supabase
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase.auth.signUp({
+          email: cleanEmail,
+          password: pass,
+          options: {
+            data: { display_name: displayName }
+          }
+        });
+        if (error) {
+          throw new Error(error.message);
+        }
+        if (data?.user) {
+          const targetUser = data.user;
+          const suUser: StandaloneUser = {
+            uid: targetUser.id,
+            email: targetUser.email || cleanEmail,
+            displayName,
+            photoURL: '',
+            emailVerified: Boolean(targetUser.email_confirmed_at),
+            getIdToken: async () => data.session?.access_token || `token_${targetUser.id}`
+          };
+          this._currentUser = suUser;
+          localStorage.setItem('errorex_standalone_user', JSON.stringify(suUser));
+          this.emitAuthChange();
+          return { user: suUser };
+        }
+      } catch (err: any) {
+        console.warn('[Supabase Auth] Registration notice:', err);
+        throw err;
+      }
+    }
+
     const regUsersRaw = localStorage.getItem('errorex_registered_users');
     const regUsers: any[] = regUsersRaw ? JSON.parse(regUsersRaw) : [];
 
@@ -349,6 +412,13 @@ class StandaloneAuthService {
   }
 
   async signOut(): Promise<void> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.auth.signOut();
+      } catch (e) {
+        // quiet
+      }
+    }
     this._currentUser = null;
     localStorage.removeItem('errorex_standalone_user');
     this.emitAuthChange();
@@ -590,8 +660,19 @@ export async function setDoc(docRef: StandaloneDocRef, data: any, options?: { me
   } else {
     items.push(record);
   }
-
   saveCollectionData(docRef.collectionName, items);
+
+  // Background sync to Supabase PostgreSQL if configured
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const tableName = docRef.collectionName === 'userProfiles' ? 'user_profiles' : docRef.collectionName;
+      supabase.from(tableName).upsert(record).then(({ error }) => {
+        if (error) console.warn(`[Supabase Sync] ${tableName}:`, error.message);
+      });
+    } catch (e) {
+      // quiet background sync
+    }
+  }
 }
 
 export async function updateDoc(docRef: StandaloneDocRef, updates: any): Promise<void> {
