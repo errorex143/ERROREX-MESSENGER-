@@ -62,29 +62,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'status', label: 'Status & Groups', icon: Sparkles },
     { id: 'friends', label: 'Social Circle', icon: UserPlus, badge: pendingRequestsCount },
     { id: 'errorex_ai', label: 'ERROREX AI', icon: Bot },
-    { id: 'profile', label: 'Profile', icon: User },
-    { id: 'settings', label: 'Settings & Themes', icon: Settings }
+    { id: 'settings', label: 'Settings', icon: Settings }
   ];
 
   return (
     <aside className="w-16 lg:w-64 h-full bg-[var(--bg-sidebar)] border-r border-[var(--accent-border)] flex flex-col justify-between py-4 select-none shrink-0 z-20 transition-colors">
-      {/* Brand & Top Lock Button */}
       <div className="flex-1 min-h-0 flex flex-col px-3 overflow-hidden">
-        <div className="flex items-center justify-between mb-3 px-1 shrink-0">
-          <CrownLogo size="sm" showWordmark={true} className="hidden lg:inline-flex" />
-          <CrownLogo size="sm" showWordmark={false} className="lg:hidden mx-auto" />
-          
-          {/* Settings Function Button */}
-          <button
-            onClick={handleOpenSettings}
-            title="Open Settings (Themes, 3 Modes, Profile, Privacy & PIN)"
-            className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-[var(--accent-border)] bg-[var(--accent-surface)] text-[var(--accent-primary)] hover:gold-glow-sm hover:scale-105 active:scale-95 transition-all shadow-sm group cursor-pointer"
-          >
-            <Settings className="w-4 h-4 group-hover:rotate-45 transition-transform" />
-            <span className="text-[11px] font-semibold">Settings</span>
-          </button>
-        </div>
-
         {/* Instant Vault Lock Button */}
         <button
           onClick={lockMessenger}
@@ -110,7 +93,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             return (
               <button
                 key={item.id}
-                onClick={() => onSelectTab(item.id as MessengerTab)}
+                onClick={() => {
+                  if (item.id === 'settings' && onOpenSettingsModal) {
+                    onOpenSettingsModal();
+                  } else {
+                    onSelectTab(item.id as MessengerTab);
+                  }
+                }}
                 className={`w-full py-2 px-2.5 rounded-xl flex items-center justify-center lg:justify-between transition-all relative ${
                   isActive
                     ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--text-main)] font-semibold shadow-sm'
@@ -153,7 +142,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   className="w-full h-full object-cover"
                 />
               ) : (
-                userProfile?.displayName?.slice(0, 1).toUpperCase() || 'E'
+                userProfile?.displayName?.slice(0, 1).toUpperCase() || 'U'
               )}
             </div>
             <div className="hidden lg:flex flex-col overflow-hidden text-left">
@@ -167,14 +156,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
 
           <div className="flex items-center gap-1">
-            {/* Settings Function Button on Mobile & Tablet */}
-            <button
-              onClick={handleOpenSettings}
-              title="Open Settings"
-              className="lg:hidden p-1.5 rounded-lg text-neutral-500 hover:text-[var(--accent-primary)] hover:bg-[var(--accent-surface)] transition-colors"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
             <button
               onClick={logout}
               title="Log Out"

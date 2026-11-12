@@ -79,106 +79,27 @@ function saveCollectionData<T = any>(collectionName: string, data: T[]): void {
   }
 }
 
-// Initial Seed Data for Instant Usability
-function seedInitialDataIfEmpty() {
-  // 1. userProfiles
-  const profiles = getCollectionData('userProfiles');
-  if (profiles.length === 0) {
-    saveCollectionData('userProfiles', [
-      {
-        uid: 'test_user_noor_1434',
-        username: 'noor',
-        displayName: 'Noor',
-        photoURL: '',
-        bio: 'ERROREX Sovereign Master Account',
-        createdAt: new Date().toISOString(),
-        isOnline: true,
-        lastSeen: new Date().toISOString()
-      },
-      {
-        uid: 'user_elena',
-        username: 'elena_rostova',
-        displayName: 'Elena Rostova',
-        photoURL: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-        bio: 'Zurich diplomatic liaison • Encrypted communications only',
-        createdAt: new Date().toISOString(),
-        isOnline: true,
-        lastSeen: new Date().toISOString()
-      },
-      {
-        uid: 'user_alexander',
-        username: 'alex_vance',
-        displayName: 'Alexander Vance',
-        photoURL: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-        bio: 'Geneva vault custodian • Verified partner',
-        createdAt: new Date().toISOString(),
-        isOnline: true,
-        lastSeen: new Date().toISOString()
-      },
-      {
-        uid: 'user_marcus',
-        username: 'marcus_sterling',
-        displayName: 'Marcus Sterling',
-        photoURL: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
-        bio: 'Swiss portfolio manager • Sovereign wealth desk',
-        createdAt: new Date().toISOString(),
-        isOnline: true,
-        lastSeen: new Date().toISOString()
+// Clean slate: No test users or mock accounts
+function cleanLegacyData() {
+  try {
+    const saved = localStorage.getItem('errorex_standalone_user');
+    if (saved) {
+      const u = JSON.parse(saved);
+      if (u.uid === 'test_user_noor_1434' || u.displayName === 'Noor' || u.username === 'noor') {
+        localStorage.removeItem('errorex_standalone_user');
       }
-    ]);
-  }
-
-  // 2. friendships
-  const friendships = getCollectionData('friendships');
-  if (friendships.length === 0) {
-    saveCollectionData('friendships', [
-      {
-        id: 'friendship_1',
-        users: ['test_user_noor_1434', 'user_elena'],
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: 'friendship_2',
-        users: ['test_user_noor_1434', 'user_alexander'],
-        createdAt: new Date().toISOString()
-      }
-    ]);
-  }
-
-  // 3. statuses
-  const statuses = getCollectionData('statuses');
-  if (statuses.length === 0) {
-    saveCollectionData('statuses', [
-      {
-        id: 'status_elena_1',
-        userId: 'user_elena',
-        userName: 'Elena Rostova',
-        userPhoto: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-        type: 'text',
-        text: 'Vault transfer completed in Zurich. Everything secured under 404 protocols. 👑',
-        bgColor: '#1E1B4B',
-        caption: 'Zurich Vault update',
-        viewsCount: 14,
-        createdAt: new Date(Date.now() - 1000 * 60 * 35).toISOString()
-      },
-      {
-        id: 'status_alexander_1',
-        userId: 'user_alexander',
-        userName: 'Alexander Vance',
-        userPhoto: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-        type: 'text',
-        text: 'ERROREX sovereign encryption active. Sovereign communications only.',
-        bgColor: '#0F172A',
-        caption: 'Operational security notice',
-        viewsCount: 22,
-        createdAt: new Date(Date.now() - 1000 * 60 * 120).toISOString()
-      }
-    ]);
+    }
+    // Clean old collection seeds
+    const oldProfiles = getCollectionData('userProfiles');
+    const filteredProfiles = oldProfiles.filter((p: any) => p.uid !== 'test_user_noor_1434' && p.uid !== 'user_test_partner');
+    if (filteredProfiles.length !== oldProfiles.length) {
+      saveCollectionData('userProfiles', filteredProfiles);
+    }
+  } catch (e) {
+    // quiet
   }
 }
-
-// Run initial seed on load
-seedInitialDataIfEmpty();
+cleanLegacyData();
 
 // --- STANDALONE AUTH SERVICE ---
 class StandaloneAuthService {
@@ -194,22 +115,17 @@ class StandaloneAuthService {
       const saved = localStorage.getItem('errorex_standalone_user');
       if (saved) {
         const u = JSON.parse(saved);
+        if (u.uid === 'test_user_noor_1434' || u.displayName === 'Noor') {
+          localStorage.removeItem('errorex_standalone_user');
+          this._currentUser = null;
+          return;
+        }
         this._currentUser = {
           ...u,
           getIdToken: async () => `token_${u.uid}`
         };
       } else {
-        // Default to Master user Noor
-        const defaultUser: StandaloneUser = {
-          uid: 'test_user_noor_1434',
-          email: 'webdwebd18@gmail.com',
-          displayName: 'Noor',
-          photoURL: '',
-          emailVerified: true,
-          getIdToken: async () => 'errorex_token_test_user_noor_1434'
-        };
-        this._currentUser = defaultUser;
-        localStorage.setItem('errorex_standalone_user', JSON.stringify(defaultUser));
+        this._currentUser = null;
       }
     } catch (e) {
       this._currentUser = null;
@@ -231,7 +147,7 @@ class StandaloneAuthService {
     };
   }
 
-  private emitAuthChange() {
+  public emitAuthChange() {
     this.authListeners.forEach(cb => {
       try {
         cb(this._currentUser);
@@ -272,21 +188,6 @@ class StandaloneAuthService {
       }
     }
 
-    // Check if master user
-    if (cleanEmail === 'webdwebd18@gmail.com' && pass === 'noor1434') {
-      const masterUser: StandaloneUser = {
-        uid: 'test_user_noor_1434',
-        email: 'webdwebd18@gmail.com',
-        displayName: 'Noor',
-        photoURL: '',
-        emailVerified: true,
-        getIdToken: async () => 'errorex_token_test_user_noor_1434'
-      };
-      this._currentUser = masterUser;
-      localStorage.setItem('errorex_standalone_user', JSON.stringify(masterUser));
-      this.emitAuthChange();
-      return { user: masterUser };
-    }
 
     // Check registered accounts
     const regUsersRaw = localStorage.getItem('errorex_registered_users');

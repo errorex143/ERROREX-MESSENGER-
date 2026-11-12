@@ -21,16 +21,17 @@ import {
   getDocs
 } from '../../lib/firebase';
 import { CrownLogo } from '../common/CrownLogo';
-import { MessageSquare, X, UserPlus, Plus, AtSign, Users, ShieldCheck } from 'lucide-react';
+import { MessageSquare, X, UserPlus, Plus, AtSign, Users, ShieldCheck, Settings, Lock } from 'lucide-react';
 
 export const MessengerDashboard: React.FC = () => {
-  const { user, userProfile } = useAuth();
-  const currentUserId = user?.uid || 'test_user_noor_1434';
-  const currentUserName = userProfile?.displayName || 'Noor';
+  const { user, userProfile, lockMessenger } = useAuth();
+  const storedProfile = chatStore.getUserProfile();
+  const currentUserId = user?.uid || storedProfile.uid || 'user_active';
+  const currentUserName = userProfile?.displayName || storedProfile.displayName || user?.displayName || 'User';
 
   const [activeTab, setActiveTab] = useState<MessengerTab>('chats');
   const [conversations, setConversations] = useState<Conversation[]>(() =>
-    chatStore.getConversations()
+    chatStore.getConversations(currentUserId)
   );
 
   // User requirement: "phly all chat details show ho k kis kis ki chat hy"
@@ -49,21 +50,26 @@ export const MessengerDashboard: React.FC = () => {
   // Settings function modal state (from sidebar Settings button)
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
-  // 1. Subscribe to chatStore updates
+  // 1. Subscribe to chatStore updates for currentUserId (private isolation)
   useEffect(() => {
     const updateFromStore = () => {
-      const convs = chatStore.getConversations();
+      const convs = chatStore.getConversations(currentUserId);
       setConversations(convs);
     };
 
     updateFromStore();
     const unsub = chatStore.subscribe(updateFromStore);
     return () => unsub();
-  }, []);
+  }, [currentUserId]);
+
+  // Reset active conversation when user changes or logs out (private isolation)
+  useEffect(() => {
+    setActiveConversationId(null);
+  }, [currentUserId]);
 
   // 2. Listen for pending incoming friend requests from Firestore (graceful)
   useEffect(() => {
-    if (!currentUserId || currentUserId.startsWith('test_user_')) return;
+    if (!currentUserId) return;
     try {
       const q = query(
         collection(db, 'friendRequests'),
@@ -81,7 +87,7 @@ export const MessengerDashboard: React.FC = () => {
 
   // 3. Load friends list for direct chat launch
   useEffect(() => {
-    if (!currentUserId || currentUserId.startsWith('test_user_')) return;
+    if (!currentUserId) return;
     try {
       const q = query(
         collection(db, 'friendships'),
@@ -133,7 +139,13 @@ export const MessengerDashboard: React.FC = () => {
       false,
       targetUser.username,
       targetUser.photoURL,
-      targetUser.bio
+      targetUser.bio,
+      currentUserId,
+      {
+        displayName: currentUserName,
+        username: storedProfile.username || 'user',
+        photoURL: storedProfile.photoURL || ''
+      }
     );
     setActiveConversationId(newConv.id);
     setActiveTab('chats');
@@ -149,7 +161,19 @@ export const MessengerDashboard: React.FC = () => {
       ? newChatUsernameInput.trim().replace(/^@/, '').toLowerCase()
       : undefined;
 
-    const newConv = chatStore.createConversation(newChatNameInput.trim(), false, customUsername);
+    const newConv = chatStore.createConversation(
+      newChatNameInput.trim(),
+      false,
+      customUsername,
+      undefined,
+      undefined,
+      currentUserId,
+      {
+        displayName: currentUserName,
+        username: storedProfile.username || 'user',
+        photoURL: storedProfile.photoURL || ''
+      }
+    );
     setNewChatNameInput('');
     setNewChatUsernameInput('');
     setActiveConversationId(newConv.id);
@@ -161,22 +185,34 @@ export const MessengerDashboard: React.FC = () => {
   const contacts = chatStore.getContacts();
 
   return (
-    <div className="h-screen w-screen flex bg-[var(--bg-page)] text-[var(--text-main)] overflow-hidden relative font-sans transition-colors">
-      {/* Sidebar Navigation: on mobile, if an active chat is open, hide sidebar so chat gets full 100% width */}
-      <div className={activeTab === 'chats' && activeConversationId ? 'hidden md:flex h-full shrink-0' : 'flex h-full shrink-0'}>
-        <Sidebar
-          activeTab={activeTab}
-          onSelectTab={tab => {
-            setActiveTab(tab);
-          }}
-          unreadMessagesCount={conversations.reduce((acc, c) => acc + (c.unreadCount || 0), 0)}
-          pendingRequestsCount={pendingRequestsCount}
-          onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
-        />
-      </div>
+    <div className="h-screen w-screen flex flex-col bg-[var(--bg-page)] text-[var(--text-main)] overflow-hidden relative font-sans transition-colors">
+      {/* Front Top Sovereign Header: ERROREX alone, fully visible without Setting or Lock buttons */}
+      <header className="w-full h-13 border-b border-[var(--accent-border)] bg-[var(--bg-sidebar)] flex items-center justify-between px-4 sm:px-6 shrink-0 z-30 shadow-sm select-none">
+        <div className="flex items-center gap-3 min-w-0">
+          <CrownLogo size="md" showWordmark={true} />
+          <span className="hidden sm:inline-flex text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-[var(--accent-surface)] text-[var(--accent-primary)] border border-[var(--accent-border)] font-bold uppercase tracking-widest">
+            Sovereign Messenger
+          </span>
+        </div>
+      </header>
 
-      {/* Main Workspace Area */}
-      <div className="flex-1 h-full flex overflow-hidden">
+      {/* Main Workspace Area (Sidebar + Active View) */}
+      <div className="flex-1 w-full flex overflow-hidden">
+        {/* Sidebar Navigation: on mobile, if an active chat is open, hide sidebar so chat gets full 100% width */}
+        <div className={activeTab === 'chats' && activeConversationId ? 'hidden md:flex h-full shrink-0' : 'flex h-full shrink-0'}>
+          <Sidebar
+            activeTab={activeTab}
+            onSelectTab={tab => {
+              setActiveTab(tab);
+            }}
+            unreadMessagesCount={conversations.reduce((acc, c) => acc + (c.unreadCount || 0), 0)}
+            pendingRequestsCount={pendingRequestsCount}
+            onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
+          />
+        </div>
+
+        {/* Content Container */}
+        <div className="flex-1 h-full flex overflow-hidden">
         {/* Chats Tab: Split Screen */}
         {activeTab === 'chats' && (
           <div className="w-full h-full flex overflow-hidden">
@@ -310,6 +346,7 @@ export const MessengerDashboard: React.FC = () => {
 
         {/* Settings View (3 modes, 8 luxury colors, WhatsApp privacy, Secret PIN) */}
         {activeTab === 'settings' && <SettingsView />}
+        </div>
       </div>
 
       {/* New Chat Modal (Quick WhatsApp Contact Launcher) */}

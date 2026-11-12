@@ -114,7 +114,7 @@ export const PinSetupScreen: React.FC = () => {
         {success && (
           <div className="mt-4 w-full flex items-center gap-2 p-3 text-xs rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-300">
             <CheckCircle className="w-4 h-4 shrink-0 text-emerald-400" />
-            <span>Secret PIN securely saved! Opening calculator...</span>
+            <span>Secret PIN securely saved! Entering ERROREX Messenger...</span>
           </div>
         )}
 

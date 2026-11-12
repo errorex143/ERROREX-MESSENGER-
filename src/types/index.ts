@@ -1,5 +1,6 @@
 export type ThemeName =
   | 'gold'
+  | 'rainbow'
   | 'emerald'
   | 'ocean'
   | 'purple'
@@ -89,6 +90,10 @@ export interface Conversation {
   createdAt: string;
   updatedAt: string;
   unreadCount?: number;
+  isPinned?: boolean;
+  isMuted?: boolean;
+  isArchived?: boolean;
+  isBlocked?: boolean;
 }
 
 export interface ChatMessage {
@@ -108,6 +113,8 @@ export interface ChatMessage {
   reactions?: Record<string, string>; // { [userId]: emoji }
   isEdited?: boolean;
   isDeleted?: boolean;
+  deletedFor?: string[]; // Array of user IDs who deleted this message 'for me'
+  deletedForEveryone?: boolean; // Deleted for all participants
 }
 
 export interface UserStatus {

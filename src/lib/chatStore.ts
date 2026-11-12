@@ -1,206 +1,29 @@
 import { Conversation, ChatMessage, ContactItem, PrivacySettings, UserProfile } from '../types';
 
-const CONVERSATIONS_STORAGE_KEY = 'errorex_conversations_v3';
-const MESSAGES_STORAGE_KEY_PREFIX = 'errorex_messages_v3_';
-const CONTACTS_STORAGE_KEY = 'errorex_contacts_v3';
-const PRIVACY_STORAGE_KEY = 'errorex_privacy_v3';
-const PROFILE_STORAGE_KEY = 'errorex_profile_v3';
+const CONVERSATIONS_STORAGE_KEY = 'errorex_conversations_v5';
+const MESSAGES_STORAGE_KEY_PREFIX = 'errorex_messages_v5_';
+const CONTACTS_STORAGE_KEY = 'errorex_contacts_v5';
+const PRIVACY_STORAGE_KEY = 'errorex_privacy_v5';
+const PROFILE_STORAGE_KEY = 'errorex_profile_v5';
 
-const initialConversations: Conversation[] = [
-  {
-    id: 'conv_elena',
-    participants: ['test_user_noor_1434', 'user_elena'],
-    participantDetails: {
-      user_elena: {
-        displayName: 'Elena Rostova',
-        username: 'elena_rostova',
-        photoURL: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'
-      },
-      test_user_noor_1434: {
-        displayName: 'Noor',
-        username: 'noor',
-        photoURL: ''
-      }
-    },
-    isGroup: false,
-    lastMessageText: 'Attached the vault access key. Let me know when you review it.',
-    lastMessageSenderId: 'user_elena',
-    lastMessageAt: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-    updatedAt: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-    unreadCount: 1
-  },
-  {
-    id: 'conv_alexander',
-    participants: ['test_user_noor_1434', 'user_alexander'],
-    participantDetails: {
-      user_alexander: {
-        displayName: 'Alexander Vance',
-        username: 'alex_vance',
-        photoURL: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80'
-      },
-      test_user_noor_1434: {
-        displayName: 'Noor',
-        username: 'noor',
-        photoURL: ''
-      }
-    },
-    isGroup: false,
-    lastMessageText: 'Got it. I will bring the encrypted ledger.',
-    lastMessageSenderId: 'user_alexander',
-    lastMessageAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
-    updatedAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-    unreadCount: 0
-  },
-  {
-    id: 'conv_vault',
-    participants: ['test_user_noor_1434'],
-    participantDetails: {
-      test_user_noor_1434: {
-        displayName: 'Sovereign Vault (Notes to Self)',
-        username: 'vault_secure',
-        photoURL: ''
-      }
-    },
-    isGroup: false,
-    groupName: 'Sovereign Vault (Notes to Self)',
-    lastMessageText: 'Welcome to your private encrypted vault. Save sensitive notes, voice memos, and photos here.',
-    lastMessageSenderId: 'system',
-    lastMessageAt: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString(),
-    updatedAt: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
-    unreadCount: 0
-  }
-];
+// Purge legacy mock data / test users on startup for a 100% fresh app
+try {
+  const legacyKeys = [
+    'errorex_conversations_v4',
+    'errorex_contacts_v4',
+    'errorex_messages_v4_conv_test_user',
+    'errorex_messages_v4_conv_vault',
+    'errorex_session'
+  ];
+  legacyKeys.forEach(k => localStorage.removeItem(k));
+} catch (e) {
+  // quiet
+}
 
-const initialContacts: ContactItem[] = [
-  {
-    id: 'contact_elena',
-    name: 'Elena Rostova',
-    username: 'elena_rostova',
-    bio: 'Zurich diplomatic liaison • Encrypted communications only',
-    photoURL: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-    isOnline: true,
-    createdAt: new Date().toISOString()
-  },
-  {
-    id: 'contact_alexander',
-    name: 'Alexander Vance',
-    username: 'alex_vance',
-    bio: 'Geneva vault custodian • Verified partner',
-    photoURL: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-    isOnline: true,
-    createdAt: new Date().toISOString()
-  },
-  {
-    id: 'contact_marcus',
-    name: 'Marcus Sterling',
-    username: 'marcus_sterling',
-    bio: 'Swiss portfolio manager • Sovereign wealth desk',
-    photoURL: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
-    isOnline: false,
-    createdAt: new Date().toISOString()
-  },
-  {
-    id: 'contact_sarah',
-    name: 'Sarah Connor',
-    username: 'sarah_connor',
-    bio: 'Strategic protocol operative • Confidential',
-    photoURL: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
-    isOnline: true,
-    createdAt: new Date().toISOString()
-  },
-  {
-    id: 'contact_vault',
-    name: 'Sovereign Vault',
-    username: 'vault_secure',
-    bio: 'Personal encrypted storage & notes to self',
-    isOnline: true,
-    createdAt: new Date().toISOString()
-  }
-];
-
-const initialMessages: Record<string, ChatMessage[]> = {
-  conv_elena: [
-    {
-      id: 'm_elena_1',
-      conversationId: 'conv_elena',
-      senderId: 'user_elena',
-      senderName: 'Elena Rostova',
-      text: 'The contracts for Zurich are finalized. All communications will remain through the ERROREX vault.',
-      mediaType: 'none',
-      createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-      readBy: ['test_user_noor_1434']
-    },
-    {
-      id: 'm_elena_2',
-      conversationId: 'conv_elena',
-      senderId: 'test_user_noor_1434',
-      senderName: 'Noor',
-      text: 'Understood. Ensure all files remain encrypted with AES-256.',
-      mediaType: 'none',
-      createdAt: new Date(Date.now() - 1000 * 60 * 20).toISOString(),
-      readBy: ['user_elena'],
-      reactions: { user_elena: '👍' }
-    },
-    {
-      id: 'm_elena_3',
-      conversationId: 'conv_elena',
-      senderId: 'user_elena',
-      senderName: 'Elena Rostova',
-      text: 'Attached the vault access key. Let me know when you review it.',
-      mediaType: 'none',
-      createdAt: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-      readBy: []
-    }
-  ],
-  conv_alexander: [
-    {
-      id: 'm_alex_1',
-      conversationId: 'conv_alexander',
-      senderId: 'user_alexander',
-      senderName: 'Alexander Vance',
-      text: 'Are we meeting at the private gallery tonight?',
-      mediaType: 'none',
-      createdAt: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
-      readBy: ['test_user_noor_1434']
-    },
-    {
-      id: 'm_alex_2',
-      conversationId: 'conv_alexander',
-      senderId: 'test_user_noor_1434',
-      senderName: 'Noor',
-      text: 'Yes, 9:00 PM. Use the secret entrance and enter your PIN.',
-      mediaType: 'none',
-      createdAt: new Date(Date.now() - 1000 * 60 * 50).toISOString(),
-      readBy: ['user_alexander'],
-      reactions: { user_alexander: '🔥' }
-    },
-    {
-      id: 'm_alex_3',
-      conversationId: 'conv_alexander',
-      senderId: 'user_alexander',
-      senderName: 'Alexander Vance',
-      text: 'Got it. I will bring the encrypted ledger.',
-      mediaType: 'none',
-      createdAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-      readBy: ['test_user_noor_1434']
-    }
-  ],
-  conv_vault: [
-    {
-      id: 'm_vault_1',
-      conversationId: 'conv_vault',
-      senderId: 'system',
-      senderName: 'ERROREX Security',
-      text: 'Welcome to your private encrypted vault. Save sensitive notes, voice memos, and photos here.',
-      mediaType: 'none',
-      createdAt: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
-      readBy: ['test_user_noor_1434']
-    }
-  ]
-};
+// 100% Fresh start: No fake users, no test chats
+const initialConversations: Conversation[] = [];
+const initialContacts: ContactItem[] = [];
+const initialMessages: Record<string, ChatMessage[]> = {};
 
 type Listener = () => void;
 const listeners: Listener[] = [];
@@ -219,7 +42,7 @@ export const chatStore = {
   },
 
   // --- Conversations ---
-  getConversations(): Conversation[] {
+  getAllConversations(): Conversation[] {
     try {
       const saved = localStorage.getItem(CONVERSATIONS_STORAGE_KEY);
       if (saved) {
@@ -228,8 +51,16 @@ export const chatStore = {
     } catch (e) {
       console.warn('Could not read saved conversations:', e);
     }
-    localStorage.setItem(CONVERSATIONS_STORAGE_KEY, JSON.stringify(initialConversations));
-    return initialConversations;
+    return [];
+  },
+
+  // STRICT PRIVATE ISOLATION: A user ONLY sees conversations where they are a participant
+  getConversations(forUserId?: string): Conversation[] {
+    const all = this.getAllConversations();
+    if (!forUserId) {
+      return all;
+    }
+    return all.filter(c => Array.isArray(c.participants) && c.participants.includes(forUserId));
   },
 
   saveConversations(conversations: Conversation[]) {
@@ -274,6 +105,21 @@ export const chatStore = {
     // Check recipient's net / online status
     const convs = this.getConversations();
     const targetConv = convs.find(c => c.id === conversationId);
+
+    // If conversation is blocked, prevent sending or receiving messages
+    if (targetConv?.isBlocked && senderId !== 'system') {
+      console.warn('Blocked conversation: message cannot be sent or received.');
+      return {
+        id: `m_blocked_${Date.now()}`,
+        conversationId,
+        senderId,
+        senderName,
+        text: '🚫 Message blocked: You have blocked this user.',
+        deliveryStatus: 'sent',
+        createdAt: nowIso
+      };
+    }
+
     const otherParticipantId = targetConv?.participants.find(p => p !== senderId);
 
     const contacts = this.getContacts();
@@ -339,79 +185,6 @@ export const chatStore = {
       }, 1800);
     }
 
-    // Realistic WhatsApp Partner Auto-Reply
-    if (conversationId === 'conv_elena' && senderId !== 'user_elena') {
-      setTimeout(() => {
-        const partnerReply: ChatMessage = {
-          id: `m_reply_${Date.now()}`,
-          conversationId,
-          senderId: 'user_elena',
-          senderName: 'Elena Rostova',
-          text: getRandomReply('elena', text),
-          mediaType: 'none',
-          createdAt: new Date().toISOString(),
-          readBy: []
-        };
-        const currentMsgs = this.getMessages(conversationId);
-        // Mark all user messages as seen (blue tick) when partner replies
-        currentMsgs.forEach(m => {
-          if (m.senderId === senderId) {
-            m.deliveryStatus = 'read';
-            if (!m.readBy) m.readBy = [];
-            if (!m.readBy.includes('user_elena')) m.readBy.push('user_elena');
-          }
-        });
-        currentMsgs.push(partnerReply);
-        this.saveMessages(conversationId, currentMsgs);
-
-        const currentConvs = this.getConversations();
-        const conv = currentConvs.find(c => c.id === conversationId);
-        if (conv) {
-          conv.lastMessageText = partnerReply.text;
-          conv.lastMessageSenderId = 'user_elena';
-          conv.lastMessageAt = partnerReply.createdAt;
-          conv.updatedAt = partnerReply.createdAt;
-          conv.unreadCount = 1;
-          this.saveConversations([...currentConvs]);
-        }
-      }, 1400);
-    } else if (conversationId === 'conv_alexander' && senderId !== 'user_alexander') {
-      setTimeout(() => {
-        const partnerReply: ChatMessage = {
-          id: `m_reply_${Date.now()}`,
-          conversationId,
-          senderId: 'user_alexander',
-          senderName: 'Alexander Vance',
-          text: getRandomReply('alexander', text),
-          mediaType: 'none',
-          createdAt: new Date().toISOString(),
-          readBy: []
-        };
-        const currentMsgs = this.getMessages(conversationId);
-        // Mark all user messages as seen (blue tick) when partner replies
-        currentMsgs.forEach(m => {
-          if (m.senderId === senderId) {
-            m.deliveryStatus = 'read';
-            if (!m.readBy) m.readBy = [];
-            if (!m.readBy.includes('user_alexander')) m.readBy.push('user_alexander');
-          }
-        });
-        currentMsgs.push(partnerReply);
-        this.saveMessages(conversationId, currentMsgs);
-
-        const currentConvs = this.getConversations();
-        const conv = currentConvs.find(c => c.id === conversationId);
-        if (conv) {
-          conv.lastMessageText = partnerReply.text;
-          conv.lastMessageSenderId = 'user_alexander';
-          conv.lastMessageAt = partnerReply.createdAt;
-          conv.updatedAt = partnerReply.createdAt;
-          conv.unreadCount = 1;
-          this.saveConversations([...currentConvs]);
-        }
-      }, 1600);
-    }
-
     return newMsg;
   },
 
@@ -446,8 +219,43 @@ export const chatStore = {
   },
 
   deleteMessage(conversationId: string, messageId: string) {
-    const messages = this.getMessages(conversationId).filter(m => m.id !== messageId);
-    this.saveMessages(conversationId, messages);
+    this.deleteMessageForEveryone(conversationId, messageId);
+  },
+
+  deleteMessageForEveryone(conversationId: string, messageId: string) {
+    const messages = this.getMessages(conversationId);
+    const msg = messages.find(m => m.id === messageId);
+    if (msg) {
+      msg.text = '🚫 This message was deleted';
+      msg.isDeleted = true;
+      msg.deletedForEveryone = true;
+      msg.mediaUrl = undefined;
+      msg.mediaType = 'none';
+      this.saveMessages(conversationId, messages);
+
+      // Update conversation preview if this was the last message
+      const convs = this.getConversations();
+      const targetConv = convs.find(c => c.id === conversationId);
+      if (targetConv && targetConv.lastMessageText) {
+        const lastMsg = messages[messages.length - 1];
+        if (lastMsg && lastMsg.id === messageId) {
+          targetConv.lastMessageText = '🚫 This message was deleted';
+          this.saveConversations([...convs]);
+        }
+      }
+    }
+  },
+
+  deleteMessageForMe(conversationId: string, messageId: string, userId: string) {
+    const messages = this.getMessages(conversationId);
+    const msg = messages.find(m => m.id === messageId);
+    if (msg) {
+      if (!msg.deletedFor) msg.deletedFor = [];
+      if (!msg.deletedFor.includes(userId)) {
+        msg.deletedFor.push(userId);
+      }
+      this.saveMessages(conversationId, messages);
+    }
   },
 
   clearMessages(conversationId: string) {
@@ -484,44 +292,52 @@ export const chatStore = {
     isGroup: boolean = false,
     customUsername?: string,
     customPhoto?: string,
-    customBio?: string
+    customBio?: string,
+    creatorId?: string,
+    creatorDetails?: { displayName: string; username: string; photoURL?: string }
   ): Conversation {
-    const convs = this.getConversations();
+    const allConvs = this.getAllConversations();
     const id = `conv_${Date.now()}`;
     const nowIso = new Date().toISOString();
     const contactUid = `user_${Date.now()}`;
     const uName = customUsername || name.toLowerCase().replace(/\s+/g, '_');
 
+    const myProfile = this.getUserProfile();
+    const myId = creatorId || myProfile.uid || 'current_user';
+    const myDisplayName = creatorDetails?.displayName || myProfile.displayName || 'You';
+    const myUsername = creatorDetails?.username || myProfile.username || 'user';
+    const myPhoto = creatorDetails?.photoURL || myProfile.photoURL || '';
+
     const newConv: Conversation = {
       id,
-      participants: ['test_user_noor_1434', contactUid],
+      participants: [myId, contactUid],
       participantDetails: {
         [contactUid]: {
           displayName: name,
           username: uName,
           photoURL: customPhoto || ''
         },
-        test_user_noor_1434: {
-          displayName: 'Noor',
-          username: 'noor',
-          photoURL: ''
+        [myId]: {
+          displayName: myDisplayName,
+          username: myUsername,
+          photoURL: myPhoto
         }
       },
       isGroup,
       groupName: isGroup ? name : undefined,
       lastMessageText: 'Conversation started',
-      lastMessageSenderId: 'test_user_noor_1434',
+      lastMessageSenderId: myId,
       lastMessageAt: nowIso,
       createdAt: nowIso,
       updatedAt: nowIso,
       unreadCount: 0
     };
 
-    convs.unshift(newConv);
-    this.saveConversations(convs);
+    allConvs.unshift(newConv);
+    this.saveConversations(allConvs);
 
     // Initial greeting message
-    this.sendMessage(id, 'system', name, `Private encrypted dialogue initiated with ${name} (@${uName}).`);
+    this.sendMessage(id, 'system', name, `Private dialogue started with ${name} (@${uName}).`);
 
     // Also auto-add to contacts if not already present
     this.addContact({
@@ -532,6 +348,52 @@ export const chatStore = {
     });
 
     return newConv;
+  },
+
+  deleteConversation(conversationId: string) {
+    const convs = this.getConversations().filter(c => c.id !== conversationId);
+    this.saveConversations(convs);
+    try {
+      localStorage.removeItem(MESSAGES_STORAGE_KEY_PREFIX + conversationId);
+    } catch (e) {
+      // quiet
+    }
+  },
+
+  togglePin(conversationId: string): boolean {
+    const convs = this.getConversations();
+    const conv = convs.find(c => c.id === conversationId);
+    if (!conv) return false;
+    conv.isPinned = !conv.isPinned;
+    this.saveConversations([...convs]);
+    return Boolean(conv.isPinned);
+  },
+
+  toggleMute(conversationId: string): boolean {
+    const convs = this.getConversations();
+    const conv = convs.find(c => c.id === conversationId);
+    if (!conv) return false;
+    conv.isMuted = !conv.isMuted;
+    this.saveConversations([...convs]);
+    return Boolean(conv.isMuted);
+  },
+
+  toggleArchive(conversationId: string): boolean {
+    const convs = this.getConversations();
+    const conv = convs.find(c => c.id === conversationId);
+    if (!conv) return false;
+    conv.isArchived = !conv.isArchived;
+    this.saveConversations([...convs]);
+    return Boolean(conv.isArchived);
+  },
+
+  toggleBlock(conversationId: string): boolean {
+    const convs = this.getConversations();
+    const conv = convs.find(c => c.id === conversationId);
+    if (!conv) return false;
+    conv.isBlocked = !conv.isBlocked;
+    this.saveConversations([...convs]);
+    return Boolean(conv.isBlocked);
   },
 
   // --- WhatsApp Contacts Book ---
@@ -670,21 +532,26 @@ export const chatStore = {
     notifyListeners();
   },
 
-  // --- User Profile (DP, Display Name, Bio, Permanent Username) ---
+  // --- User Profile (DP, Display Name, Bio, Username) ---
   getUserProfile(): UserProfile {
     const defaults: UserProfile = {
-      uid: 'test_user_noor_1434',
-      displayName: 'Noor',
-      username: 'noor', // LOCKED & PERMANENT
-      bio: 'Sovereign Account • Encrypted Vault Active',
+      uid: '',
+      displayName: '',
+      username: '',
+      bio: 'Encrypted Sovereign Account Active',
       photoURL: '',
       isOnline: true,
-      createdAt: '2026-01-01T00:00:00.000Z'
+      createdAt: new Date().toISOString()
     };
     try {
       const saved = localStorage.getItem(PROFILE_STORAGE_KEY);
       if (saved) {
-        return { ...defaults, ...JSON.parse(saved) };
+        const parsed = JSON.parse(saved);
+        if (parsed.uid === 'test_user_noor_1434' || parsed.displayName === 'Noor' || parsed.username === 'noor') {
+          localStorage.removeItem(PROFILE_STORAGE_KEY);
+          return defaults;
+        }
+        return { ...defaults, ...parsed };
       }
     } catch (e) {
       console.warn('Could not read user profile:', e);
@@ -694,13 +561,13 @@ export const chatStore = {
 
   saveUserProfile(profileUpdates: Partial<UserProfile>): UserProfile {
     const current = this.getUserProfile();
-    // PERMANENT USERNAME: Keep current username immutable
     const updated: UserProfile = {
       ...current,
+      uid: profileUpdates.uid !== undefined ? profileUpdates.uid : current.uid,
       displayName: profileUpdates.displayName !== undefined ? profileUpdates.displayName : current.displayName,
       bio: profileUpdates.bio !== undefined ? profileUpdates.bio : current.bio,
       photoURL: profileUpdates.photoURL !== undefined ? profileUpdates.photoURL : current.photoURL,
-      username: current.username, // NEVER change username
+      username: profileUpdates.username !== undefined ? profileUpdates.username : current.username,
       updatedAt: new Date().toISOString()
     };
     localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(updated));
@@ -708,24 +575,3 @@ export const chatStore = {
     return updated;
   }
 };
-
-function getRandomReply(character: 'elena' | 'alexander', userText: string): string {
-  const elenaReplies = [
-    'Message received and verified. The security handshake is complete.',
-    'Understood. I will prepare the documents and update the ledger.',
-    'Acknowledged. Everything is moving according to the sovereign protocol.',
-    'Confirmed. I will keep this channel open for further instructions.',
-    'Clear. The vault encryption keys have been rotated successfully.'
-  ];
-
-  const alexanderReplies = [
-    'Received. I am on my way to the designated coordinates.',
-    'Perfect. The private council has been notified.',
-    'Understood, Noor. We will proceed with the operation as agreed.',
-    'Confirmed. The transmission is fully secure.',
-    'Got your message. Everything is in place on my side.'
-  ];
-
-  const list = character === 'elena' ? elenaReplies : alexanderReplies;
-  return list[Math.floor(Math.random() * list.length)];
-}

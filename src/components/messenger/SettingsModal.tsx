@@ -22,6 +22,7 @@ import {
   Info,
   RefreshCw
 } from 'lucide-react';
+import { updatePassword } from '../../lib/firebase';
 
 const HERALDIC_AVATARS = [
   'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
@@ -44,7 +45,7 @@ const WHATSAPP_STATUS_PRESETS = [
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  initialTab?: 'appearance' | 'privacy' | 'profile' | 'pin';
+  initialTab?: 'appearance' | 'privacy' | 'profile' | 'pin' | 'account';
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -52,7 +53,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   initialTab = 'appearance'
 }) => {
-  const { userProfile, updateUserProfile, verifyPin, setupPin, lockMessenger } = useAuth();
+  const { user, userProfile, updateUserProfile, verifyPin, setupPin, lockMessenger } = useAuth();
   const {
     theme,
     setTheme,
@@ -64,13 +65,41 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     formattedCountdown
   } = useTheme();
 
-  const [activeTab, setActiveTab] = useState<'appearance' | 'privacy' | 'profile' | 'pin'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'appearance' | 'privacy' | 'profile' | 'pin' | 'account'>(initialTab);
+
+  // Account Password Change State
+  const [newPassword, setNewPassword] = useState('');
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordMessage(null);
+    setPasswordError(null);
+    if (newPassword.length < 6) {
+      setPasswordError('Password must be at least 6 characters.');
+      return;
+    }
+    setPasswordLoading(true);
+    try {
+      if (user) {
+        await updatePassword(user, newPassword);
+      }
+      setPasswordMessage('Account password updated successfully!');
+      setNewPassword('');
+      setTimeout(() => setPasswordMessage(null), 3500);
+    } catch (err: any) {
+      setPasswordError(err.message || 'Failed to update account password.');
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
 
   // Profile State
   const storedProfile = chatStore.getUserProfile();
-  const [displayName, setDisplayName] = useState(userProfile?.displayName || storedProfile.displayName || 'Noor');
-  // USERNAME IS PERMANENT & IMMUTABLE (@noor)
-  const permanentUsername = userProfile?.username || storedProfile.username || 'noor';
+  const [displayName, setDisplayName] = useState(userProfile?.displayName || storedProfile.displayName || 'User');
+  const [username, setUsername] = useState(userProfile?.username || storedProfile.username || user?.email?.split('@')[0] || 'user');
   const [bio, setBio] = useState(userProfile?.bio || storedProfile.bio || 'Sovereign Account • Encrypted Vault Active');
   const [photoURL, setPhotoURL] = useState(userProfile?.photoURL || storedProfile.photoURL || '');
   const [profileSaving, setProfileSaving] = useState(false);
@@ -108,8 +137,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setProfileSaving(true);
     setProfileMessage(null);
 
+    const cleanUsername = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '') || 'user';
+
     chatStore.saveUserProfile({
       displayName: displayName.trim(),
+      username: cleanUsername,
       bio: bio.trim(),
       photoURL
     });
@@ -117,6 +149,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     try {
       await updateUserProfile({
         displayName: displayName.trim(),
+        username: cleanUsername,
         bio: bio.trim(),
         photoURL
       });
@@ -210,59 +243,74 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
         </div>
 
-        {/* Modal Navigation Tabs */}
-        <div className="px-4 py-2 border-b border-neutral-200 dark:border-white/5 bg-[var(--bg-sidebar)] flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0">
-          <button
-            type="button"
-            onClick={() => setActiveTab('appearance')}
-            className={`py-1.5 px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap transition-all ${
-              activeTab === 'appearance'
-                ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--text-main)] shadow-sm'
-                : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
-            }`}
-          >
-            <Palette className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
-            <span>Themes & 8 Colors</span>
-          </button>
+        {/* Modal Navigation Tabs: All 5 Function Buttons FULLY visible */}
+        <div className="p-2 sm:p-2.5 border-b border-neutral-200 dark:border-white/5 bg-[var(--bg-card)] shrink-0">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 sm:gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab('appearance')}
+              className={`py-2 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'appearance'
+                  ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--accent-primary)] font-bold shadow-sm'
+                  : 'bg-[var(--bg-sidebar)] border border-neutral-200 dark:border-white/5 text-[var(--text-muted)] hover:text-[var(--text-main)]'
+              }`}
+            >
+              <Palette className="w-3.5 h-3.5 shrink-0 text-[var(--accent-primary)]" />
+              <span className="truncate">Theme Color</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('profile')}
-            className={`py-1.5 px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap transition-all ${
-              activeTab === 'profile'
-                ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--text-main)] shadow-sm'
-                : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
-            }`}
-          >
-            <User className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
-            <span>Profile & DP</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('privacy')}
+              className={`py-2 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'privacy'
+                  ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--accent-primary)] font-bold shadow-sm'
+                  : 'bg-[var(--bg-sidebar)] border border-neutral-200 dark:border-white/5 text-[var(--text-muted)] hover:text-[var(--text-main)]'
+              }`}
+            >
+              <Eye className="w-3.5 h-3.5 shrink-0 text-[var(--accent-primary)]" />
+              <span className="truncate">Privacy</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('privacy')}
-            className={`py-1.5 px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap transition-all ${
-              activeTab === 'privacy'
-                ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--text-main)] shadow-sm'
-                : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
-            }`}
-          >
-            <Eye className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
-            <span>Privacy</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('profile')}
+              className={`py-2 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer col-span-2 sm:col-span-1 ${
+                activeTab === 'profile'
+                  ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--accent-primary)] font-bold shadow-sm'
+                  : 'bg-[var(--bg-sidebar)] border border-neutral-200 dark:border-white/5 text-[var(--text-muted)] hover:text-[var(--text-main)]'
+              }`}
+            >
+              <User className="w-3.5 h-3.5 shrink-0 text-[var(--accent-primary)]" />
+              <span className="truncate font-bold">PROFILE IDENTITY</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('pin')}
-            className={`py-1.5 px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap transition-all ${
-              activeTab === 'pin'
-                ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--text-main)] shadow-sm'
-                : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
-            }`}
-          >
-            <KeyRound className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
-            <span>Secret 8-Digit PIN</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('pin')}
+              className={`py-2 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'pin'
+                  ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--accent-primary)] font-bold shadow-sm'
+                  : 'bg-[var(--bg-sidebar)] border border-neutral-200 dark:border-white/5 text-[var(--text-muted)] hover:text-[var(--text-main)]'
+              }`}
+            >
+              <KeyRound className="w-3.5 h-3.5 shrink-0 text-[var(--accent-primary)]" />
+              <span className="truncate">Secret 8 Digit</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('account')}
+              className={`py-2 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'account'
+                  ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--accent-primary)] font-bold shadow-sm'
+                  : 'bg-[var(--bg-sidebar)] border border-neutral-200 dark:border-white/5 text-[var(--text-muted)] hover:text-[var(--text-main)]'
+              }`}
+            >
+              <Shield className="w-3.5 h-3.5 shrink-0 text-[var(--accent-primary)]" />
+              <span className="truncate">Account Supabase</span>
+            </button>
+          </div>
         </div>
 
         {/* Modal Tab Content */}
@@ -382,6 +430,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   {THEMES.map(th => {
                     const isSelected = theme === th.id;
                     const colorNames: Record<string, string> = {
+                      rainbow: '🌈 Rainbow Prism (Multi-Color Spectrum)',
                       gold: 'Imperial Gold',
                       white: 'Platinum White',
                       black: 'Obsidian Black',
@@ -412,7 +461,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         <div className="flex items-center gap-3 min-w-0">
                           <div
                             className="w-7 h-7 rounded-full border-2 border-white/20 shadow-sm shrink-0"
-                            style={{ backgroundColor: th.primaryHex }}
+                            style={{
+                              background: th.id === 'rainbow'
+                                ? 'linear-gradient(135deg, #FF0055 0%, #FF7700 25%, #FFDD00 50%, #00CC66 75%, #0099FF 100%)'
+                                : th.primaryHex
+                            }}
                           />
                           <div className="truncate">
                             <h4 className="text-xs font-bold text-[var(--text-main)] truncate">{displayName}</h4>
@@ -472,7 +525,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="flex-1 text-center sm:text-left space-y-1.5">
                   <div>
                     <h3 className="text-xs font-bold text-[var(--text-main)]">{displayName}</h3>
-                    <p className="text-[11px] font-mono text-[var(--accent-primary)]">@{permanentUsername}</p>
+                    <p className="text-[11px] font-mono text-[var(--accent-primary)]">@{username}</p>
                   </div>
 
                   <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-0.5">
@@ -538,32 +591,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </p>
                 </div>
 
-                {/* 2. Permanent Username (CANNOT BE CHANGED) */}
+                {/* 2. Username (@handle) */}
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="block text-xs font-semibold text-[var(--text-main)] flex items-center gap-1.5">
                       <span>Username (@handle)</span>
-                      <span className="text-[10px] px-2 py-0.2 rounded-full bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 font-mono">
-                        Permanent
-                      </span>
                     </label>
-                    <span className="text-[10px] text-emerald-500 font-mono flex items-center gap-1">
+                    <span className="text-[10px] text-[var(--accent-primary)] font-mono flex items-center gap-1">
                       <ShieldCheck className="w-3 h-3" />
-                      <span>Locked</span>
+                      <span>Customizable</span>
                     </span>
                   </div>
                   <div className="relative">
-                    <Lock className="w-3.5 h-3.5 absolute left-3 top-2.5 text-[var(--accent-primary)] opacity-80" />
+                    <span className="absolute left-3 top-2 text-xs font-mono text-[var(--accent-primary)] font-bold">@</span>
                     <input
                       type="text"
-                      readOnly
-                      disabled
-                      value={`@${permanentUsername}`}
-                      className="w-full pl-8 pr-3 py-2 text-xs font-mono rounded-xl bg-neutral-200/50 dark:bg-black/50 border border-neutral-300 dark:border-neutral-800 text-[var(--accent-primary)] cursor-not-allowed select-all"
+                      required
+                      maxLength={20}
+                      value={username}
+                      onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                      placeholder="your_handle"
+                      className="w-full pl-8 pr-3 py-2 text-xs font-mono rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--accent-primary)] focus:outline-none transition-colors"
                     />
                   </div>
                   <p className="mt-1 text-[10px] text-[var(--text-muted)]">
-                    Your ERROREX username <strong>(@{permanentUsername})</strong> is fixed and cannot be changed.
+                    Your custom ERROREX username <strong>(@{username})</strong> for finding contacts and receiving messages.
                   </p>
                 </div>
 
@@ -813,6 +865,70 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   type="button"
                   onClick={lockMessenger}
                   className="py-1.5 px-3.5 rounded-xl bg-neutral-900 border border-[var(--accent-border)] hover:border-[var(--accent-primary)] text-xs text-white font-semibold flex items-center gap-1.5"
+                >
+                  <Lock className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
+                  <span>Lock Now</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 5: Account */}
+          {activeTab === 'account' && (
+            <div className="space-y-4">
+
+              {/* Change Password Card */}
+              <div className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--accent-border)] space-y-3 shadow-sm">
+                <div>
+                  <h4 className="text-xs font-bold text-[var(--text-main)]">Change Account Password</h4>
+                  <p className="text-[11px] text-[var(--text-muted)]">
+                    Update your primary account login password.
+                  </p>
+                </div>
+
+                {passwordMessage && (
+                  <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 text-xs">
+                    {passwordMessage}
+                  </div>
+                )}
+
+                {passwordError && (
+                  <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-500/40 text-rose-300 text-xs">
+                    {passwordError}
+                  </div>
+                )}
+
+                <form onSubmit={handleChangePassword} className="space-y-3">
+                  <input
+                    type="password"
+                    required
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    placeholder="New password (minimum 6 characters)"
+                    className="w-full px-3.5 py-2 text-xs rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] focus:outline-none"
+                  />
+                  <button
+                    type="submit"
+                    disabled={passwordLoading || newPassword.length < 6}
+                    className="py-2 px-4 rounded-xl gold-button text-xs font-semibold text-[var(--accent-primary)] disabled:opacity-50 cursor-pointer"
+                  >
+                    {passwordLoading ? 'Updating...' : 'Save New Password'}
+                  </button>
+                </form>
+              </div>
+
+              {/* Instant Lock to Calculator */}
+              <div className="p-4 rounded-2xl bg-[var(--bg-card)] border border-rose-950/50 flex items-center justify-between shadow-sm">
+                <div>
+                  <h4 className="text-xs font-bold text-rose-500">Lock Application</h4>
+                  <p className="text-[10px] text-[var(--text-muted)]">
+                    Immediately exit messenger and display the calculator.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={lockMessenger}
+                  className="py-1.5 px-3.5 rounded-xl bg-neutral-900 border border-[var(--accent-border)] hover:border-[var(--accent-primary)] text-xs text-white font-semibold flex items-center gap-1.5 cursor-pointer"
                 >
                   <Lock className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
                   <span>Lock Now</span>

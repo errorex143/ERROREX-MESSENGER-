@@ -64,8 +64,8 @@ export const SettingsView: React.FC = () => {
 
   // Profile fields inside settings
   const storedProfile = chatStore.getUserProfile();
-  const [displayName, setDisplayName] = useState(user?.displayName || storedProfile.displayName || 'Noor');
-  const permanentUsername = storedProfile.username || 'noor';
+  const [displayName, setDisplayName] = useState(user?.displayName || storedProfile.displayName || 'User');
+  const [username, setUsername] = useState(storedProfile.username || user?.email?.split('@')[0] || 'user');
   const [bio, setBio] = useState(storedProfile.bio || 'Sovereign Account • Encrypted Vault Active');
   const [photoURL, setPhotoURL] = useState(user?.photoURL || storedProfile.photoURL || '');
   const [profileSavedNotice, setProfileSavedNotice] = useState(false);
@@ -107,14 +107,17 @@ export const SettingsView: React.FC = () => {
   // Handle Profile Save inside settings
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanUsername = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '') || 'user';
     chatStore.saveUserProfile({
       displayName: displayName.trim(),
+      username: cleanUsername,
       bio: bio.trim(),
       photoURL
     });
     try {
       await updateUserProfile({
         displayName: displayName.trim(),
+        username: cleanUsername,
         bio: bio.trim(),
         photoURL
       });
@@ -205,67 +208,69 @@ export const SettingsView: React.FC = () => {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-1.5 mt-4 p-1 rounded-xl bg-neutral-200/60 dark:bg-black/60 border border-neutral-300 dark:border-white/5 max-w-2xl overflow-x-auto scrollbar-none">
-        <button
-          onClick={() => setActiveTab('appearance')}
-          className={`py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap transition-all ${
-            activeTab === 'appearance'
-              ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--text-main)] shadow-sm'
-              : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
-          }`}
-        >
-          <Palette className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
-          <span>Themes & 8 Colors</span>
-        </button>
+      {/* 5 Function Buttons: Theme Color, Privacy, PROFILE IDENTITY, Secret 8 Digit, Account Supabase */}
+      <div className="mt-4 p-2 sm:p-2.5 rounded-2xl bg-[var(--bg-card)] border border-neutral-300 dark:border-white/5 max-w-2xl">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 sm:gap-2">
+          <button
+            onClick={() => setActiveTab('appearance')}
+            className={`py-2 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              activeTab === 'appearance'
+                ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--accent-primary)] font-bold shadow-sm'
+                : 'bg-[var(--bg-sidebar)] border border-neutral-200 dark:border-white/5 text-[var(--text-muted)] hover:text-[var(--text-main)]'
+            }`}
+          >
+            <Palette className="w-3.5 h-3.5 shrink-0 text-[var(--accent-primary)]" />
+            <span className="truncate">Theme Color</span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab('privacy')}
-          className={`py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap transition-all ${
-            activeTab === 'privacy'
-              ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--text-main)] shadow-sm'
-              : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
-          }`}
-        >
-          <Eye className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
-          <span>Privacy</span>
-        </button>
+          <button
+            onClick={() => setActiveTab('privacy')}
+            className={`py-2 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              activeTab === 'privacy'
+                ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--accent-primary)] font-bold shadow-sm'
+                : 'bg-[var(--bg-sidebar)] border border-neutral-200 dark:border-white/5 text-[var(--text-muted)] hover:text-[var(--text-main)]'
+            }`}
+          >
+            <Eye className="w-3.5 h-3.5 shrink-0 text-[var(--accent-primary)]" />
+            <span className="truncate">Privacy</span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab('profile')}
-          className={`py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap transition-all ${
-            activeTab === 'profile'
-              ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--text-main)] shadow-sm'
-              : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
-          }`}
-        >
-          <User className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
-          <span>Profile & Username</span>
-        </button>
+          <button
+            onClick={() => setActiveTab('profile')}
+            className={`py-2 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer col-span-2 sm:col-span-1 ${
+              activeTab === 'profile'
+                ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--accent-primary)] font-bold shadow-sm'
+                : 'bg-[var(--bg-sidebar)] border border-neutral-200 dark:border-white/5 text-[var(--text-muted)] hover:text-[var(--text-main)]'
+            }`}
+          >
+            <User className="w-3.5 h-3.5 shrink-0 text-[var(--accent-primary)]" />
+            <span className="truncate font-bold">PROFILE IDENTITY</span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab('pin')}
-          className={`py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap transition-all ${
-            activeTab === 'pin'
-              ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--text-main)] shadow-sm'
-              : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
-          }`}
-        >
-          <KeyRound className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
-          <span>Secret 8-Digit PIN</span>
-        </button>
+          <button
+            onClick={() => setActiveTab('pin')}
+            className={`py-2 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              activeTab === 'pin'
+                ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--accent-primary)] font-bold shadow-sm'
+                : 'bg-[var(--bg-sidebar)] border border-neutral-200 dark:border-white/5 text-[var(--text-muted)] hover:text-[var(--text-main)]'
+            }`}
+          >
+            <KeyRound className="w-3.5 h-3.5 shrink-0 text-[var(--accent-primary)]" />
+            <span className="truncate">Secret 8 Digit</span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab('account')}
-          className={`py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap transition-all ${
-            activeTab === 'account'
-              ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--text-main)] shadow-sm'
-              : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
-          }`}
-        >
-          <Shield className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
-          <span>Account</span>
-        </button>
+          <button
+            onClick={() => setActiveTab('account')}
+            className={`py-2 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              activeTab === 'account'
+                ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--accent-primary)] font-bold shadow-sm'
+                : 'bg-[var(--bg-sidebar)] border border-neutral-200 dark:border-white/5 text-[var(--text-muted)] hover:text-[var(--text-main)]'
+            }`}
+          >
+            <Shield className="w-3.5 h-3.5 shrink-0 text-[var(--accent-primary)]" />
+            <span className="truncate">Account Supabase</span>
+          </button>
+        </div>
       </div>
 
       {/* Tab 1: Appearance: 3 Mode Options + 8 Unique Colors */}
@@ -384,6 +389,7 @@ export const SettingsView: React.FC = () => {
               {THEMES.map(th => {
                 const isSelected = theme === th.id;
                 const colorNames: Record<string, string> = {
+                  rainbow: '🌈 Rainbow Prism (Multi-Color Spectrum)',
                   gold: 'Imperial Gold',
                   white: 'Platinum White',
                   black: 'Obsidian Black',
@@ -414,7 +420,11 @@ export const SettingsView: React.FC = () => {
                     <div className="flex items-center gap-3">
                       <div
                         className="w-8 h-8 rounded-full border-2 border-white/20 shadow-sm shrink-0"
-                        style={{ backgroundColor: th.primaryHex }}
+                        style={{
+                          background: th.id === 'rainbow'
+                            ? 'linear-gradient(135deg, #FF0055 0%, #FF7700 25%, #FFDD00 50%, #00CC66 75%, #0099FF 100%)'
+                            : th.primaryHex
+                        }}
                       />
                       <div>
                         <h3 className="text-xs font-bold text-[var(--text-main)]">{displayName}</h3>
@@ -540,9 +550,30 @@ export const SettingsView: React.FC = () => {
         </div>
       )}
 
-      {/* Tab 3: Profile & Permanent Username Settings */}
+      {/* Tab 3: PROFILE IDENTITY */}
       {activeTab === 'profile' && (
         <div className="mt-6 max-w-xl space-y-4">
+          {/* Sovereign Profile Identity Header */}
+          <div className="p-4 rounded-2xl bg-[var(--accent-surface)] border border-[var(--accent-border)] flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[var(--accent-primary)] to-[var(--accent-secondary)] text-black flex items-center justify-center font-bold text-lg shadow-md">
+                👑
+              </div>
+              <div>
+                <h2 className="text-xs font-bold text-[var(--text-main)] uppercase tracking-wider flex items-center gap-1.5">
+                  <span>PROFILE IDENTITY</span>
+                  <Sparkles className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
+                </h2>
+                <p className="text-[10px] text-[var(--text-muted)]">
+                  Sovereign Cryptographic Profile & Display Credentials
+                </p>
+              </div>
+            </div>
+            <span className="text-[10px] font-mono px-2.5 py-1 rounded-full bg-black/40 border border-[var(--accent-primary)] text-[var(--accent-primary)] font-bold">
+              VERIFIED 👑
+            </span>
+          </div>
+
           {profileSavedNotice && (
             <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 text-xs flex items-center gap-2">
               <Check className="w-4 h-4 text-emerald-400" />
@@ -582,7 +613,7 @@ export const SettingsView: React.FC = () => {
               <div className="flex-1 text-center sm:text-left space-y-1.5">
                 <div>
                   <h3 className="text-xs font-bold text-[var(--text-main)]">{displayName}</h3>
-                  <p className="text-[11px] font-mono text-[var(--accent-primary)]">@{permanentUsername}</p>
+                  <p className="text-[11px] font-mono text-[var(--accent-primary)]">@{username}</p>
                 </div>
 
                 <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-0.5">
@@ -638,32 +669,31 @@ export const SettingsView: React.FC = () => {
                 />
               </div>
 
-              {/* Username (PERMANENT & IMMUTABLE) */}
+              {/* Username (@handle) */}
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="block text-xs font-semibold text-[var(--text-main)] flex items-center gap-1.5">
                     <span>Username (@handle)</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 font-mono">
-                      Permanent • Cannot be changed
-                    </span>
                   </label>
-                  <span className="text-[10px] font-mono text-emerald-500 flex items-center gap-1">
+                  <span className="text-[10px] font-mono text-[var(--accent-primary)] flex items-center gap-1">
                     <ShieldCheck className="w-3 h-3" />
-                    <span>Locked</span>
+                    <span>Customizable</span>
                   </span>
                 </div>
                 <div className="relative">
-                  <Lock className="w-4 h-4 absolute left-3 top-2.5 text-[var(--accent-primary)] opacity-80" />
+                  <span className="absolute left-3 top-2 text-xs font-mono text-[var(--accent-primary)] font-bold">@</span>
                   <input
                     type="text"
-                    readOnly
-                    disabled
-                    value={`@${permanentUsername}`}
-                    className="w-full pl-9 pr-3 py-2 text-xs font-mono rounded-xl bg-neutral-200/50 dark:bg-black/50 border border-neutral-300 dark:border-neutral-800 text-[var(--accent-primary)] cursor-not-allowed select-all"
+                    required
+                    maxLength={20}
+                    value={username}
+                    onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                    placeholder="your_handle"
+                    className="w-full pl-8 pr-3 py-2 text-xs font-mono rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--accent-primary)] focus:outline-none"
                   />
                 </div>
                 <p className="mt-1 text-[10px] text-[var(--text-muted)]">
-                  Your ERROREX username <strong>(@{permanentUsername})</strong> is fixed and cannot be changed.
+                  Your custom ERROREX username <strong>(@{username})</strong> for finding contacts and receiving messages.
                 </p>
               </div>
 
@@ -796,14 +826,14 @@ export const SettingsView: React.FC = () => {
         </div>
       )}
 
-      {/* Tab 5: Account & Security */}
+      {/* Tab 5: Account & Supabase */}
       {activeTab === 'account' && (
         <div className="mt-6 max-w-xl space-y-5">
           <div className="p-5 rounded-2xl bg-[var(--bg-card)] border border-[var(--accent-border)] space-y-4 shadow-sm">
             <div>
               <h2 className="text-xs font-bold text-[var(--text-main)]">Change Account Password</h2>
               <p className="text-[11px] text-[var(--text-muted)]">
-                Update your primary Firebase account login password.
+                Update your primary account login password.
               </p>
             </div>
 

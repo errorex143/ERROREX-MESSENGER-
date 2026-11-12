@@ -17,7 +17,8 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-export const THEMES: { id: ThemeName; name: string; primaryHex: string; description: string }[] = [
+export const THEMES: { id: ThemeName; name: string; primaryHex: string; description: string; isRainbow?: boolean }[] = [
+  { id: 'rainbow', name: 'Rainbow Prism', primaryHex: '#FF2E93', description: 'Vibrant multi-color rainbow spectrum with prism luster', isRainbow: true },
   { id: 'gold', name: 'Imperial Gold', primaryHex: '#D4AF37', description: 'Classic regal gold with metallic luster' },
   { id: 'white', name: 'Platinum White', primaryHex: '#F8FAFC', description: 'Pure diamond white with crystalline shine' },
   { id: 'black', name: 'Obsidian Black', primaryHex: '#0A0A0C', description: 'Deep velvet onyx black with dark mirror luster' },
