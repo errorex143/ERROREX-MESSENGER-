@@ -62,8 +62,8 @@ export async function signInWithEmailAndPassword(_auth: any, email: string, pass
   return standaloneAuth.signInWithEmailAndPassword(email, pass);
 }
 
-export async function createUserWithEmailAndPassword(_auth: any, email: string, pass: string) {
-  return standaloneAuth.createUserWithEmailAndPassword(email, pass);
+export async function createUserWithEmailAndPassword(_auth: any, email: string, pass: string, displayName?: string) {
+  return standaloneAuth.createUserWithEmailAndPassword(email, pass, displayName);
 }
 
 export async function sendPasswordResetEmail(_auth: any, email: string) {

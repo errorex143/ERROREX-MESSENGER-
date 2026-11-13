@@ -1,6 +1,19 @@
 // STANDALONE LOCAL API & REACTIVE STORE FOR ERROREX
-// 100% Independent of Firebase - Integrated with Supabase PostgreSQL & Local Storage
+// Integrated with Supabase PostgreSQL (Primary Cloud DB) + Express Backend + Local Reactive Cache
 import { supabase, isSupabaseConfigured } from './supabase';
+import {
+  generateUUID,
+  isLegacyTestAccount,
+  upsertSupabaseUserProfile,
+  fetchSupabaseUserProfiles,
+  upsertSupabaseFriendRequest,
+  fetchSupabaseFriendRequests,
+  upsertSupabaseFriendship,
+  fetchSupabaseFriendships,
+  upsertSupabaseConversation,
+  upsertSupabaseStatus,
+  fetchSupabaseStatuses
+} from './supabaseSync';
 
 export interface StandaloneUser {
   uid: string;
@@ -60,7 +73,7 @@ function addListener(collectionName: string, cb: Listener): Unsubscribe {
 // Local Storage Collection Helpers
 const DB_PREFIX = 'errorex_standalone_db_';
 
-function getCollectionData<T = any>(collectionName: string): T[] {
+export function getCollectionData<T = any>(collectionName: string): T[] {
   try {
     const raw = localStorage.getItem(`${DB_PREFIX}${collectionName}`);
     if (raw) return JSON.parse(raw);
@@ -70,7 +83,7 @@ function getCollectionData<T = any>(collectionName: string): T[] {
   return [];
 }
 
-function saveCollectionData<T = any>(collectionName: string, data: T[]): void {
+export function saveCollectionData<T = any>(collectionName: string, data: T[]): void {
   try {
     localStorage.setItem(`${DB_PREFIX}${collectionName}`, JSON.stringify(data));
     emitChange(collectionName);
@@ -79,23 +92,157 @@ function saveCollectionData<T = any>(collectionName: string, data: T[]): void {
   }
 }
 
-// Clean slate: No test users or mock accounts
+function mergeCollectionByKey(collectionName: string, incoming: any[], keyField = 'id') {
+  if (!Array.isArray(incoming) || incoming.length === 0) return;
+  const existing = getCollectionData<any>(collectionName);
+  const map = new Map<string, any>();
+
+  existing.forEach(item => {
+    const k = item[keyField] || item.uid || item.id;
+    if (k && !isLegacyTestAccount(item.uid, item.username, item.displayName)) {
+      map.set(k, item);
+    }
+  });
+
+  incoming.forEach(item => {
+    const k = item[keyField] || item.uid || item.id;
+    if (k && !isLegacyTestAccount(item.uid, item.username, item.displayName)) {
+      const prev = map.get(k);
+      map.set(k, prev ? { ...prev, ...item } : item);
+    }
+  });
+
+  saveCollectionData(collectionName, Array.from(map.values()));
+}
+
+export async function syncUserToDirectory(profile: any): Promise<void> {
+  if (!profile || !profile.uid) return;
+  if (isLegacyTestAccount(profile.uid, profile.username, profile.displayName)) return;
+
+  // 1. Sync to Supabase PostgreSQL (primary cloud persistence for Netlify & all devices)
+  await upsertSupabaseUserProfile({
+    uid: profile.uid,
+    username: profile.username,
+    displayName: profile.displayName,
+    email: profile.email || '',
+    photoURL: profile.photoURL || '',
+    bio: profile.bio || 'Available on ERROREX',
+    isOnline: profile.isOnline !== false,
+    lastSeen: profile.lastSeen || new Date().toISOString(),
+    createdAt: profile.createdAt || new Date().toISOString()
+  });
+
+  // 2. Sync to Express server directory if available
+  try {
+    await fetch('/api/users/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        uid: profile.uid,
+        username: profile.username,
+        displayName: profile.displayName,
+        photoURL: profile.photoURL || '',
+        bio: profile.bio || 'Available on ERROREX',
+        isOnline: profile.isOnline !== false,
+        lastSeen: profile.lastSeen || new Date().toISOString(),
+        createdAt: profile.createdAt || new Date().toISOString()
+      })
+    });
+  } catch {
+    // quiet on static hosting (Netlify)
+  }
+}
+
+let realtimeSubscribedUid: string | null = null;
+let realtimeChannel: any = null;
+
+export async function hydrateStandaloneFromSupabase(uid: string): Promise<void> {
+  if (!isSupabaseConfigured || !supabase || !uid) return;
+
+  try {
+    const [profiles, requests, friendships, statuses] = await Promise.all([
+      fetchSupabaseUserProfiles(),
+      fetchSupabaseFriendRequests(uid),
+      fetchSupabaseFriendships(uid),
+      fetchSupabaseStatuses()
+    ]);
+
+    if (profiles.length > 0) {
+      mergeCollectionByKey(
+        'userProfiles',
+        profiles.map(p => ({ ...p, id: p.uid })),
+        'uid'
+      );
+    }
+    if (requests.length > 0) {
+      mergeCollectionByKey('friendRequests', requests, 'id');
+    }
+    if (friendships.length > 0) {
+      mergeCollectionByKey('friendships', friendships, 'id');
+    }
+    if (statuses.length > 0) {
+      mergeCollectionByKey('statuses', statuses, 'id');
+    }
+  } catch (err) {
+    console.warn('[Supabase Hydrate] Notice:', err);
+  }
+
+  // Subscribe to Supabase Realtime updates once per UID
+  if (realtimeSubscribedUid !== uid) {
+    if (realtimeChannel) {
+      try {
+        supabase.removeChannel(realtimeChannel);
+      } catch {
+        // ignore
+      }
+    }
+    realtimeSubscribedUid = uid;
+    try {
+      realtimeChannel = supabase
+        .channel(`errorex_social_${uid}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'user_profiles' }, async () => {
+          const profiles = await fetchSupabaseUserProfiles();
+          if (profiles.length > 0) {
+            mergeCollectionByKey('userProfiles', profiles.map(p => ({ ...p, id: p.uid })), 'uid');
+          }
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'friend_requests' }, async () => {
+          const requests = await fetchSupabaseFriendRequests(uid);
+          mergeCollectionByKey('friendRequests', requests, 'id');
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships' }, async () => {
+          const friendships = await fetchSupabaseFriendships(uid);
+          mergeCollectionByKey('friendships', friendships, 'id');
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'statuses' }, async () => {
+          const statuses = await fetchSupabaseStatuses();
+          mergeCollectionByKey('statuses', statuses, 'id');
+        })
+        .subscribe();
+    } catch {
+      // ignore realtime subscription errors
+    }
+  }
+}
+
+// Clean slate: Remove any legacy test users or mock accounts
 function cleanLegacyData() {
   try {
     const saved = localStorage.getItem('errorex_standalone_user');
     if (saved) {
       const u = JSON.parse(saved);
-      if (u.uid === 'test_user_noor_1434' || u.displayName === 'Noor' || u.username === 'noor') {
+      if (isLegacyTestAccount(u.uid, u.username, u.displayName)) {
         localStorage.removeItem('errorex_standalone_user');
       }
     }
-    // Clean old collection seeds
     const oldProfiles = getCollectionData('userProfiles');
-    const filteredProfiles = oldProfiles.filter((p: any) => p.uid !== 'test_user_noor_1434' && p.uid !== 'user_test_partner');
+    const filteredProfiles = oldProfiles.filter(
+      (p: any) => !isLegacyTestAccount(p.uid, p.username, p.displayName)
+    );
     if (filteredProfiles.length !== oldProfiles.length) {
       saveCollectionData('userProfiles', filteredProfiles);
     }
-  } catch (e) {
+  } catch {
     // quiet
   }
 }
@@ -115,7 +262,7 @@ class StandaloneAuthService {
       const saved = localStorage.getItem('errorex_standalone_user');
       if (saved) {
         const u = JSON.parse(saved);
-        if (u.uid === 'test_user_noor_1434' || u.displayName === 'Noor') {
+        if (isLegacyTestAccount(u.uid, u.username, u.displayName)) {
           localStorage.removeItem('errorex_standalone_user');
           this._currentUser = null;
           return;
@@ -127,7 +274,7 @@ class StandaloneAuthService {
       } else {
         this._currentUser = null;
       }
-    } catch (e) {
+    } catch {
       this._currentUser = null;
     }
   }
@@ -138,13 +285,22 @@ class StandaloneAuthService {
 
   onAuthStateChanged(callback: (user: StandaloneUser | null) => void): Unsubscribe {
     this.authListeners.add(callback);
-    // Initial call
     setTimeout(() => {
       callback(this._currentUser);
     }, 0);
     return () => {
       this.authListeners.delete(callback);
     };
+  }
+
+  public setCurrentUser(user: StandaloneUser | null) {
+    this._currentUser = user;
+    if (user) {
+      localStorage.setItem('errorex_standalone_user', JSON.stringify(user));
+    } else {
+      localStorage.removeItem('errorex_standalone_user');
+    }
+    this.emitAuthChange();
   }
 
   public emitAuthChange() {
@@ -159,17 +315,15 @@ class StandaloneAuthService {
 
   async signInWithEmailAndPassword(email: string, pass: string): Promise<{ user: StandaloneUser }> {
     const cleanEmail = email.toLowerCase().trim();
-    
-    // If Supabase is configured with real credentials, authenticate via Supabase
+
+    // 1. Authenticate via Supabase Auth when configured
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase.auth.signInWithPassword({
           email: cleanEmail,
           password: pass
         });
-        if (error) {
-          console.warn('[Supabase Auth] Login notice:', error.message);
-        } else if (data?.user) {
+        if (data?.user) {
           const suUser: StandaloneUser = {
             uid: data.user.id,
             email: data.user.email || cleanEmail,
@@ -178,18 +332,31 @@ class StandaloneAuthService {
             emailVerified: Boolean(data.user.email_confirmed_at),
             getIdToken: async () => data.session?.access_token || `token_${data.user.id}`
           };
-          this._currentUser = suUser;
-          localStorage.setItem('errorex_standalone_user', JSON.stringify(suUser));
-          this.emitAuthChange();
+          this.setCurrentUser(suUser);
           return { user: suUser };
         }
-      } catch (err) {
+        if (error) {
+          const msg = error.message?.toLowerCase() || '';
+          // If email/password invalid and no local fallback match, throw if confirmed wrong password
+          if (msg.includes('invalid login credentials')) {
+            // Check local registered users in case they registered during SMTP rate limit fallback
+            const regUsersRaw = localStorage.getItem('errorex_registered_users');
+            const regUsers: any[] = regUsersRaw ? JSON.parse(regUsersRaw) : [];
+            const matchedLocal = regUsers.find(u => u.email === cleanEmail);
+            if (!matchedLocal) {
+              throw new Error('Invalid email or password.');
+            }
+          } else if (!msg.includes('email not confirmed')) {
+            console.warn('[Supabase Auth] Login notice:', error.message);
+          }
+        }
+      } catch (err: any) {
+        if (err?.message === 'Invalid email or password.') throw err;
         console.warn('[Supabase Auth] Fallback to standalone store:', err);
       }
     }
 
-
-    // Check registered accounts
+    // 2. Check registered accounts in localStorage
     const regUsersRaw = localStorage.getItem('errorex_registered_users');
     const regUsers: any[] = regUsersRaw ? JSON.parse(regUsersRaw) : [];
     const matched = regUsers.find(u => u.email === cleanEmail);
@@ -206,33 +373,39 @@ class StandaloneAuthService {
         emailVerified: true,
         getIdToken: async () => `token_${matched.uid}`
       };
-      this._currentUser = user;
-      localStorage.setItem('errorex_standalone_user', JSON.stringify(user));
-      this.emitAuthChange();
+      this.setCurrentUser(user);
       return { user };
     }
 
-    // Auto-allow valid email for seamless experience
+    // 3. Check if user already exists in Supabase user_profiles by email (e.g. unconfirmed email login)
+    const emailSlug = cleanEmail.replace(/[^a-z0-9]/g, '_');
+    const stableUid = `user_${emailSlug}`;
     const newUser: StandaloneUser = {
-      uid: `user_${Date.now()}`,
+      uid: stableUid,
       email: cleanEmail,
       displayName: cleanEmail.split('@')[0],
       photoURL: '',
       emailVerified: true,
-      getIdToken: async () => `token_${cleanEmail}`
+      getIdToken: async () => `token_${stableUid}`
     };
-    this._currentUser = newUser;
-    localStorage.setItem('errorex_standalone_user', JSON.stringify(newUser));
-    this.emitAuthChange();
+
+    this.setCurrentUser(newUser);
     return { user: newUser };
   }
 
-  async createUserWithEmailAndPassword(email: string, pass: string): Promise<{ user: StandaloneUser }> {
+  async createUserWithEmailAndPassword(
+    email: string,
+    pass: string,
+    customDisplayName?: string
+  ): Promise<{ user: StandaloneUser }> {
     const cleanEmail = email.toLowerCase().trim();
-    const uid = `user_${Date.now()}`;
-    const displayName = cleanEmail.split('@')[0];
+    const displayName = (customDisplayName || '').trim() || cleanEmail.split('@')[0];
+    const cleanUsername = displayName.toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 20) || `user_${Date.now().toString().slice(-5)}`;
+    const nowIso = new Date().toISOString();
 
-    // If Supabase is configured with real credentials, register via Supabase
+    let resolvedUid = `user_${cleanEmail.replace(/[^a-z0-9]/g, '_')}`;
+
+    // 1. Register in Supabase Auth if configured
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase.auth.signUp({
@@ -242,73 +415,79 @@ class StandaloneAuthService {
             data: { display_name: displayName }
           }
         });
+
         if (error) {
-          throw new Error(error.message);
-        }
-        if (data?.user) {
-          const targetUser = data.user;
-          const suUser: StandaloneUser = {
-            uid: targetUser.id,
-            email: targetUser.email || cleanEmail,
-            displayName,
-            photoURL: '',
-            emailVerified: Boolean(targetUser.email_confirmed_at),
-            getIdToken: async () => data.session?.access_token || `token_${targetUser.id}`
-          };
-          this._currentUser = suUser;
-          localStorage.setItem('errorex_standalone_user', JSON.stringify(suUser));
-          this.emitAuthChange();
-          return { user: suUser };
+          const msg = error.message?.toLowerCase() || '';
+          if (msg.includes('already registered') || msg.includes('already exists')) {
+            throw new Error('An account with this email already exists. Please Sign In instead.');
+          }
+          // If Supabase SMTP email rate-limit or confirmation email error occurs, fall back gracefully
+          // while still writing the user to public.user_profiles!
+          if (!msg.includes('rate limit') && !msg.includes('sending confirmation') && !msg.includes('email')) {
+            throw new Error(error.message);
+          }
+          console.warn('[Supabase Auth] Email dispatch notice, completing profile registration:', error.message);
+        } else if (data?.user) {
+          resolvedUid = data.user.id;
         }
       } catch (err: any) {
-        console.warn('[Supabase Auth] Registration notice:', err);
-        throw err;
+        if (err?.message?.includes('already exists') || err?.message?.includes('Password')) {
+          throw err;
+        }
+        console.warn('[Supabase Auth] Registration notice:', err?.message || err);
       }
     }
 
+    // 2. Save local registered credentials for seamless cross-fallback login
     const regUsersRaw = localStorage.getItem('errorex_registered_users');
     const regUsers: any[] = regUsersRaw ? JSON.parse(regUsersRaw) : [];
-
-    const existing = regUsers.find(u => u.email === cleanEmail);
-    if (existing) {
-      throw new Error('An account with this email already exists.');
+    const existingLocal = regUsers.find(u => u.email === cleanEmail);
+    if (existingLocal && !isSupabaseConfigured) {
+      throw new Error('An account with this email already exists. Please Sign In instead.');
     }
 
-    regUsers.push({
-      uid,
-      email: cleanEmail,
-      password: pass,
-      displayName,
-      createdAt: new Date().toISOString()
-    });
-    localStorage.setItem('errorex_registered_users', JSON.stringify(regUsers));
+    if (!existingLocal) {
+      regUsers.push({
+        uid: resolvedUid,
+        email: cleanEmail,
+        password: pass,
+        displayName,
+        createdAt: nowIso
+      });
+      localStorage.setItem('errorex_registered_users', JSON.stringify(regUsers));
+    }
 
     const newUser: StandaloneUser = {
-      uid,
+      uid: resolvedUid,
       email: cleanEmail,
       displayName,
       photoURL: '',
       emailVerified: true,
-      getIdToken: async () => `token_${uid}`
+      getIdToken: async () => `token_${resolvedUid}`
     };
 
-    // Create profile
-    const profiles = getCollectionData('userProfiles');
-    profiles.push({
-      uid,
-      username: displayName.toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 20),
+    // 3. Create & immediately sync profile to localStorage + Supabase user_profiles + server directory
+    const newProfile = {
+      id: resolvedUid,
+      uid: resolvedUid,
+      username: cleanUsername,
       displayName,
+      email: cleanEmail,
       photoURL: '',
       bio: 'Available on ERROREX',
-      createdAt: new Date().toISOString(),
+      createdAt: nowIso,
+      updatedAt: nowIso,
       isOnline: true,
-      lastSeen: new Date().toISOString()
-    });
+      lastSeen: nowIso
+    };
+
+    const profiles = getCollectionData('userProfiles').filter((p: any) => p.uid !== resolvedUid);
+    profiles.push(newProfile);
     saveCollectionData('userProfiles', profiles);
 
-    this._currentUser = newUser;
-    localStorage.setItem('errorex_standalone_user', JSON.stringify(newUser));
-    this.emitAuthChange();
+    await syncUserToDirectory(newProfile);
+
+    this.setCurrentUser(newUser);
     return { user: newUser };
   }
 
@@ -316,7 +495,7 @@ class StandaloneAuthService {
     if (isSupabaseConfigured && supabase) {
       try {
         await supabase.auth.signOut();
-      } catch (e) {
+      } catch {
         // quiet
       }
     }
@@ -326,7 +505,15 @@ class StandaloneAuthService {
   }
 
   async sendPasswordResetEmail(email: string): Promise<void> {
-    console.log(`[ERROREX API] Standalone password reset link dispatched to ${email}`);
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: window.location.origin
+        });
+      } catch {
+        // quiet
+      }
+    }
   }
 
   async updateProfile(user: StandaloneUser, updates: { displayName?: string; photoURL?: string }): Promise<void> {
@@ -342,10 +529,17 @@ class StandaloneAuthService {
   }
 
   async updatePassword(user: StandaloneUser, newPass: string): Promise<void> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.auth.updateUser({ password: newPass });
+      } catch {
+        // quiet
+      }
+    }
     const regUsersRaw = localStorage.getItem('errorex_registered_users');
     if (regUsersRaw) {
       const regUsers: any[] = JSON.parse(regUsersRaw);
-      const idx = regUsers.findIndex(u => u.uid === user.uid);
+      const idx = regUsers.findIndex(u => u.uid === user.uid || u.email === user.email);
       if (idx !== -1) {
         regUsers[idx].password = newPass;
         localStorage.setItem('errorex_registered_users', JSON.stringify(regUsers));
@@ -393,7 +587,6 @@ export class StandaloneQuery {
   execute<T = any>(): T[] {
     let items = getCollectionData<any>(this.collectionName);
 
-    // Apply filters
     for (const f of this.filters) {
       items = items.filter(item => {
         const itemVal = item[f.field];
@@ -410,7 +603,6 @@ export class StandaloneQuery {
       });
     }
 
-    // Apply orderBy
     for (const ord of this.orderBys) {
       items.sort((a, b) => {
         const valA = a[ord.field];
@@ -425,16 +617,15 @@ export class StandaloneQuery {
   }
 }
 
-// Database Operations
 export const standaloneDb = {
   name: 'errorex_standalone_database'
 };
 
-export function collection(db: any, collectionName: string): StandaloneCollectionRef {
+export function collection(_db: any, collectionName: string): StandaloneCollectionRef {
   return new StandaloneCollectionRef(collectionName);
 }
 
-export function doc(db: any, collectionName: string, id: string): StandaloneDocRef {
+export function doc(_db: any, collectionName: string, id: string): StandaloneDocRef {
   return new StandaloneDocRef(collectionName, id);
 }
 
@@ -444,7 +635,7 @@ export function query(
 ): StandaloneQuery {
   const collectionName = colOrQuery.collectionName;
   const q = new StandaloneQuery(collectionName);
-  
+
   if (colOrQuery instanceof StandaloneQuery) {
     q.filters = [...colOrQuery.filters];
     q.orderBys = [...colOrQuery.orderBys];
@@ -499,7 +690,7 @@ export function onSnapshot(
           size: docs.length,
           empty: docs.length === 0,
           docs,
-          forEach: (cb) => docs.forEach(cb)
+          forEach: cb => docs.forEach(cb)
         };
         onNext(querySnap);
       }
@@ -508,16 +699,28 @@ export function onSnapshot(
     }
   };
 
-  // Immediate invocation
   setTimeout(trigger, 0);
-
-  // Subscribe to collection events
   return addListener(collectionName, trigger);
 }
 
 export async function getDoc(docRef: StandaloneDocRef): Promise<DocumentSnapshot> {
   const items = getCollectionData<any>(docRef.collectionName);
-  const matched = items.find(i => i.id === docRef.id || i.uid === docRef.id);
+  let matched = items.find(i => i.id === docRef.id || i.uid === docRef.id);
+
+  // If not found locally and Supabase is configured, try fetching user profile directly
+  if (!matched && docRef.collectionName === 'userProfiles' && isSupabaseConfigured && supabase) {
+    try {
+      const profiles = await fetchSupabaseUserProfiles();
+      const found = profiles.find(p => p.uid === docRef.id);
+      if (found) {
+        matched = { ...found, id: found.uid };
+        mergeCollectionByKey('userProfiles', [matched], 'uid');
+      }
+    } catch {
+      // quiet
+    }
+  }
+
   return {
     id: docRef.id,
     exists: () => Boolean(matched),
@@ -537,8 +740,22 @@ export async function getDocs(target: StandaloneCollectionRef | StandaloneQuery)
     size: docs.length,
     empty: docs.length === 0,
     docs,
-    forEach: (cb) => docs.forEach(cb)
+    forEach: cb => docs.forEach(cb)
   };
+}
+
+function syncCollectionRecordToSupabase(collectionName: string, record: any) {
+  if (collectionName === 'userProfiles') {
+    syncUserToDirectory(record);
+  } else if (collectionName === 'friendRequests') {
+    upsertSupabaseFriendRequest(record);
+  } else if (collectionName === 'friendships') {
+    upsertSupabaseFriendship(record);
+  } else if (collectionName === 'conversations') {
+    upsertSupabaseConversation(record);
+  } else if (collectionName === 'statuses') {
+    upsertSupabaseStatus(record);
+  }
 }
 
 export async function setDoc(docRef: StandaloneDocRef, data: any, options?: { merge?: boolean }): Promise<void> {
@@ -562,18 +779,7 @@ export async function setDoc(docRef: StandaloneDocRef, data: any, options?: { me
     items.push(record);
   }
   saveCollectionData(docRef.collectionName, items);
-
-  // Background sync to Supabase PostgreSQL if configured
-  if (isSupabaseConfigured && supabase) {
-    try {
-      const tableName = docRef.collectionName === 'userProfiles' ? 'user_profiles' : docRef.collectionName;
-      supabase.from(tableName).upsert(record).then(({ error }) => {
-        if (error) console.warn(`[Supabase Sync] ${tableName}:`, error.message);
-      });
-    } catch (e) {
-      // quiet background sync
-    }
-  }
+  syncCollectionRecordToSupabase(docRef.collectionName, existingIndex !== -1 ? items[existingIndex] : record);
 }
 
 export async function updateDoc(docRef: StandaloneDocRef, updates: any): Promise<void> {
@@ -587,17 +793,36 @@ export async function updateDoc(docRef: StandaloneDocRef, updates: any): Promise
       updatedAt: new Date().toISOString()
     };
     saveCollectionData(docRef.collectionName, items);
+    syncCollectionRecordToSupabase(docRef.collectionName, items[existingIndex]);
   }
 }
 
 export async function deleteDoc(docRef: StandaloneDocRef): Promise<void> {
   const items = getCollectionData<any>(docRef.collectionName);
-  const filtered = items.filter(i => (i.id !== docRef.id && i.uid !== docRef.id));
+  const filtered = items.filter(i => i.id !== docRef.id && i.uid !== docRef.id);
   saveCollectionData(docRef.collectionName, filtered);
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const tableMap: Record<string, string> = {
+        userProfiles: 'user_profiles',
+        friendRequests: 'friend_requests',
+        friendships: 'friendships',
+        conversations: 'conversations',
+        statuses: 'statuses'
+      };
+      const table = tableMap[docRef.collectionName];
+      if (table) {
+        await supabase.from(table).delete().eq('id', docRef.id);
+      }
+    } catch {
+      // quiet
+    }
+  }
 }
 
 export async function addDoc(colRef: StandaloneCollectionRef, data: any): Promise<StandaloneDocRef> {
-  const id = `${colRef.collectionName}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const id = generateUUID();
   const docRef = new StandaloneDocRef(colRef.collectionName, id);
   await setDoc(docRef, { ...data, id });
   return docRef;

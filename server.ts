@@ -5,6 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
+import { ERROREX_AI_SYSTEM_INSTRUCTION, generateErrorexAiFallback } from './src/lib/errorexAiEngine';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -44,7 +45,7 @@ try {
 const app = express();
 const portArgIndex = process.argv.indexOf('--port');
 const cliPort = portArgIndex !== -1 && process.argv[portArgIndex + 1] ? Number(process.argv[portArgIndex + 1]) : null;
-const PORT = cliPort || Number(process.env.PORT) || 3000;
+const PORT = process.env.NODE_ENV === 'production' ? (Number(process.env.PORT) || 3000) : (cliPort || 3000);
 
 app.use(express.json({ limit: '10mb' }));
 
@@ -261,6 +262,106 @@ app.get('/api/has-pin', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error in /api/has-pin:', error);
     res.json({ hasPin: true });
+  }
+});
+
+// --- SHARED WEBSITE USERS DIRECTORY (For Social Circle -> Find Members) ---
+interface DirectoryUser {
+  uid: string;
+  username: string;
+  displayName: string;
+  photoURL?: string;
+  bio?: string;
+  isOnline?: boolean;
+  lastSeen?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+const USERS_DIR_FILE = path.resolve(__dirname, 'users_directory.json');
+
+function loadUsersDirectory(): Map<string, DirectoryUser> {
+  const map = new Map<string, DirectoryUser>();
+  try {
+    if (fs.existsSync(USERS_DIR_FILE)) {
+      const data = JSON.parse(fs.readFileSync(USERS_DIR_FILE, 'utf8'));
+      for (const [k, v] of Object.entries(data)) {
+        const u = v as DirectoryUser;
+        if (u && u.uid && !u.uid.includes('noor') && !u.uid.includes('test_user_noor') && u.uid !== 'user_test_partner') {
+          map.set(k, u);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Could not read users_directory.json:', e);
+  }
+  return map;
+}
+
+function saveUsersDirectory(map: Map<string, DirectoryUser>) {
+  try {
+    const obj: Record<string, DirectoryUser> = {};
+    for (const [k, v] of map.entries()) {
+      obj[k] = v;
+    }
+    fs.writeFileSync(USERS_DIR_FILE, JSON.stringify(obj, null, 2), 'utf8');
+  } catch (e) {
+    console.warn('Could not write users_directory.json:', e);
+  }
+}
+
+const usersDirectory = loadUsersDirectory();
+
+// Get all users who use this website
+app.get('/api/users', (_req: Request, res: Response) => {
+  try {
+    const list = Array.from(usersDirectory.values()).sort((a, b) => {
+      if (a.isOnline && !b.isOnline) return -1;
+      if (!a.isOnline && b.isOnline) return 1;
+      return (b.updatedAt || '').localeCompare(a.updatedAt || '');
+    });
+    res.json({ users: list });
+  } catch (error) {
+    console.error('Error in GET /api/users:', error);
+    res.json({ users: [] });
+  }
+});
+
+// Register or update user in shared website directory
+app.post('/api/users/sync', (req: Request, res: Response) => {
+  try {
+    const { uid, username, displayName, photoURL, bio, isOnline, lastSeen, createdAt } = req.body || {};
+    if (!uid || typeof uid !== 'string') {
+      return res.status(400).json({ error: 'Valid uid is required' });
+    }
+    if (uid.includes('noor') || uid.includes('test_user_noor') || uid === 'user_test_partner') {
+      return res.status(400).json({ error: 'Legacy test account ignored' });
+    }
+
+    const existing = usersDirectory.get(uid);
+    const nowIso = new Date().toISOString();
+    const record: DirectoryUser = {
+      uid,
+      username: (typeof username === 'string' && username.trim())
+        ? username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_')
+        : existing?.username || `user_${uid.slice(0, 6)}`,
+      displayName: (typeof displayName === 'string' && displayName.trim())
+        ? displayName.trim()
+        : existing?.displayName || 'ERROREX Member',
+      photoURL: typeof photoURL === 'string' ? photoURL : (existing?.photoURL || ''),
+      bio: typeof bio === 'string' ? bio : (existing?.bio || 'Available on ERROREX'),
+      isOnline: typeof isOnline === 'boolean' ? isOnline : (existing?.isOnline ?? true),
+      lastSeen: typeof lastSeen === 'string' ? lastSeen : nowIso,
+      createdAt: existing?.createdAt || (typeof createdAt === 'string' ? createdAt : nowIso),
+      updatedAt: nowIso
+    };
+
+    usersDirectory.set(uid, record);
+    saveUsersDirectory(usersDirectory);
+    res.json({ success: true, user: record });
+  } catch (error) {
+    console.error('Error in POST /api/users/sync:', error);
+    res.status(500).json({ error: 'Failed to sync user profile' });
   }
 });
 
@@ -680,20 +781,10 @@ app.post('/api/ai/chat', async (req: Request, res: Response) => {
         contents.push({ role: 'user', parts: [{ text: message }] });
 
         const response = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
+          model: 'gemini-4-hydrogen',
           contents,
           config: {
-            systemInstruction: `You are ERROREX AI, an elite, highly intelligent AI assistant (ChatGPT-grade).
-Rules you must strictly follow:
-1. LEAN, CRISP, UNIQUE WRITING: Provide clean, direct, and unique responses. No fluff, no robotic filler, no generic disclaimers ("As an AI...", "Here is what you asked for:"). Answer precisely and directly from the very first word.
-2. STRICT ACCURACY: Answer exactly what was asked. Keep explanations focused, logical, and actionable.
-3. MULTILINGUAL MASTERY: Understand every language fluently (Roman Urdu, Urdu / اردو, Hindi, English, Arabic, Pashto, Punjabi, French, Spanish, German, Turkish, Chinese, etc.).
-4. EXACT LANGUAGE FIDELITY:
-   - If the user asks in Roman Urdu, respond naturally, elegantly and fluently in Roman Urdu.
-   - If the user asks in Urdu script (اردو), reply in proper, clear Urdu script.
-   - If the user requests a specific language (e.g. "English me batao", "Urdu me samjhao", "in French", "in Arabic", "reply in Hindi"), ALWAYS deliver the full answer in that exact requested language.
-5. TECHNICAL & PROGRAMMING EXCELLENCE: Give clean, modern, production-grade code with syntax highlighting and direct explanations.
-6. MATHEMATICS & REASONING: Show concise, step-by-step logic and the exact answer without fluff.`
+            systemInstruction: ERROREX_AI_SYSTEM_INSTRUCTION
           }
         });
 
@@ -705,12 +796,12 @@ Rules you must strictly follow:
       }
     }
 
-    // High-performance ChatGPT-grade autonomous response engine
-    const autonomousReply = generateChatGPTGradeResponse(message, history);
+    // High-performance autonomous response engine
+    const autonomousReply = generateErrorexAiFallback(message, history);
     res.json({ reply: autonomousReply });
   } catch (error: any) {
     console.error('Error in /api/ai/chat:', error);
-    const fallback = generateChatGPTGradeResponse(req.body?.message || 'help');
+    const fallback = generateErrorexAiFallback(req.body?.message || 'help');
     res.json({ reply: fallback });
   }
 });

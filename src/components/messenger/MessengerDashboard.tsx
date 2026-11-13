@@ -124,7 +124,12 @@ export const MessengerDashboard: React.FC = () => {
   // Start direct conversation with a friend or contact
   const handleStartChatWithUser = (targetUser: UserProfile | { displayName: string; uid?: string; username?: string; photoURL?: string; bio?: string }) => {
     const existing = conversations.find(
-      c => !c.isGroup && targetUser.username && c.participantDetails && Object.values(c.participantDetails).some(p => p.username === targetUser.username)
+      c =>
+        !c.isGroup &&
+        ((targetUser.uid && c.participants.includes(targetUser.uid)) ||
+          (targetUser.username &&
+            c.participantDetails &&
+            Object.values(c.participantDetails).some(p => p.username === targetUser.username)))
     );
 
     if (existing) {
@@ -143,9 +148,10 @@ export const MessengerDashboard: React.FC = () => {
       currentUserId,
       {
         displayName: currentUserName,
-        username: storedProfile.username || 'user',
-        photoURL: storedProfile.photoURL || ''
-      }
+        username: userProfile?.username || storedProfile.username || 'user',
+        photoURL: userProfile?.photoURL || storedProfile.photoURL || ''
+      },
+      targetUser.uid
     );
     setActiveConversationId(newConv.id);
     setActiveTab('chats');
@@ -289,6 +295,13 @@ export const MessengerDashboard: React.FC = () => {
             currentUserId={currentUserId}
             currentUserProfile={userProfile}
             onStartChatWithUser={handleStartChatWithUser}
+            initialSubTab={
+              activeTab === 'directory'
+                ? 'directory'
+                : activeTab === 'requests'
+                ? 'requests'
+                : 'friends'
+            }
           />
         )}
 

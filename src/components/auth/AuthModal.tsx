@@ -6,9 +6,8 @@ import {
   sendPasswordResetEmail,
   sendEmailVerification
 } from '../../lib/firebase';
-import { useAuth } from '../../context/AuthContext';
 import { CrownLogo } from '../common/CrownLogo';
-import { Lock, Mail, ArrowRight, ShieldCheck, KeyRound, AlertCircle, CheckCircle2, Check } from 'lucide-react';
+import { Mail, ArrowRight, ShieldCheck, KeyRound, AlertCircle, CheckCircle2, User, Check } from 'lucide-react';
 import { isSupabaseConfigured, supabase } from '../../lib/supabase';
 import { standaloneAuth } from '../../lib/standaloneApi';
 
@@ -22,10 +21,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const [isForgotPassword, setIsForgotPassword] = useState(false);
 
   // Load saved credentials from localStorage if user previously checked "Save password"
+  const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [displayName, setDisplayName] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
 
   const [loading, setLoading] = useState(false);
@@ -41,7 +40,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         if (parsed.password) setPassword(parsed.password);
         if (parsed.rememberMe !== undefined) setRememberMe(Boolean(parsed.rememberMe));
       }
-    } catch (e) {
+    } catch {
       // quiet read
     }
   }, [isOpen]);
@@ -68,25 +67,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         return;
       }
 
-      // Standalone Google flow: Seamless Google ID authentication
-      const userGoogleEmail = email.includes('@') ? email.trim() : 'google.user@gmail.com';
+      // Standalone Google flow
+      const userGoogleEmail = (email.includes('@') ? email.trim() : 'google.user@gmail.com').toLowerCase();
       const cleanName = userGoogleEmail.split('@')[0];
+      const stableGoogleUid = `google_${userGoogleEmail.replace(/[^a-z0-9]/g, '_')}`;
       const googleUser = {
-        uid: `google_${Date.now()}`,
+        uid: stableGoogleUid,
         email: userGoogleEmail,
         displayName: cleanName.charAt(0).toUpperCase() + cleanName.slice(1),
-        photoURL: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
+        photoURL: '',
         emailVerified: true,
-        getIdToken: async () => `token_google_${Date.now()}`
+        getIdToken: async () => `token_${stableGoogleUid}`
       };
 
       if (rememberMe) {
         localStorage.setItem('errorex_saved_credentials', JSON.stringify({ email: userGoogleEmail, password: '', rememberMe: true }));
       }
 
-      localStorage.setItem(`errorex_unlocked_${googleUser.uid}`, 'true');
-      localStorage.setItem('errorex_standalone_user', JSON.stringify(googleUser));
-      standaloneAuth.emitAuthChange();
+      // Only pre-unlock if user already configured their Calculator PIN earlier
+      if (localStorage.getItem(`errorex_pin_set_${googleUser.uid}`) === 'true') {
+        localStorage.setItem(`errorex_unlocked_${googleUser.uid}`, 'true');
+      }
+      standaloneAuth.setCurrentUser(googleUser);
       onClose();
     } catch (err: any) {
       setError(err?.message || 'Google authentication error. Please try again.');
@@ -101,8 +103,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     setInfoMessage(null);
 
     const cleanEmail = email.trim().toLowerCase();
-    if (!cleanEmail.includes('@')) {
-      setError('Please enter a valid email address.');
+    if (!cleanEmail.includes('@') || !cleanEmail.includes('.')) {
+      setError('Please enter a valid Gmail or email address.');
       return;
     }
 
@@ -128,14 +130,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         setError('Password must be at least 6 characters.');
         return;
       }
+      if (!confirmPassword) {
+        setError('Please re-enter your password in Confirm Password.');
+        return;
+      }
       if (password !== confirmPassword) {
-        setError('Passwords do not match.');
+        setError('Both passwords do not match. Please enter the same password twice.');
         return;
       }
 
       setLoading(true);
       try {
-        const cred = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+        const cred = await createUserWithEmailAndPassword(auth, cleanEmail, password, displayName.trim());
         if (rememberMe) {
           localStorage.setItem('errorex_saved_credentials', JSON.stringify({ email: cleanEmail, password, rememberMe: true }));
         } else {
@@ -143,10 +149,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         }
 
         if (cred.user) {
-          localStorage.setItem(`errorex_unlocked_${cred.user.uid}`, 'true');
+          // IMPORTANT: Do NOT set unlocked or pin_set here so Step 2 (Calculator 8-Digit PIN Setup) opens next!
+          localStorage.removeItem(`errorex_unlocked_${cred.user.uid}`);
           try {
             await sendEmailVerification(cred.user);
-          } catch (e) {
+          } catch {
             // non-fatal
           }
         }
@@ -161,7 +168,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
       try {
         const cred = await signInWithEmailAndPassword(auth, cleanEmail, password);
         if (cred.user) {
-          localStorage.setItem(`errorex_unlocked_${cred.user.uid}`, 'true');
+          // If user already has PIN set, keep unlocked during active session until logout
+          if (
+            localStorage.getItem(`errorex_pin_set_${cred.user.uid}`) === 'true' ||
+            localStorage.getItem(`errorex_pin_cred_${cred.user.uid}`)
+          ) {
+            localStorage.setItem(`errorex_unlocked_${cred.user.uid}`, 'true');
+          }
         }
         if (rememberMe) {
           localStorage.setItem('errorex_saved_credentials', JSON.stringify({ email: cleanEmail, password, rememberMe: true }));
@@ -177,9 +190,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
+  const passwordsMatch = Boolean(password && confirmPassword && password === confirmPassword);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-      <div className="relative w-full max-w-md p-6 sm:p-8 rounded-3xl bg-[#0E0E11] border border-[var(--accent-border)] gold-glow shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto">
+      <div className="relative w-full max-w-md p-6 sm:p-8 rounded-3xl bg-[#0E0E11] border border-[var(--accent-border)] gold-glow shadow-2xl my-4">
         {/* Header with Crown */}
         <div className="flex flex-col items-center text-center mb-5">
           <CrownLogo size="lg" showWordmark={true} />
@@ -187,7 +202,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             {isForgotPassword
               ? 'Reset Account Password'
               : isRegister
-              ? 'Join The Sovereign Network'
+              ? 'Step 1 of 2 • Create Sovereign ID'
               : 'Authenticate Account'}
           </p>
         </div>
@@ -213,7 +228,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             <div className="flex items-center gap-3 my-4">
               <div className="flex-1 h-px bg-white/10" />
               <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-mono">
-                or email & password
+                or gmail & password
               </span>
               <div className="flex-1 h-px bg-white/10" />
             </div>
@@ -269,19 +284,38 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         )}
 
         {/* Form */}
-        <form onSubmit={handleEmailAuth} className="space-y-4">
+        <form onSubmit={handleEmailAuth} className="space-y-3.5">
+          {isRegister && !isForgotPassword && (
+            <div>
+              <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                Full Name / Display Name
+              </label>
+              <div className="relative">
+                <User className="w-4 h-4 absolute left-3.5 top-3 text-neutral-500" />
+                <input
+                  type="text"
+                  maxLength={25}
+                  value={displayName}
+                  onChange={e => setDisplayName(e.target.value)}
+                  placeholder="Your Name (visible in Find Members)"
+                  className="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl bg-neutral-900/80 border border-neutral-700/60 focus:border-[var(--accent-primary)] focus:outline-none text-white placeholder-neutral-500 transition-colors"
+                />
+              </div>
+            </div>
+          )}
+
           <div>
             <label className="block text-xs font-medium text-neutral-300 mb-1.5">
-              Email Address
+              Gmail / Email Address
             </label>
             <div className="relative">
-              <Mail className="w-4 h-4 absolute left-3.5 top-3.5 text-neutral-500" />
+              <Mail className="w-4 h-4 absolute left-3.5 top-3 text-neutral-500" />
               <input
                 type="email"
                 required
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder="your.email@domain.com"
+                placeholder="yourname@gmail.com"
                 className="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl bg-neutral-900/80 border border-neutral-700/60 focus:border-[var(--accent-primary)] focus:outline-none text-white placeholder-neutral-500 transition-colors"
               />
             </div>
@@ -305,13 +339,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                   )}
                 </div>
                 <div className="relative">
-                  <KeyRound className="w-4 h-4 absolute left-3.5 top-3.5 text-neutral-500" />
+                  <KeyRound className="w-4 h-4 absolute left-3.5 top-3 text-neutral-500" />
                   <input
                     type="password"
                     required
                     value={password}
                     onChange={e => setPassword(e.target.value)}
-                    placeholder="••••••••"
+                    placeholder="Minimum 6 characters"
                     className="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl bg-neutral-900/80 border border-neutral-700/60 focus:border-[var(--accent-primary)] focus:outline-none text-white placeholder-neutral-500 transition-colors"
                   />
                 </div>
@@ -319,24 +353,32 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
 
               {isRegister && (
                 <div>
-                  <label className="block text-xs font-medium text-neutral-300 mb-1.5">
-                    Confirm Password
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-medium text-neutral-300">
+                      Confirm Password (Enter 2nd Time)
+                    </label>
+                    {confirmPassword && (
+                      <span className={`text-[10px] font-mono flex items-center gap-1 ${passwordsMatch ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {passwordsMatch ? <Check className="w-3 h-3" /> : null}
+                        {passwordsMatch ? 'Matched' : 'Not matched'}
+                      </span>
+                    )}
+                  </div>
                   <div className="relative">
-                    <ShieldCheck className="w-4 h-4 absolute left-3.5 top-3.5 text-neutral-500" />
+                    <ShieldCheck className="w-4 h-4 absolute left-3.5 top-3 text-neutral-500" />
                     <input
                       type="password"
                       required
                       value={confirmPassword}
                       onChange={e => setConfirmPassword(e.target.value)}
-                      placeholder="••••••••"
+                      placeholder="Re-enter same password"
                       className="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl bg-neutral-900/80 border border-neutral-700/60 focus:border-[var(--accent-primary)] focus:outline-none text-white placeholder-neutral-500 transition-colors"
                     />
                   </div>
                 </div>
               )}
 
-              {/* Save Password / Remember Me Checkbox */}
+              {/* Save Password Checkbox */}
               <div className="flex items-center justify-between text-xs pt-1">
                 <label className="flex items-center gap-2 cursor-pointer select-none text-neutral-300 hover:text-white transition-colors">
                   <input
@@ -360,7 +402,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
               <span className="inline-block w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
             ) : (
               <>
-                <span>{isForgotPassword ? 'Send Reset Link' : isRegister ? 'Register & Continue' : 'Sign In'}</span>
+                <span>
+                  {isForgotPassword
+                    ? 'Send Reset Link'
+                    : isRegister
+                    ? 'Next: Set Calculator PIN'
+                    : 'Sign In'}
+                </span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
@@ -384,7 +432,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
 
         <div className="mt-5 pt-3 border-t border-neutral-800 text-center">
           <p className="text-[11px] text-neutral-500">
-            Account password and secret 8-digit PIN are two separate sovereign security layers.
+            {isRegister
+              ? 'Step 1: Confirm Gmail & Password → Step 2: Set your 8-digit Calculator Unlock PIN.'
+              : 'Account password and secret 8-digit Calculator PIN are two separate security layers.'}
           </p>
         </div>
       </div>

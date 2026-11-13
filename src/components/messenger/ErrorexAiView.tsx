@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { CrownLogo } from '../common/CrownLogo';
 import { EmojiKeyboard } from '../common/EmojiKeyboard';
+import { generateErrorexAiFallback } from '../../lib/errorexAiEngine';
 import {
   Send,
   Sparkles,
@@ -9,13 +10,7 @@ import {
   Copy,
   Check,
   Trash2,
-  Smile,
-  Globe,
-  HelpCircle,
-  Lightbulb,
-  Code,
-  ShieldCheck,
-  Languages
+  Smile
 } from 'lucide-react';
 
 interface AiMessage {
@@ -89,18 +84,29 @@ export const ErrorexAiView: React.FC = () => {
     setShowEmojiPicker(false);
     setIsLoading(true);
 
+    const historySlice = messages.slice(-10).map(m => ({ sender: m.sender, text: m.text }));
+
     try {
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: textToSend,
-          history: messages.slice(-10).map(m => ({ sender: m.sender, text: m.text }))
+          history: historySlice
         })
       });
 
-      const data = await res.json();
-      const aiReply = data.reply || 'Main aapke sawal ka jwab abhi generate nahi kar saka. Barah-e-karam dobara koshish karein.';
+      const contentType = res.headers.get('content-type') || '';
+      let aiReply = '';
+
+      if (res.ok && contentType.includes('application/json')) {
+        const data = await res.json();
+        aiReply = typeof data?.reply === 'string' ? data.reply.trim() : '';
+      }
+
+      if (!aiReply) {
+        aiReply = generateErrorexAiFallback(textToSend, historySlice);
+      }
 
       const aiMsg: AiMessage = {
         id: `ai_${Date.now()}`,
@@ -111,11 +117,12 @@ export const ErrorexAiView: React.FC = () => {
 
       setMessages(prev => [...prev, aiMsg]);
     } catch (err: any) {
-      console.error('AI chat error:', err);
+      console.warn('AI chat fallback engaged:', err?.message || err);
+      const fallbackReply = generateErrorexAiFallback(textToSend, historySlice);
       const fallbackMsg: AiMessage = {
         id: `ai_${Date.now()}`,
         sender: 'ai',
-        text: `Salam! Main ERROREX AI hoon. Main har zubaan me har sawal ka jwab deta hoon.\n\nAapka sawal tha: "${textToSend}". Server response abhi connect ho raha hai. Barah-e-karam dobara koshish karein ya Settings me secrets check karein.`,
+        text: fallbackReply,
         createdAt: new Date().toISOString()
       };
       setMessages(prev => [...prev, fallbackMsg]);

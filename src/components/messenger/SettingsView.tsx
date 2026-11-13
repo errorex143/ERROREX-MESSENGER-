@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme, THEMES } from '../../context/ThemeContext';
-import { ThemeName, ColorMode, PrivacySettings } from '../../types';
+import { useTheme } from '../../context/ThemeContext';
+import { THEMES } from '../../context/ThemeContext';
+import { PrivacySettings } from '../../types';
 import { chatStore } from '../../lib/chatStore';
+import { isSupabaseConfigured, testSupabaseConnection } from '../../lib/supabase';
+import { syncUserToDirectory, hydrateStandaloneFromSupabase } from '../../lib/standaloneApi';
 import {
   Palette,
   Shield,
@@ -16,11 +19,10 @@ import {
   Lock,
   User,
   ShieldCheck,
-  Bell,
   Sparkles,
-  Info,
   Camera,
-  RefreshCw
+  RefreshCw,
+  Database
 } from 'lucide-react';
 import { updatePassword } from '../../lib/firebase';
 
@@ -94,6 +96,41 @@ export const SettingsView: React.FC = () => {
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
+
+  // Supabase connection & sync state
+  const [supabaseStatus, setSupabaseStatus] = useState<{ connected: boolean; message: string } | null>(null);
+  const [syncingCloud, setSyncingCloud] = useState(false);
+
+  useEffect(() => {
+    if (activeTab === 'account') {
+      testSupabaseConnection().then(setSupabaseStatus);
+    }
+  }, [activeTab]);
+
+  const handleManualCloudSync = async () => {
+    if (!user) return;
+    setSyncingCloud(true);
+    try {
+      await syncUserToDirectory({
+        uid: user.uid,
+        username: username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '') || 'user',
+        displayName: displayName.trim() || user.displayName || 'Member',
+        email: user.email || '',
+        photoURL,
+        bio,
+        isOnline: true,
+        lastSeen: new Date().toISOString()
+      });
+      await Promise.all([
+        hydrateStandaloneFromSupabase(user.uid),
+        chatStore.hydrateFromSupabase(user.uid)
+      ]);
+      const health = await testSupabaseConnection();
+      setSupabaseStatus(health);
+    } finally {
+      setSyncingCloud(false);
+    }
+  };
 
   // Handle Privacy Change
   const updatePrivacyField = (key: keyof PrivacySettings, value: any) => {
@@ -829,6 +866,49 @@ export const SettingsView: React.FC = () => {
       {/* Tab 5: Account & Supabase */}
       {activeTab === 'account' && (
         <div className="mt-6 max-w-xl space-y-5">
+          {/* Read-Only Supabase PostgreSQL Status & Manual Sync */}
+          <div className="p-5 rounded-2xl bg-[var(--bg-card)] border border-[var(--accent-border)] space-y-3 shadow-sm">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-[var(--accent-surface)] border border-[var(--accent-border)] flex items-center justify-center text-[var(--accent-primary)]">
+                  <Database className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-xs font-bold text-[var(--text-main)]">Supabase Cloud Sync</h2>
+                  <p className="text-[11px] text-[var(--text-muted)]">
+                    {isSupabaseConfigured
+                      ? supabaseStatus?.message || 'Checking PostgreSQL tables...'
+                      : 'Environment variables VITE_SUPABASE_URL & VITE_SUPABASE_ANON_KEY required.'}
+                  </p>
+                </div>
+              </div>
+              <span
+                className={`text-[10px] font-mono px-2.5 py-1 rounded-full font-bold border ${
+                  supabaseStatus?.connected
+                    ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                    : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                }`}
+              >
+                {supabaseStatus?.connected ? 'CONNECTED' : 'LOCAL MODE'}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-white/5">
+              <span className="text-[11px] text-[var(--text-muted)]">
+                Account: <strong className="text-[var(--text-main)]">{user?.email || 'Local Session'}</strong>
+              </span>
+              <button
+                type="button"
+                onClick={handleManualCloudSync}
+                disabled={syncingCloud}
+                className="py-1.5 px-3 rounded-xl gold-button text-xs font-semibold text-[var(--accent-primary)] flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${syncingCloud ? 'animate-spin' : ''}`} />
+                <span>{syncingCloud ? 'Syncing...' : 'Sync Profile & Members'}</span>
+              </button>
+            </div>
+          </div>
+
           <div className="p-5 rounded-2xl bg-[var(--bg-card)] border border-[var(--accent-border)] space-y-4 shadow-sm">
             <div>
               <h2 className="text-xs font-bold text-[var(--text-main)]">Change Account Password</h2>

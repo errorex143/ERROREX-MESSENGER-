@@ -1,4 +1,14 @@
 import { Conversation, ChatMessage, ContactItem, PrivacySettings, UserProfile } from '../types';
+import { supabase, isSupabaseConfigured } from './supabase';
+import {
+  generateUUID,
+  isLegacyTestAccount,
+  upsertSupabaseConversation,
+  fetchSupabaseConversations,
+  deleteSupabaseConversation,
+  upsertSupabaseMessage,
+  fetchSupabaseMessages
+} from './supabaseSync';
 
 const CONVERSATIONS_STORAGE_KEY = 'errorex_conversations_v5';
 const MESSAGES_STORAGE_KEY_PREFIX = 'errorex_messages_v5_';
@@ -16,12 +26,10 @@ try {
     'errorex_session'
   ];
   legacyKeys.forEach(k => localStorage.removeItem(k));
-} catch (e) {
+} catch {
   // quiet
 }
 
-// 100% Fresh start: No fake users, no test chats
-const initialConversations: Conversation[] = [];
 const initialContacts: ContactItem[] = [];
 const initialMessages: Record<string, ChatMessage[]> = {};
 
@@ -29,8 +37,17 @@ type Listener = () => void;
 const listeners: Listener[] = [];
 
 function notifyListeners() {
-  listeners.forEach(fn => fn());
+  listeners.forEach(fn => {
+    try {
+      fn();
+    } catch {
+      // quiet
+    }
+  });
 }
+
+let chatRealtimeChannel: any = null;
+let chatRealtimeUid: string | null = null;
 
 export const chatStore = {
   subscribe(fn: Listener) {
@@ -39,6 +56,99 @@ export const chatStore = {
       const idx = listeners.indexOf(fn);
       if (idx !== -1) listeners.splice(idx, 1);
     };
+  },
+
+  // --- Supabase Cloud Hydration & Realtime Sync ---
+  async hydrateFromSupabase(uid: string) {
+    if (!isSupabaseConfigured || !supabase || !uid) return;
+
+    try {
+      const remoteConvs = await fetchSupabaseConversations(uid);
+      if (remoteConvs.length > 0) {
+        const localConvs = this.getAllConversations();
+        const convMap = new Map<string, Conversation>();
+        localConvs.forEach(c => convMap.set(c.id, c));
+        remoteConvs.forEach(rc => {
+          const prev = convMap.get(rc.id);
+          convMap.set(rc.id, prev ? { ...prev, ...rc } : rc);
+        });
+        this.saveConversations(Array.from(convMap.values()));
+
+        // Fetch messages for each conversation
+        await Promise.all(
+          remoteConvs.map(async rc => {
+            const remoteMsgs = await fetchSupabaseMessages(rc.id);
+            if (remoteMsgs.length > 0) {
+              const localMsgs = this.getMessages(rc.id);
+              const msgMap = new Map<string, ChatMessage>();
+              localMsgs.forEach(m => msgMap.set(m.id, m));
+              remoteMsgs.forEach(rm => {
+                const prev = msgMap.get(rm.id);
+                msgMap.set(rm.id, prev ? { ...prev, ...rm } : rm);
+              });
+              const merged = Array.from(msgMap.values()).sort(
+                (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+              );
+              this.saveMessages(rc.id, merged);
+            }
+          })
+        );
+      }
+    } catch (err) {
+      console.warn('[ChatStore] Supabase hydrate notice:', err);
+    }
+
+    // Subscribe to realtime messages & conversations
+    if (chatRealtimeUid !== uid) {
+      if (chatRealtimeChannel) {
+        try {
+          supabase.removeChannel(chatRealtimeChannel);
+        } catch {
+          // ignore
+        }
+      }
+      chatRealtimeUid = uid;
+      try {
+        chatRealtimeChannel = supabase
+          .channel(`errorex_chat_${uid}`)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, async () => {
+            const remoteConvs = await fetchSupabaseConversations(uid);
+            if (remoteConvs.length > 0) {
+              const localConvs = this.getAllConversations();
+              const convMap = new Map<string, Conversation>();
+              localConvs.forEach(c => convMap.set(c.id, c));
+              remoteConvs.forEach(rc => {
+                const prev = convMap.get(rc.id);
+                convMap.set(rc.id, prev ? { ...prev, ...rc } : rc);
+              });
+              this.saveConversations(Array.from(convMap.values()));
+            }
+          })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, async payload => {
+            const row = (payload.new || payload.old) as any;
+            if (!row?.conversation_id) return;
+            const myConvs = this.getConversations(uid);
+            if (!myConvs.some(c => c.id === row.conversation_id)) return;
+            const remoteMsgs = await fetchSupabaseMessages(row.conversation_id);
+            if (remoteMsgs.length > 0) {
+              const localMsgs = this.getMessages(row.conversation_id);
+              const msgMap = new Map<string, ChatMessage>();
+              localMsgs.forEach(m => msgMap.set(m.id, m));
+              remoteMsgs.forEach(rm => {
+                const prev = msgMap.get(rm.id);
+                msgMap.set(rm.id, prev ? { ...prev, ...rm } : rm);
+              });
+              const merged = Array.from(msgMap.values()).sort(
+                (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+              );
+              this.saveMessages(row.conversation_id, merged);
+            }
+          })
+          .subscribe();
+      } catch {
+        // quiet
+      }
+    }
   },
 
   // --- Conversations ---
@@ -102,15 +212,13 @@ export const chatStore = {
     const messages = this.getMessages(conversationId);
     const nowIso = new Date().toISOString();
 
-    // Check recipient's net / online status
-    const convs = this.getConversations();
+    const convs = this.getAllConversations();
     const targetConv = convs.find(c => c.id === conversationId);
 
-    // If conversation is blocked, prevent sending or receiving messages
     if (targetConv?.isBlocked && senderId !== 'system') {
       console.warn('Blocked conversation: message cannot be sent or received.');
       return {
-        id: `m_blocked_${Date.now()}`,
+        id: generateUUID(),
         conversationId,
         senderId,
         senderName,
@@ -121,25 +229,24 @@ export const chatStore = {
     }
 
     const otherParticipantId = targetConv?.participants.find(p => p !== senderId);
-
     const contacts = this.getContacts();
     const otherUsername = targetConv?.participantDetails?.[otherParticipantId || '']?.username;
     const recipientContact = contacts.find(
       c => c.id === otherParticipantId || (otherUsername && c.username.toLowerCase() === otherUsername.toLowerCase())
     );
 
-    // If receiver's internet is OFF (isOnline === false): 1 tick ('sent')
-    // If receiver's internet is ON (isOnline === true): 2 ticks black ('delivered')
     const isRecipientOnline = targetConv?.isGroup
       ? true
       : otherParticipantId === 'vault_secure' || conversationId === 'conv_vault'
       ? true
-      : recipientContact ? recipientContact.isOnline !== false : true;
+      : recipientContact
+      ? recipientContact.isOnline !== false
+      : true;
 
     const initialDeliveryStatus: 'sent' | 'delivered' | 'read' = isRecipientOnline ? 'delivered' : 'sent';
 
     const newMsg: ChatMessage = {
-      id: `m_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      id: generateUUID(),
       conversationId,
       senderId,
       senderName,
@@ -157,8 +264,8 @@ export const chatStore = {
 
     messages.push(newMsg);
     this.saveMessages(conversationId, messages);
+    upsertSupabaseMessage(newMsg);
 
-    // Update conversation lastMessage & timestamp
     if (targetConv) {
       targetConv.lastMessageText =
         mediaType === 'image' ? '📷 Photo' : mediaType === 'audio' ? '🎤 Voice Memo' : text;
@@ -167,9 +274,9 @@ export const chatStore = {
       targetConv.updatedAt = nowIso;
       targetConv.unreadCount = 0;
       this.saveConversations([...convs]);
+      upsertSupabaseConversation(targetConv);
     }
 
-    // If recipient's net is ON, simulate realistic seen/read transition after 1.8s
     if (isRecipientOnline) {
       setTimeout(() => {
         const currentMsgs = this.getMessages(conversationId);
@@ -181,6 +288,7 @@ export const chatStore = {
             targetMsg.readBy.push(otherParticipantId);
           }
           this.saveMessages(conversationId, currentMsgs);
+          upsertSupabaseMessage(targetMsg);
         }
       }, 1800);
     }
@@ -189,7 +297,7 @@ export const chatStore = {
   },
 
   markAsRead(conversationId: string, userId?: string) {
-    const convs = this.getConversations();
+    const convs = this.getAllConversations();
     const conv = convs.find(c => c.id === conversationId);
     let changed = false;
 
@@ -206,6 +314,7 @@ export const chatStore = {
         if (!m.readBy.includes(userId)) {
           m.readBy.push(userId);
           msgsChanged = true;
+          upsertSupabaseMessage(m);
         }
       });
       if (msgsChanged) {
@@ -213,8 +322,9 @@ export const chatStore = {
       }
     }
 
-    if (changed) {
+    if (changed && conv) {
       this.saveConversations([...convs]);
+      upsertSupabaseConversation(conv);
     }
   },
 
@@ -232,15 +342,16 @@ export const chatStore = {
       msg.mediaUrl = undefined;
       msg.mediaType = 'none';
       this.saveMessages(conversationId, messages);
+      upsertSupabaseMessage(msg);
 
-      // Update conversation preview if this was the last message
-      const convs = this.getConversations();
+      const convs = this.getAllConversations();
       const targetConv = convs.find(c => c.id === conversationId);
       if (targetConv && targetConv.lastMessageText) {
         const lastMsg = messages[messages.length - 1];
         if (lastMsg && lastMsg.id === messageId) {
           targetConv.lastMessageText = '🚫 This message was deleted';
           this.saveConversations([...convs]);
+          upsertSupabaseConversation(targetConv);
         }
       }
     }
@@ -255,16 +366,18 @@ export const chatStore = {
         msg.deletedFor.push(userId);
       }
       this.saveMessages(conversationId, messages);
+      upsertSupabaseMessage(msg);
     }
   },
 
   clearMessages(conversationId: string) {
     this.saveMessages(conversationId, []);
-    const currentConvs = this.getConversations();
+    const currentConvs = this.getAllConversations();
     const conv = currentConvs.find(c => c.id === conversationId);
     if (conv) {
       conv.lastMessageText = 'Messages cleared';
       this.saveConversations([...currentConvs]);
+      upsertSupabaseConversation(conv);
     }
   },
 
@@ -275,6 +388,7 @@ export const chatStore = {
       msg.text = newText;
       msg.isEdited = true;
       this.saveMessages(conversationId, messages);
+      upsertSupabaseMessage(msg);
     }
   },
 
@@ -284,6 +398,7 @@ export const chatStore = {
     if (msg) {
       msg.reactions = { ...(msg.reactions || {}), [userId]: emoji };
       this.saveMessages(conversationId, messages);
+      upsertSupabaseMessage(msg);
     }
   },
 
@@ -294,12 +409,13 @@ export const chatStore = {
     customPhoto?: string,
     customBio?: string,
     creatorId?: string,
-    creatorDetails?: { displayName: string; username: string; photoURL?: string }
+    creatorDetails?: { displayName: string; username: string; photoURL?: string },
+    targetUid?: string
   ): Conversation {
     const allConvs = this.getAllConversations();
-    const id = `conv_${Date.now()}`;
+    const id = generateUUID();
     const nowIso = new Date().toISOString();
-    const contactUid = `user_${Date.now()}`;
+    const contactUid = targetUid || `user_${Date.now()}`;
     const uName = customUsername || name.toLowerCase().replace(/\s+/g, '_');
 
     const myProfile = this.getUserProfile();
@@ -335,11 +451,10 @@ export const chatStore = {
 
     allConvs.unshift(newConv);
     this.saveConversations(allConvs);
+    upsertSupabaseConversation(newConv);
 
-    // Initial greeting message
     this.sendMessage(id, 'system', name, `Private dialogue started with ${name} (@${uName}).`);
 
-    // Also auto-add to contacts if not already present
     this.addContact({
       name,
       username: uName,
@@ -351,17 +466,18 @@ export const chatStore = {
   },
 
   deleteConversation(conversationId: string) {
-    const convs = this.getConversations().filter(c => c.id !== conversationId);
+    const convs = this.getAllConversations().filter(c => c.id !== conversationId);
     this.saveConversations(convs);
+    deleteSupabaseConversation(conversationId);
     try {
       localStorage.removeItem(MESSAGES_STORAGE_KEY_PREFIX + conversationId);
-    } catch (e) {
+    } catch {
       // quiet
     }
   },
 
   togglePin(conversationId: string): boolean {
-    const convs = this.getConversations();
+    const convs = this.getAllConversations();
     const conv = convs.find(c => c.id === conversationId);
     if (!conv) return false;
     conv.isPinned = !conv.isPinned;
@@ -370,7 +486,7 @@ export const chatStore = {
   },
 
   toggleMute(conversationId: string): boolean {
-    const convs = this.getConversations();
+    const convs = this.getAllConversations();
     const conv = convs.find(c => c.id === conversationId);
     if (!conv) return false;
     conv.isMuted = !conv.isMuted;
@@ -379,7 +495,7 @@ export const chatStore = {
   },
 
   toggleArchive(conversationId: string): boolean {
-    const convs = this.getConversations();
+    const convs = this.getAllConversations();
     const conv = convs.find(c => c.id === conversationId);
     if (!conv) return false;
     conv.isArchived = !conv.isArchived;
@@ -388,7 +504,7 @@ export const chatStore = {
   },
 
   toggleBlock(conversationId: string): boolean {
-    const convs = this.getConversations();
+    const convs = this.getAllConversations();
     const conv = convs.find(c => c.id === conversationId);
     if (!conv) return false;
     conv.isBlocked = !conv.isBlocked;
@@ -396,7 +512,7 @@ export const chatStore = {
     return Boolean(conv.isBlocked);
   },
 
-  // --- WhatsApp Contacts Book ---
+  // --- Contacts Book ---
   getContacts(): ContactItem[] {
     try {
       const saved = localStorage.getItem(CONTACTS_STORAGE_KEY);
@@ -419,7 +535,6 @@ export const chatStore = {
     const contacts = this.getContacts();
     const cleanUsername = contact.username.replace(/^@/, '').toLowerCase().trim();
 
-    // Check if already in contacts by username
     const existing = contacts.find(c => c.username.toLowerCase() === cleanUsername);
     if (existing) {
       existing.name = contact.name;
@@ -459,10 +574,8 @@ export const chatStore = {
     contact.isOnline = forceOnline !== undefined ? forceOnline : !contact.isOnline;
     this.saveContacts(contacts);
 
-    // If contact net is now active (isOnline === true), transition pending 'sent' (1 tick) messages to 'delivered' (2 ticks black)
-    // and then to 'read' (2 ticks blue) when seen!
     if (contact.isOnline) {
-      const convs = this.getConversations();
+      const convs = this.getAllConversations();
       convs.forEach(conv => {
         const isTarget =
           conv.participants.includes(contact.id) ||
@@ -483,8 +596,6 @@ export const chatStore = {
 
           if (changed) {
             this.saveMessages(conv.id, msgs);
-
-            // Realistic simulation of contact reading after 1.5 seconds
             setTimeout(() => {
               const freshMsgs = this.getMessages(conv.id);
               let readChanged = false;
@@ -508,7 +619,7 @@ export const chatStore = {
     return contact.isOnline;
   },
 
-  // --- WhatsApp Privacy Settings ---
+  // --- Privacy Settings ---
   getPrivacySettings(): PrivacySettings {
     const defaults: PrivacySettings = {
       profilePhoto: 'everyone',
@@ -532,7 +643,7 @@ export const chatStore = {
     notifyListeners();
   },
 
-  // --- User Profile (DP, Display Name, Bio, Username) ---
+  // --- User Profile ---
   getUserProfile(): UserProfile {
     const defaults: UserProfile = {
       uid: '',
@@ -547,7 +658,7 @@ export const chatStore = {
       const saved = localStorage.getItem(PROFILE_STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.uid === 'test_user_noor_1434' || parsed.displayName === 'Noor' || parsed.username === 'noor') {
+        if (isLegacyTestAccount(parsed.uid, parsed.username, parsed.displayName)) {
           localStorage.removeItem(PROFILE_STORAGE_KEY);
           return defaults;
         }
