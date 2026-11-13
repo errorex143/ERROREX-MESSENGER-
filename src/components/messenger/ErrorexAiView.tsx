@@ -25,18 +25,27 @@ interface AiMessage {
 }
 
 const QUICK_PROMPTS = [
-  'Assalam-o-Alaikum! Ap kya kya kr sakty ho?',
+  'Koi dil ko chhoo lene wali Urdu / Roman Urdu ghazal sunao',
+  'Mera business / YouTube channel promote karne ki viral post likho',
+  'Mujhe ek cinematic AI image prompt bana kar do',
   'Write a clean sick leave application',
-  'Explain encryption & private security simply',
   'Write Python AES-256 encryption code',
   'Translate "Welcome to ERROREX Vault" into Urdu & Arabic'
 ];
 
 export const ErrorexAiView: React.FC = () => {
   const [messages, setMessages] = useState<AiMessage[]>(() => {
+    const cleanWelcomeText = `### Salam & Welcome to ERROREX AI 👑\n\nMain aapka friendly aur intelligent assistant hoon. Jo bhi poochein ya likhne ko kahein — **poetry, ghazals, business promotion, AI prompts, coding, applications, math, ya translation** — main har zubaan me bilkul perfect aur saaf jawab dunga!`;
     try {
       const saved = localStorage.getItem('errorex_ai_messages');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.map((m: AiMessage) =>
+            m.id === 'msg_ai_welcome' ? { ...m, text: cleanWelcomeText } : m
+          );
+        }
+      }
     } catch {
       // ignore read error
     }
@@ -44,7 +53,7 @@ export const ErrorexAiView: React.FC = () => {
       {
         id: 'msg_ai_welcome',
         sender: 'ai',
-        text: `### Salam & Welcome to ERROREX AI 👑\n\nMain aapka friendly, ChatGPT-style assistant hoon. Main **har zubaan** (Roman Urdu, اردو, English, Hindi, Arabic, French) samajhta hoon aur har sawal ka saaf, clear aur stylish jawab deta hoon.\n\n- **Writing & Applications:** Emails, essays, summaries, captions\n- **Coding & Tech:** React, TypeScript, Python, SQL, Supabase\n- **Math & Translation:** Calculations, conversions, aur har zubaan me tarjuma\n\nJo poochna hai be-jhijhak poochein!`,
+        text: cleanWelcomeText,
         createdAt: new Date().toISOString()
       }
     ];
@@ -59,7 +68,7 @@ export const ErrorexAiView: React.FC = () => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Track browser online / offline state cleanly
   useEffect(() => {
@@ -130,7 +139,10 @@ export const ErrorexAiView: React.FC = () => {
       createdAt: new Date().toISOString()
     };
 
-    const historySlice = messages.slice(-10).map(m => ({ sender: m.sender, text: m.text }));
+    const historySlice = messages
+      .filter(m => m.id !== 'msg_ai_welcome')
+      .slice(-10)
+      .map(m => ({ id: m.id, sender: m.sender, text: m.text }));
     setMessages(prev => [...prev, userMsg]);
     if (!customPrompt) setInput('');
     setShowEmojiPicker(false);
@@ -157,10 +169,14 @@ export const ErrorexAiView: React.FC = () => {
     if (lastUserIdx === -1) return;
     const actualIdx = messages.length - 1 - lastUserIdx;
     const lastUserMsg = messages[actualIdx];
-    const historySlice = messages.slice(Math.max(0, actualIdx - 10), actualIdx).map(m => ({
-      sender: m.sender,
-      text: m.text
-    }));
+    const historySlice = messages
+      .slice(Math.max(0, actualIdx - 10), actualIdx)
+      .filter(m => m.id !== 'msg_ai_welcome')
+      .map(m => ({
+        id: m.id,
+        sender: m.sender,
+        text: m.text
+      }));
 
     setIsLoading(true);
     try {
@@ -215,8 +231,6 @@ export const ErrorexAiView: React.FC = () => {
           <div className="min-w-0">
             <h1 className="text-base font-bold gold-gradient-text truncate">ERROREX AI</h1>
             <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)] whitespace-nowrap">
-              <span>ChatGPT-Style Assistant</span>
-              <span aria-hidden="true">·</span>
               <span>All Languages</span>
               <span aria-hidden="true">·</span>
               <span className={`inline-flex items-center gap-1 font-medium ${isOnline ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
@@ -383,30 +397,36 @@ export const ErrorexAiView: React.FC = () => {
         />
       )}
 
-      {/* Input Bar */}
+      {/* Input Bar (Multiline textarea: Enter sends, Shift+Enter newline) */}
       <form
         onSubmit={e => {
           e.preventDefault();
           handleSendMessage();
         }}
-        className="p-3 sm:p-4 bg-[var(--bg-sidebar)] border-t border-[var(--accent-border)] flex items-center gap-2 shrink-0"
+        className="p-3 sm:p-4 bg-[var(--bg-sidebar)] border-t border-[var(--accent-border)] flex items-end gap-2 shrink-0"
       >
         <button
           type="button"
           onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-          className="p-2.5 rounded-xl text-[var(--text-muted)] hover:text-[var(--accent-primary)] hover:bg-[var(--bg-card)] transition-colors cursor-pointer"
+          className="p-2.5 rounded-xl text-[var(--text-muted)] hover:text-[var(--accent-primary)] hover:bg-[var(--bg-card)] transition-colors cursor-pointer shrink-0"
           title="Emojis"
         >
           <Smile className="w-5 h-5" />
         </button>
 
-        <input
+        <textarea
           ref={inputRef}
-          type="text"
+          rows={1}
           value={input}
           onChange={e => setInput(e.target.value)}
-          placeholder="Ask any question in any language (Roman Urdu, اردو, English...)"
-          className="flex-1 px-4 py-2.5 text-xs sm:text-sm rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] placeholder-neutral-500 focus:outline-none transition-colors"
+          onKeyDown={e => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleSendMessage();
+            }
+          }}
+          placeholder="Ask anything — poetry, ghazals, promotions, prompts, code (Shift+Enter for new line)..."
+          className="flex-1 px-4 py-2.5 text-xs sm:text-sm rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] placeholder-neutral-500 focus:outline-none transition-colors resize-none max-h-32 overflow-y-auto leading-relaxed"
           disabled={isLoading}
         />
 
