@@ -3,6 +3,7 @@ import { supabase, isSupabaseConfigured } from './supabase';
 import {
   generateUUID,
   isLegacyTestAccount,
+  isUserCurrentlyOnline,
   upsertSupabaseConversation,
   fetchSupabaseConversations,
   deleteSupabaseConversation,
@@ -235,13 +236,27 @@ export const chatStore = {
       c => c.id === otherParticipantId || (otherUsername && c.username.toLowerCase() === otherUsername.toLowerCase())
     );
 
-    const isRecipientOnline = targetConv?.isGroup
+    let directoryProfiles: UserProfile[] = [];
+    try {
+      const rawProfiles = localStorage.getItem('errorex_standalone_db_userProfiles');
+      if (rawProfiles) directoryProfiles = JSON.parse(rawProfiles);
+    } catch {
+      // quiet
+    }
+    const liveDirectoryUser = directoryProfiles.find(p => p.uid === otherParticipantId);
+    const browserOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+
+    const isRecipientOnline = !browserOnline
+      ? false
+      : targetConv?.isGroup
       ? true
       : otherParticipantId === 'vault_secure' || conversationId === 'conv_vault'
       ? true
+      : liveDirectoryUser
+      ? isUserCurrentlyOnline(liveDirectoryUser)
       : recipientContact
       ? recipientContact.isOnline !== false
-      : true;
+      : false;
 
     const initialDeliveryStatus: 'sent' | 'delivered' | 'read' = isRecipientOnline ? 'delivered' : 'sent';
 
@@ -264,7 +279,9 @@ export const chatStore = {
 
     messages.push(newMsg);
     this.saveMessages(conversationId, messages);
-    upsertSupabaseMessage(newMsg);
+    if (browserOnline) {
+      upsertSupabaseMessage(newMsg);
+    }
 
     if (targetConv) {
       targetConv.lastMessageText =
@@ -274,7 +291,9 @@ export const chatStore = {
       targetConv.updatedAt = nowIso;
       targetConv.unreadCount = 0;
       this.saveConversations([...convs]);
-      upsertSupabaseConversation(targetConv);
+      if (browserOnline) {
+        upsertSupabaseConversation(targetConv);
+      }
     }
 
     if (isRecipientOnline) {
@@ -288,12 +307,27 @@ export const chatStore = {
             targetMsg.readBy.push(otherParticipantId);
           }
           this.saveMessages(conversationId, currentMsgs);
-          upsertSupabaseMessage(targetMsg);
+          if (typeof navigator === 'undefined' || navigator.onLine) {
+            upsertSupabaseMessage(targetMsg);
+          }
         }
       }, 1800);
     }
 
     return newMsg;
+  },
+
+  async syncPendingToSupabase(uid: string) {
+    if (!isSupabaseConfigured || !uid) return;
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+    const convs = this.getConversations(uid);
+    for (const conv of convs) {
+      await upsertSupabaseConversation(conv);
+      const msgs = this.getMessages(conv.id);
+      for (const m of msgs) {
+        await upsertSupabaseMessage(m);
+      }
+    }
   },
 
   markAsRead(conversationId: string, userId?: string) {

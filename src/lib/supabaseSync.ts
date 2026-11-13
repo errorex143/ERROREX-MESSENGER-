@@ -62,6 +62,50 @@ export async function hashPinClient(pin: string, salt: string): Promise<string> 
   return (h >>> 0).toString(16).padStart(8, '0');
 }
 
+export function isUserCurrentlyOnline(
+  profile?: { isOnline?: boolean; lastSeen?: string } | null
+): boolean {
+  if (!profile) return false;
+  if (profile.isOnline === false) return false;
+  if (profile.lastSeen) {
+    const lastMs = new Date(profile.lastSeen).getTime();
+    if (!Number.isNaN(lastMs) && Date.now() - lastMs > 2 * 60 * 1000) {
+      return false;
+    }
+  }
+  return Boolean(profile.isOnline);
+}
+
+export function sendOfflineBeacon(uid: string): void {
+  if (!isSupabaseConfigured || !uid) return;
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+  if (!supabaseUrl || !supabaseAnonKey) return;
+
+  try {
+    const endpoint = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/user_profiles?uid=eq.${encodeURIComponent(uid)}`;
+    fetch(endpoint, {
+      method: 'PATCH',
+      keepalive: true,
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${supabaseAnonKey}`,
+        Prefer: 'return=minimal'
+      },
+      body: JSON.stringify({
+        is_online: false,
+        last_seen: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+    }).catch(() => {
+      // ignore keepalive failure during unload
+    });
+  } catch {
+    // quiet
+  }
+}
+
 // --- Mappers ---
 export function mapRowToUserProfile(row: any): UserProfile {
   return {

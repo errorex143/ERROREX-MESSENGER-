@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { CrownLogo } from '../common/CrownLogo';
 import { EmojiKeyboard } from '../common/EmojiKeyboard';
+import { MarkdownMessage } from '../common/MarkdownMessage';
 import { generateErrorexAiFallback } from '../../lib/errorexAiEngine';
 import {
   Send,
@@ -10,7 +11,10 @@ import {
   Copy,
   Check,
   Trash2,
-  Smile
+  Smile,
+  RotateCcw,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 
 interface AiMessage {
@@ -22,10 +26,10 @@ interface AiMessage {
 
 const QUICK_PROMPTS = [
   'Assalam-o-Alaikum! Ap kya kya kr sakty ho?',
+  'Write a clean sick leave application',
   'Explain encryption & private security simply',
-  'Write a Python code for AES-256 data hashing',
-  'Translate "Welcome to ERROREX Vault" into Urdu, Arabic & French',
-  'Tell me a creative sovereign philosophy quote'
+  'Write Python AES-256 encryption code',
+  'Translate "Welcome to ERROREX Vault" into Urdu & Arabic'
 ];
 
 export const ErrorexAiView: React.FC = () => {
@@ -33,14 +37,14 @@ export const ErrorexAiView: React.FC = () => {
     try {
       const saved = localStorage.getItem('errorex_ai_messages');
       if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.warn('Could not read AI messages:', e);
+    } catch {
+      // ignore read error
     }
     return [
       {
         id: 'msg_ai_welcome',
         sender: 'ai',
-        text: '👑 **Salam & Welcome to ERROREX AI!**\n\nMain aapka sovereign AI assistant hoon. Main har zubaan (Roman Urdu, Urdu, Hindi, English, Arabic, Spanish, etc.) samajhta hoon aur har sawal ka mukammal jwab deta hoon.\n\nAap mujhse coding, mathematics, translation, general knowledge, ya koi bhi sawal pooch sakte hain. Main aapki kya madad karoon?',
+        text: `### Salam & Welcome to ERROREX AI 👑\n\nMain aapka friendly, ChatGPT-style assistant hoon. Main **har zubaan** (Roman Urdu, اردو, English, Hindi, Arabic, French) samajhta hoon aur har sawal ka saaf, clear aur stylish jawab deta hoon.\n\n- **Writing & Applications:** Emails, essays, summaries, captions\n- **Coding & Tech:** React, TypeScript, Python, SQL, Supabase\n- **Math & Translation:** Calculations, conversions, aur har zubaan me tarjuma\n\nJo poochna hai be-jhijhak poochein!`,
         createdAt: new Date().toISOString()
       }
     ];
@@ -48,18 +52,33 @@ export const ErrorexAiView: React.FC = () => {
 
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isOnline, setIsOnline] = useState(() =>
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Track browser online / offline state cleanly
+  useEffect(() => {
+    const goOnline = () => setIsOnline(true);
+    const goOffline = () => setIsOnline(false);
+    window.addEventListener('online', goOnline);
+    window.addEventListener('offline', goOffline);
+    return () => {
+      window.removeEventListener('online', goOnline);
+      window.removeEventListener('offline', goOffline);
+    };
+  }, []);
+
   // Save messages to localStorage
   useEffect(() => {
     try {
       localStorage.setItem('errorex_ai_messages', JSON.stringify(messages));
-    } catch (e) {
-      console.warn('Could not save AI messages:', e);
+    } catch {
+      // ignore storage quota
     }
   }, [messages]);
 
@@ -68,23 +87,13 @@ export const ErrorexAiView: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length, isLoading]);
 
-  const handleSendMessage = async (customPrompt?: string) => {
-    const textToSend = customPrompt || input.trim();
-    if (!textToSend || isLoading) return;
+  const fetchAiReply = async (textToSend: string, historySlice: Array<{ sender: string; text: string }>) => {
+    const currentlyOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
 
-    const userMsg: AiMessage = {
-      id: `user_${Date.now()}`,
-      sender: 'user',
-      text: textToSend,
-      createdAt: new Date().toISOString()
-    };
-
-    setMessages(prev => [...prev, userMsg]);
-    setInput('');
-    setShowEmojiPicker(false);
-    setIsLoading(true);
-
-    const historySlice = messages.slice(-10).map(m => ({ sender: m.sender, text: m.text }));
+    if (!currentlyOnline) {
+      await new Promise(resolve => setTimeout(resolve, 180));
+      return generateErrorexAiFallback(textToSend, historySlice, true);
+    }
 
     try {
       const res = await fetch('/api/ai/chat', {
@@ -97,108 +106,159 @@ export const ErrorexAiView: React.FC = () => {
       });
 
       const contentType = res.headers.get('content-type') || '';
-      let aiReply = '';
-
       if (res.ok && contentType.includes('application/json')) {
         const data = await res.json();
-        aiReply = typeof data?.reply === 'string' ? data.reply.trim() : '';
+        if (typeof data?.reply === 'string' && data.reply.trim()) {
+          return data.reply.trim();
+        }
       }
+    } catch {
+      // Fall through cleanly to local engine
+    }
 
-      if (!aiReply) {
-        aiReply = generateErrorexAiFallback(textToSend, historySlice);
-      }
+    return generateErrorexAiFallback(textToSend, historySlice, false);
+  };
 
+  const handleSendMessage = async (customPrompt?: string) => {
+    const textToSend = (customPrompt ?? input).trim();
+    if (!textToSend || isLoading) return;
+
+    const userMsg: AiMessage = {
+      id: `user_${Date.now()}`,
+      sender: 'user',
+      text: textToSend,
+      createdAt: new Date().toISOString()
+    };
+
+    const historySlice = messages.slice(-10).map(m => ({ sender: m.sender, text: m.text }));
+    setMessages(prev => [...prev, userMsg]);
+    if (!customPrompt) setInput('');
+    setShowEmojiPicker(false);
+    setIsLoading(true);
+
+    try {
+      const aiReply = await fetchAiReply(textToSend, historySlice);
       const aiMsg: AiMessage = {
         id: `ai_${Date.now()}`,
         sender: 'ai',
         text: aiReply,
         createdAt: new Date().toISOString()
       };
-
       setMessages(prev => [...prev, aiMsg]);
-    } catch (err: any) {
-      console.warn('AI chat fallback engaged:', err?.message || err);
-      const fallbackReply = generateErrorexAiFallback(textToSend, historySlice);
-      const fallbackMsg: AiMessage = {
-        id: `ai_${Date.now()}`,
-        sender: 'ai',
-        text: fallbackReply,
-        createdAt: new Date().toISOString()
-      };
-      setMessages(prev => [...prev, fallbackMsg]);
     } finally {
       setIsLoading(false);
-      setTimeout(() => inputRef.current?.focus(), 100);
+      setTimeout(() => inputRef.current?.focus(), 80);
+    }
+  };
+
+  const handleRegenerateLast = async () => {
+    if (isLoading) return;
+    const lastUserIdx = [...messages].reverse().findIndex(m => m.sender === 'user');
+    if (lastUserIdx === -1) return;
+    const actualIdx = messages.length - 1 - lastUserIdx;
+    const lastUserMsg = messages[actualIdx];
+    const historySlice = messages.slice(Math.max(0, actualIdx - 10), actualIdx).map(m => ({
+      sender: m.sender,
+      text: m.text
+    }));
+
+    setIsLoading(true);
+    try {
+      const freshReply = await fetchAiReply(lastUserMsg.text, historySlice);
+      setMessages(prev => {
+        const updated = [...prev];
+        if (updated[updated.length - 1]?.sender === 'ai') {
+          updated[updated.length - 1] = {
+            ...updated[updated.length - 1],
+            text: freshReply,
+            createdAt: new Date().toISOString()
+          };
+        } else {
+          updated.push({
+            id: `ai_${Date.now()}`,
+            sender: 'ai',
+            text: freshReply,
+            createdAt: new Date().toISOString()
+          });
+        }
+        return updated;
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleCopy = (id: string, text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
+    setTimeout(() => setCopiedId(null), 1800);
   };
 
   const handleClearChat = () => {
     const welcome: AiMessage = {
       id: `msg_ai_${Date.now()}`,
       sender: 'ai',
-      text: '👑 **Salam! Main ERROREX AI hoon.**\n\nChat reset ho gayi hai. Koi bhi sawal kisi bhi zubaan me poochein, main foran jwab doonga!',
+      text: `### Salam! Main ERROREX AI Hoon 👑\n\nChat fresh ho gayi hai. Koi bhi sawal kisi bhi zubaan me poochein — main saaf aur mukammal jawab dunga!`,
       createdAt: new Date().toISOString()
     };
     setMessages([welcome]);
   };
 
   return (
-    <div className="flex-1 h-full flex flex-col bg-[var(--bg-window)] text-[var(--text-main)] select-none overflow-hidden transition-colors">
-      {/* Top Header */}
-      <div className="p-3.5 px-5 bg-[var(--bg-sidebar)] border-b border-[var(--accent-border)] flex items-center justify-between shrink-0 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-[var(--accent-surface)] border border-[var(--accent-primary)] gold-glow flex items-center justify-center text-[var(--accent-primary)] shadow-sm">
-            <Sparkles className="w-5 h-5 animate-pulse" />
+    <div className="flex-1 h-full flex flex-col bg-[var(--bg-window)] text-[var(--text-main)] overflow-hidden transition-colors">
+      {/* Clean Top Header */}
+      <div className="py-3 px-5 bg-[var(--bg-sidebar)] border-b border-[var(--accent-border)] flex items-center justify-between gap-4 shrink-0">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-[var(--accent-surface)] border border-[var(--accent-border)] flex items-center justify-center text-[var(--accent-primary)] shrink-0">
+            <Sparkles className="w-5 h-5" />
           </div>
-          <div>
-            <h1 className="text-base font-bold gold-gradient-text flex items-center gap-2">
-              <span>ERROREX AI</span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold">
-                Multilingual • Active
+          <div className="min-w-0">
+            <h1 className="text-base font-bold gold-gradient-text truncate">ERROREX AI</h1>
+            <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)] whitespace-nowrap">
+              <span>ChatGPT-Style Assistant</span>
+              <span aria-hidden="true">·</span>
+              <span>All Languages</span>
+              <span aria-hidden="true">·</span>
+              <span className={`inline-flex items-center gap-1 font-medium ${isOnline ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                {isOnline ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+                <span>{isOnline ? 'Online' : 'Offline Mode'}</span>
               </span>
-            </h1>
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleClearChat}
-            className="py-1.5 px-3 rounded-xl border border-neutral-700 hover:border-rose-500 text-xs text-neutral-400 hover:text-rose-400 flex items-center gap-1.5 transition-colors"
-            title="Clear Chat History"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Clear Chat</span>
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={handleClearChat}
+          className="py-1.5 px-3.5 rounded-xl border border-neutral-300 dark:border-neutral-700 hover:border-rose-500 text-xs font-medium text-[var(--text-muted)] hover:text-rose-500 flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+          title="Clear Chat History"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">New Chat</span>
+        </button>
       </div>
 
       {/* Messages Scroll Area */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 space-y-4 chat-scroll-area">
-        {/* Welcome Banner */}
-        <div className="max-w-xl mx-auto p-4 rounded-2xl bg-[var(--accent-surface)] border border-[var(--accent-primary)]/40 shadow-sm text-center space-y-2.5">
-          <div className="flex items-center justify-center gap-2 text-[var(--accent-primary)]">
-            <CrownLogo size="sm" showWordmark={false} />
-            <span className="text-xs font-bold uppercase tracking-wider">Sovereign Intelligence Engine</span>
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 space-y-5 chat-scroll-area">
+        {/* Clean Starter Prompts Card */}
+        <div className="max-w-2xl mx-auto p-4 sm:p-5 rounded-2xl bg-[var(--bg-card)] border border-[var(--accent-border)] space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-[var(--accent-primary)]">
+              <CrownLogo size="sm" showWordmark={false} />
+              <span className="text-xs font-semibold tracking-wide">Ask Anything in Any Language</span>
+            </div>
+            <span className="text-[11px] text-[var(--text-muted)]">
+              Roman Urdu · اردو · English · العربية
+            </span>
           </div>
-          <p className="text-xs text-[var(--text-main)] leading-relaxed">
-            Puchiye coding, hisaab-kitab, scientific sawalat, tarjuma (translation), ya koi bhi maloomat. ERROREX AI har zubaan ko ba-asani samajhta hai.
-          </p>
 
-          {/* Quick Prompt Chips */}
-          <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
+          <div className="flex flex-wrap gap-2">
             {QUICK_PROMPTS.map((prompt, idx) => (
               <button
                 key={idx}
                 type="button"
                 onClick={() => handleSendMessage(prompt)}
-                className="py-1 px-2.5 rounded-lg text-[11px] bg-[var(--bg-card)] border border-[var(--accent-border)] hover:border-[var(--accent-primary)] text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors truncate max-w-xs"
+                className="py-1.5 px-3 rounded-xl text-xs bg-[var(--bg-sidebar)] border border-[var(--accent-border)] hover:border-[var(--accent-primary)] text-[var(--text-main)] transition-colors text-left cursor-pointer"
               >
                 {prompt}
               </button>
@@ -206,77 +266,116 @@ export const ErrorexAiView: React.FC = () => {
           </div>
         </div>
 
-        {/* Message Bubbles */}
-        {messages.map(msg => {
-          const isUser = msg.sender === 'user';
-          return (
-            <div
-              key={msg.id}
-              className={`flex flex-col group ${isUser ? 'items-end' : 'items-start'}`}
-            >
-              <div className="flex items-start gap-2.5 max-w-xl md:max-w-2xl">
-                {!isUser && (
-                  <div className="w-8 h-8 rounded-xl bg-[var(--accent-surface)] border border-[var(--accent-primary)] flex items-center justify-center text-[var(--accent-primary)] shrink-0 shadow-sm mt-0.5">
-                    <Bot className="w-4 h-4" />
-                  </div>
-                )}
+        {/* Conversation Thread */}
+        <div className="max-w-3xl mx-auto space-y-5">
+          {messages.map((msg, idx) => {
+            const isUser = msg.sender === 'user';
+            const isLastAi = !isUser && idx === messages.length - 1;
 
-                <div
-                  className={`p-3.5 rounded-2xl text-xs sm:text-[13px] leading-relaxed shadow-md select-text ${
-                    isUser
-                      ? 'bg-gradient-to-br from-[var(--accent-surface)] to-[var(--bg-card)] border border-[var(--accent-primary)] text-[var(--text-main)] rounded-br-xs'
-                      : 'bg-[var(--bg-card)] border border-[var(--accent-border)] text-[var(--text-main)] rounded-bl-xs'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-4 mb-1 border-b border-neutral-200/50 dark:border-white/5 pb-1">
-                    <span className="text-[10px] font-mono font-bold text-[var(--accent-primary)]">
-                      {isUser ? 'You' : 'ERROREX AI'}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[9px] font-mono text-[var(--text-muted)]">
-                        {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleCopy(msg.id, msg.text)}
-                        className="text-neutral-400 hover:text-[var(--accent-primary)] transition-colors"
-                        title="Copy Message"
-                      >
-                        {copiedId === msg.id ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                      </button>
+            return (
+              <div
+                key={msg.id}
+                className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
+              >
+                <div className={`flex items-start gap-3 ${isUser ? 'max-w-[85%] sm:max-w-xl' : 'w-full'}`}>
+                  {!isUser && (
+                    <div className="w-8 h-8 rounded-xl bg-[var(--accent-surface)] border border-[var(--accent-border)] flex items-center justify-center text-[var(--accent-primary)] shrink-0 mt-0.5">
+                      <Bot className="w-4 h-4" />
                     </div>
+                  )}
+
+                  <div
+                    className={`rounded-2xl transition-colors ${
+                      isUser
+                        ? 'px-4 py-3 bg-[var(--accent-surface)] border border-[var(--accent-primary)]/40 text-[var(--text-main)]'
+                        : 'flex-1 px-4 py-3.5 bg-[var(--bg-card)] border border-[var(--accent-border)] text-[var(--text-main)]'
+                    }`}
+                  >
+                    {/* Header line */}
+                    <div className="flex items-center justify-between gap-4 mb-2 pb-1.5 border-b border-neutral-200/60 dark:border-white/5">
+                      <span className="text-[11px] font-semibold text-[var(--accent-primary)]">
+                        {isUser ? 'You' : 'ERROREX AI'}
+                      </span>
+                      <div className="flex items-center gap-2.5 text-[10px] font-mono tabular-nums text-[var(--text-muted)]">
+                        <span>
+                          {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        {!isUser && (
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(msg.id, msg.text)}
+                            className="inline-flex items-center gap-1 text-[var(--text-muted)] hover:text-[var(--accent-primary)] transition-colors cursor-pointer"
+                            title="Copy response"
+                          >
+                            {copiedId === msg.id ? (
+                              <>
+                                <Check className="w-3 h-3 text-emerald-500" />
+                                <span className="text-emerald-500">Copied</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3 h-3" />
+                                <span className="hidden sm:inline">Copy</span>
+                              </>
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Message Body */}
+                    {isUser ? (
+                      <div className="text-[13px] sm:text-[13.5px] leading-relaxed whitespace-pre-wrap select-text">
+                        {msg.text}
+                      </div>
+                    ) : (
+                      <MarkdownMessage content={msg.text} />
+                    )}
+
+                    {/* Regenerate Action on latest AI response */}
+                    {isLastAi && messages.some(m => m.sender === 'user') && (
+                      <div className="mt-3 pt-2 border-t border-neutral-200/50 dark:border-white/5 flex items-center justify-end">
+                        <button
+                          type="button"
+                          onClick={handleRegenerateLast}
+                          disabled={isLoading}
+                          className="inline-flex items-center gap-1.5 py-1 px-2.5 rounded-lg text-[11px] text-[var(--text-muted)] hover:text-[var(--accent-primary)] hover:bg-[var(--accent-surface)] transition-colors cursor-pointer disabled:opacity-50"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          <span>Regenerate</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
 
-                  <div className="whitespace-pre-wrap font-sans">{msg.text}</div>
+                  {isUser && (
+                    <div className="w-8 h-8 rounded-xl bg-neutral-200 dark:bg-neutral-800 border border-[var(--accent-border)] flex items-center justify-center text-[var(--accent-primary)] shrink-0 mt-0.5">
+                      <User className="w-4 h-4" />
+                    </div>
+                  )}
                 </div>
+              </div>
+            );
+          })}
 
-                {isUser && (
-                  <div className="w-8 h-8 rounded-xl bg-neutral-200 dark:bg-neutral-800 border border-[var(--accent-border)] flex items-center justify-center text-[var(--accent-primary)] shrink-0 shadow-sm mt-0.5">
-                    <User className="w-4 h-4" />
-                  </div>
-                )}
+          {/* Clean Thinking Indicator */}
+          {isLoading && (
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-xl bg-[var(--accent-surface)] border border-[var(--accent-border)] flex items-center justify-center text-[var(--accent-primary)] shrink-0">
+                <Bot className="w-4 h-4" />
+              </div>
+              <div className="px-4 py-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--accent-border)] text-xs text-[var(--text-muted)] flex items-center gap-2.5">
+                <span className="inline-block w-3.5 h-3.5 border-2 border-[var(--accent-primary)] border-t-transparent rounded-full animate-spin" />
+                <span>Writing a clear answer...</span>
               </div>
             </div>
-          );
-        })}
-
-        {/* AI Loading Thinking Bubble */}
-        {isLoading && (
-          <div className="flex items-start gap-2.5 max-w-md">
-            <div className="w-8 h-8 rounded-xl bg-[var(--accent-surface)] border border-[var(--accent-primary)] flex items-center justify-center text-[var(--accent-primary)] shrink-0 shadow-sm animate-pulse">
-              <Bot className="w-4 h-4" />
-            </div>
-            <div className="p-3.5 px-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--accent-border)] text-xs text-[var(--text-muted)] flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-[var(--accent-primary)] animate-ping" />
-              <span className="font-mono">ERROREX AI is thinking and translating...</span>
-            </div>
-          </div>
-        )}
+          )}
+        </div>
 
         <div ref={messagesEndRef} />
       </div>
 
-      {/* 100+ Emojis & Cartoons Keyboard */}
+      {/* Emoji Keyboard */}
       {showEmojiPicker && (
         <EmojiKeyboard
           onSelectEmoji={emoji => setInput(prev => prev + emoji)}
@@ -284,40 +383,37 @@ export const ErrorexAiView: React.FC = () => {
         />
       )}
 
-      {/* Chat Input Bar */}
+      {/* Input Bar */}
       <form
         onSubmit={e => {
           e.preventDefault();
           handleSendMessage();
         }}
-        className="p-3 sm:p-4 bg-[var(--bg-sidebar)] border-t border-neutral-200 dark:border-white/5 flex items-center gap-2 shrink-0"
+        className="p-3 sm:p-4 bg-[var(--bg-sidebar)] border-t border-[var(--accent-border)] flex items-center gap-2 shrink-0"
       >
-        {/* Emoji Button */}
         <button
           type="button"
           onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-          className="p-2.5 rounded-xl text-neutral-400 hover:text-[var(--accent-primary)] hover:bg-neutral-200 dark:hover:bg-neutral-900 transition-colors"
-          title="1000 Live Animated Stickers & Emojis"
+          className="p-2.5 rounded-xl text-[var(--text-muted)] hover:text-[var(--accent-primary)] hover:bg-[var(--bg-card)] transition-colors cursor-pointer"
+          title="Emojis"
         >
           <Smile className="w-5 h-5" />
         </button>
 
-        {/* Text Input */}
         <input
           ref={inputRef}
           type="text"
           value={input}
           onChange={e => setInput(e.target.value)}
-          placeholder="Puchiye koi bhi sawal kisi bhi zubaan me (Ask anything in any language)..."
+          placeholder="Ask any question in any language (Roman Urdu, اردو, English...)"
           className="flex-1 px-4 py-2.5 text-xs sm:text-sm rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] placeholder-neutral-500 focus:outline-none transition-colors"
           disabled={isLoading}
         />
 
-        {/* Send Button */}
         <button
           type="submit"
           disabled={!input.trim() || isLoading}
-          className="p-2.5 px-4 rounded-xl gold-button-accent text-black font-bold flex items-center gap-1.5 hover:gold-glow-sm transition-all disabled:opacity-50"
+          className="py-2.5 px-4 rounded-xl gold-button-accent text-black font-bold flex items-center gap-1.5 transition-all disabled:opacity-50 whitespace-nowrap shrink-0 cursor-pointer"
           title="Send to ERROREX AI"
         >
           <Send className="w-4 h-4" />

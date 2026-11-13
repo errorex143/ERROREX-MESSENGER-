@@ -14,7 +14,7 @@ import {
   OperationType
 } from '../../lib/firebase';
 import { isSupabaseConfigured } from '../../lib/supabase';
-import { fetchSupabaseUserProfiles, isLegacyTestAccount } from '../../lib/supabaseSync';
+import { fetchSupabaseUserProfiles, isLegacyTestAccount, isUserCurrentlyOnline } from '../../lib/supabaseSync';
 import { hydrateStandaloneFromSupabase } from '../../lib/standaloneApi';
 import { FriendRequest, Friendship, UserProfile } from '../../types';
 import {
@@ -58,6 +58,12 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
   const [allMembers, setAllMembers] = useState<UserProfile[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [, setPresenceTick] = useState(0);
+
+  useEffect(() => {
+    const tick = setInterval(() => setPresenceTick(t => t + 1), 20000);
+    return () => clearInterval(tick);
+  }, []);
 
   // Load incoming friend requests
   useEffect(() => {
@@ -180,8 +186,10 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
       }
 
       const sorted = Array.from(mergedMap.values()).sort((a, b) => {
-        if (a.isOnline && !b.isOnline) return -1;
-        if (!a.isOnline && b.isOnline) return 1;
+        const aOnline = isUserCurrentlyOnline(a);
+        const bOnline = isUserCurrentlyOnline(b);
+        if (aOnline && !bOnline) return -1;
+        if (!aOnline && bOnline) return 1;
         return (a.displayName || '').localeCompare(b.displayName || '');
       });
       setAllMembers(sorted);
@@ -395,8 +403,17 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                         @{friend.username}
                       </p>
                       <span className="text-[9px] text-neutral-500 dark:text-neutral-400 flex items-center gap-1 mt-0.5">
-                        <span className={`w-1.5 h-1.5 rounded-full ${friend.isOnline ? 'bg-emerald-500' : 'bg-neutral-600'}`} />
-                        <span>{friend.isOnline ? 'Online' : 'Offline'}</span>
+                        {(() => {
+                          const onlineNow = isUserCurrentlyOnline(friend);
+                          return (
+                            <>
+                              <span className={`w-1.5 h-1.5 rounded-full ${onlineNow ? 'bg-emerald-500' : 'bg-neutral-500'}`} />
+                              <span className={onlineNow ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : ''}>
+                                {onlineNow ? 'Online' : 'Offline'}
+                              </span>
+                            </>
+                          );
+                        })()}
                       </span>
                     </div>
                   </div>
@@ -575,8 +592,9 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                           (member.displayName || 'U').slice(0, 1).toUpperCase()
                         )}
                         <span
+                          title={isUserCurrentlyOnline(member) ? 'Online' : 'Offline'}
                           className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-[var(--bg-card)] ${
-                            member.isOnline ? 'bg-emerald-500' : 'bg-neutral-500'
+                            isUserCurrentlyOnline(member) ? 'bg-emerald-500' : 'bg-neutral-500'
                           }`}
                         />
                       </div>

@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Conversation } from '../../types';
+import { Conversation, UserProfile } from '../../types';
 import { chatStore } from '../../lib/chatStore';
+import { db, collection, onSnapshot } from '../../lib/firebase';
+import { getCollectionData } from '../../lib/standaloneApi';
+import { isUserCurrentlyOnline } from '../../lib/supabaseSync';
 import {
   Search,
   Plus,
@@ -59,6 +62,25 @@ export const ChatList: React.FC<ChatListProps> = ({
   } | null>(null);
 
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const [directoryProfiles, setDirectoryProfiles] = useState<UserProfile[]>(() =>
+    getCollectionData('userProfiles') as UserProfile[]
+  );
+  const [, setPresenceTick] = useState(0);
+
+  // Subscribe to live userProfiles presence + refresh tick so stale lastSeen flips offline
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'userProfiles'), snap => {
+      const list: UserProfile[] = [];
+      snap.forEach((d: any) => list.push(d.data() as UserProfile));
+      setDirectoryProfiles(list);
+    });
+    const tick = setInterval(() => setPresenceTick(t => t + 1), 20000);
+    return () => {
+      unsub();
+      clearInterval(tick);
+    };
+  }, []);
 
   // Close 3-dot menu on click outside
   useEffect(() => {
@@ -189,11 +211,27 @@ export const ChatList: React.FC<ChatListProps> = ({
   const handleViewProfile = (e: React.MouseEvent, conv: Conversation) => {
     e.stopPropagation();
     setOpenMenuConvId(null);
+    const otherId = conv.participants.find(p => p !== currentUserId) || conv.participants[0];
+    const username = getChatUsername(conv);
+    const liveProfile = directoryProfiles.find(
+      p => p.uid === otherId || (p.username && username && p.username.toLowerCase() === username.toLowerCase())
+    );
+    const matchedContact = savedContacts.find(
+      c => (c.username && username && c.username.toLowerCase() === username.toLowerCase()) || c.id === otherId
+    );
+    const isOnlineNow = conv.isGroup
+      ? true
+      : liveProfile
+      ? isUserCurrentlyOnline(liveProfile)
+      : matchedContact
+      ? matchedContact.isOnline === true
+      : false;
     setViewingProfileUser({
       displayName: getChatTitle(conv),
-      username: getChatUsername(conv),
+      username,
       photoURL: getChatAvatar(conv) || undefined,
-      bio: getChatBio(conv),
+      bio: liveProfile?.bio || getChatBio(conv),
+      isOnline: isOnlineNow,
       isGroup: conv.isGroup,
       conversationId: conv.id
     });
@@ -349,10 +387,21 @@ export const ChatList: React.FC<ChatListProps> = ({
             const isFromMe = conv.lastMessageSenderId === currentUserId;
 
             const otherId = conv.participants.find(p => p !== currentUserId) || conv.participants[0];
+            const liveProfile = directoryProfiles.find(
+              p => p.uid === otherId || (p.username && username && p.username.toLowerCase() === username.toLowerCase())
+            );
             const matchedContact = savedContacts.find(
               c => (c.username && username && c.username.toLowerCase() === username.toLowerCase()) || c.id === otherId
             );
-            const isContactNetActive = conv.isGroup ? true : matchedContact ? matchedContact.isOnline !== false : true;
+            const isContactNetActive = conv.isGroup
+              ? true
+              : otherId === 'vault_secure' || conv.id === 'conv_vault'
+              ? true
+              : liveProfile
+              ? isUserCurrentlyOnline(liveProfile)
+              : matchedContact
+              ? matchedContact.isOnline === true
+              : false;
 
             const msgs = chatStore.getMessages(conv.id);
             const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
@@ -366,12 +415,12 @@ export const ChatList: React.FC<ChatListProps> = ({
                 key={conv.id}
                 className={`w-full p-3.5 flex items-start gap-3 transition-colors text-left relative group cursor-pointer ${
                   isActive
-                    ? 'bg-[var(--accent-surface)] border-l-4 border-[var(--accent-primary)]'
+                    ? 'bg-[var(--accent-surface)]'
                     : 'hover:bg-neutral-200/50 dark:hover:bg-neutral-900/50'
                 }`}
                 onClick={() => onSelectConversation(conv.id)}
               >
-                {/* Contact DP / Avatar with online indicator */}
+                {/* Contact DP / Avatar with real online/offline indicator */}
                 <div className="relative shrink-0">
                   <div className="w-11 h-11 rounded-full bg-neutral-200 dark:bg-neutral-900 border border-[var(--accent-border)] flex items-center justify-center text-[var(--accent-primary)] font-bold text-sm overflow-hidden shadow-inner">
                     {avatar ? (
@@ -382,9 +431,12 @@ export const ChatList: React.FC<ChatListProps> = ({
                       title.slice(0, 1).toUpperCase()
                     )}
                   </div>
-                  {isContactNetActive && (
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-[var(--bg-list)] absolute bottom-0 right-0 animate-pulse" />
-                  )}
+                  <span
+                    title={isContactNetActive ? 'Online' : 'Offline'}
+                    className={`w-2.5 h-2.5 rounded-full border-2 border-[var(--bg-list)] absolute bottom-0 right-0 ${
+                      isContactNetActive ? 'bg-emerald-500' : 'bg-neutral-500'
+                    }`}
+                  />
                 </div>
 
                 {/* Details Column: Title, Username, Last Message, Time, Badges */}
@@ -584,7 +636,12 @@ export const ChatList: React.FC<ChatListProps> = ({
                     </span>
                   )}
                 </div>
-                <span className="w-4 h-4 rounded-full bg-emerald-500 border-2 border-[#0E0E12] absolute bottom-1 right-1 shadow-md" />
+                <span
+                  className={`w-4 h-4 rounded-full border-2 border-[#0E0E12] absolute bottom-1 right-1 shadow-md ${
+                    viewingProfileUser.isOnline ? 'bg-emerald-500' : 'bg-neutral-500'
+                  }`}
+                  title={viewingProfileUser.isOnline ? 'Online' : 'Offline'}
+                />
               </div>
 
               {/* Display Name & Sovereign Badge */}

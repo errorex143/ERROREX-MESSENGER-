@@ -23,7 +23,8 @@ import {
   hashPinClient,
   upsertSupabasePinCredential,
   fetchSupabasePinCredential,
-  isLegacyTestAccount
+  isLegacyTestAccount,
+  sendOfflineBeacon
 } from '../lib/supabaseSync';
 import { chatStore } from '../lib/chatStore';
 import { UserProfile } from '../types';
@@ -265,21 +266,81 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  // Update online presence
+  // Real-time online / offline presence, tab visibility, unload beacon, and auto-sync on reconnect
   useEffect(() => {
     if (!user) return;
-    const interval = setInterval(async () => {
+
+    const markPresence = async (online: boolean) => {
+      const nowIso = new Date().toISOString();
+      setUserProfile(prev => (prev ? { ...prev, isOnline: online, lastSeen: nowIso } : prev));
       try {
         await updateDoc(doc(db, 'userProfiles', user.uid), {
-          isOnline: true,
-          lastSeen: new Date().toISOString()
+          isOnline: online,
+          lastSeen: nowIso
         });
       } catch {
-        // quiet error
+        // quiet error when offline
       }
-    }, 45000);
+    };
 
-    return () => clearInterval(interval);
+    // Initial presence sync based on live browser connectivity
+    markPresence(typeof navigator !== 'undefined' ? navigator.onLine : true);
+
+    const interval = setInterval(() => {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        markPresence(false);
+        return;
+      }
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return;
+      }
+      markPresence(true);
+    }, 30000);
+
+    const handleOnline = async () => {
+      await markPresence(true);
+      try {
+        await hydrateStandaloneFromSupabase(user.uid);
+        await chatStore.syncPendingToSupabase(user.uid);
+        await chatStore.hydrateFromSupabase(user.uid);
+      } catch {
+        // quiet sync error
+      }
+    };
+
+    const handleOffline = () => {
+      markPresence(false);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        const onlineNow = typeof navigator !== 'undefined' ? navigator.onLine : true;
+        markPresence(onlineNow);
+        if (onlineNow) {
+          hydrateStandaloneFromSupabase(user.uid).catch(() => {});
+          chatStore.hydrateFromSupabase(user.uid).catch(() => {});
+        }
+      }
+    };
+
+    const handleUnload = () => {
+      sendOfflineBeacon(user.uid);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', handleUnload);
+    window.addEventListener('beforeunload', handleUnload);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', handleUnload);
+      window.removeEventListener('beforeunload', handleUnload);
+    };
   }, [user]);
 
   // Verify 8-digit Calculator Secret PIN (Client Salted Hash + Supabase + Express Fallback)

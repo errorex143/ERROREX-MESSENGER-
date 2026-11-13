@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChatMessage, Conversation, PrivacySettings, ThemeName, ColorMode } from '../../types';
+import { ChatMessage, Conversation, PrivacySettings, ThemeName, ColorMode, UserProfile } from '../../types';
 import { chatStore } from '../../lib/chatStore';
+import { db, collection, onSnapshot } from '../../lib/firebase';
+import { getCollectionData } from '../../lib/standaloneApi';
+import { isUserCurrentlyOnline } from '../../lib/supabaseSync';
 import { useTheme, THEMES } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { EmojiKeyboard, LIVE_STICKERS } from '../common/EmojiKeyboard';
@@ -278,6 +281,33 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [directoryProfiles, setDirectoryProfiles] = useState<UserProfile[]>(() =>
+    getCollectionData('userProfiles') as UserProfile[]
+  );
+  const [isBrowserOnline, setIsBrowserOnline] = useState<boolean>(() =>
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
+  const [, setPresenceTick] = useState(0);
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'userProfiles'), snap => {
+      const list: UserProfile[] = [];
+      snap.forEach((d: any) => list.push(d.data() as UserProfile));
+      setDirectoryProfiles(list);
+    });
+    const onOnline = () => setIsBrowserOnline(true);
+    const onOffline = () => setIsBrowserOnline(false);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    const tick = setInterval(() => setPresenceTick(t => t + 1), 20000);
+    return () => {
+      unsub();
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+      clearInterval(tick);
+    };
+  }, []);
+
   const otherParticipantId =
     conversation.participants.find(p => p !== currentUserId) || conversation.participants[0] || '';
 
@@ -285,27 +315,41 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     ? 'group'
     : conversation.participantDetails?.[otherParticipantId]?.username || 'contact';
 
-  // Check saved contacts: "or user ko hm ny jis name sy save Kiya ho wo show ho"
+  // Check saved contacts & live directory profiles
   const allContacts = chatStore.getContacts();
   const contactItem = allContacts.find(
     c => (c.username && chatUsername && c.username.toLowerCase() === chatUsername.toLowerCase()) ||
          c.id === otherParticipantId
   );
+  const liveProfile = directoryProfiles.find(
+    p => p.uid === otherParticipantId || (p.username && chatUsername && p.username.toLowerCase() === chatUsername.toLowerCase())
+  );
 
   const chatTitle = conversation.isGroup
     ? conversation.groupName || 'Group Conversation'
     : contactItem?.name ||
+      liveProfile?.displayName ||
       conversation.participantDetails?.[otherParticipantId]?.displayName ||
       conversation.groupName ||
       'Private Contact';
 
-  const isContactOnline = conversation.isGroup ? true : (contactItem ? contactItem.isOnline !== false : true);
+  const isContactOnline = !isBrowserOnline
+    ? false
+    : conversation.isGroup
+    ? true
+    : otherParticipantId === 'vault_secure' || conversation.id === 'conv_vault'
+    ? true
+    : liveProfile
+    ? isUserCurrentlyOnline(liveProfile)
+    : contactItem
+    ? contactItem.isOnline === true
+    : false;
 
   const chatAvatar = conversation.isGroup
     ? conversation.groupPhoto
-    : contactItem?.photoURL || conversation.participantDetails?.[otherParticipantId]?.photoURL;
+    : contactItem?.photoURL || liveProfile?.photoURL || conversation.participantDetails?.[otherParticipantId]?.photoURL;
 
-  const chatBio = contactItem?.bio || 'Encrypted contact • Active on ERROREX Sovereign Network';
+  const chatBio = liveProfile?.bio || contactItem?.bio || 'Encrypted contact • Active on ERROREX Sovereign Network';
 
   // Subscribe to real-time chat updates & mark conversation as seen/read
   useEffect(() => {
@@ -519,9 +563,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             </div>
             {/* Live Online / Offline status */}
             <div className="flex items-center gap-1.5 text-[10px] font-mono">
-              <span className={`w-2 h-2 rounded-full ${isContactOnline ? 'bg-emerald-500 animate-pulse' : 'bg-neutral-500'}`} />
+              <span className={`w-2 h-2 rounded-full ${isContactOnline ? 'bg-emerald-500' : 'bg-neutral-500'}`} />
               <span className={isContactOnline ? 'text-emerald-500 dark:text-emerald-400 font-semibold' : 'text-neutral-500 font-medium'}>
-                {isContactOnline ? 'online' : 'offline'}
+                {isContactOnline ? 'Online' : 'Offline'}
               </span>
             </div>
           </div>
@@ -540,6 +584,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Offline Auto-Queue Notice */}
+      {!isBrowserOnline && (
+        <div className="px-4 py-1.5 bg-amber-500/10 border-b border-amber-500/20 text-center text-[11px] font-medium text-amber-600 dark:text-amber-300">
+          You are offline — messages are saved locally and will sync automatically when online.
+        </div>
+      )}
 
       {/* Messages Scroll Area */}
       <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3.5 chat-scroll-area">
