@@ -35,15 +35,24 @@ const QUICK_PROMPTS = [
 
 export const ErrorexAiView: React.FC = () => {
   const [messages, setMessages] = useState<AiMessage[]>(() => {
-    const cleanWelcomeText = `### Salam & Welcome to ERROREX AI 👑\n\nMain aapka friendly aur intelligent assistant hoon. Jo bhi poochein ya likhne ko kahein — **poetry, ghazals, business promotion, AI prompts, coding, applications, math, ya translation** — main har zubaan me bilkul perfect aur saaf jawab dunga!`;
+    const cleanWelcomeText = `### Salam & Welcome to ERROREX AI 👑\n\nMain aapka friendly aur intelligent assistant hoon. Jo bhi poochein ya likhne ko kahein — **poetry, ghazals, business promotion, AI prompts, essays, recipes, coding, math, ya translation** — main har zubaan me bilkul perfect, stylish aur tafseeli jawab dunga!`;
     try {
       const saved = localStorage.getItem('errorex_ai_messages');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed.map((m: AiMessage) =>
-            m.id === 'msg_ai_welcome' ? { ...m, text: cleanWelcomeText } : m
-          );
+          return parsed
+            .filter(
+              (m: AiMessage) =>
+                !(
+                  m?.sender === 'ai' &&
+                  typeof m?.text === 'string' &&
+                  (m.text.includes('GEMINI_API_KEY') || m.text.includes('Specify your preferred format'))
+                )
+            )
+            .map((m: AiMessage) =>
+              m.id === 'msg_ai_welcome' ? { ...m, text: cleanWelcomeText } : m
+            );
         }
       }
     } catch {
@@ -82,12 +91,16 @@ export const ErrorexAiView: React.FC = () => {
     };
   }, []);
 
-  // Save messages to localStorage
+  // Save messages to localStorage with safe fallback only on browser storage overflow
   useEffect(() => {
     try {
       localStorage.setItem('errorex_ai_messages', JSON.stringify(messages));
     } catch {
-      // ignore storage quota
+      try {
+        localStorage.setItem('errorex_ai_messages', JSON.stringify(messages.slice(-150)));
+      } catch {
+        // ignore storage quota
+      }
     }
   }, [messages]);
 
@@ -100,8 +113,8 @@ export const ErrorexAiView: React.FC = () => {
     const currentlyOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
 
     if (!currentlyOnline) {
-      await new Promise(resolve => setTimeout(resolve, 180));
-      return generateErrorexAiFallback(textToSend, historySlice, true);
+      await new Promise(resolve => setTimeout(resolve, 160));
+      return generateErrorexAiFallback(textToSend, historySlice);
     }
 
     try {
@@ -125,7 +138,7 @@ export const ErrorexAiView: React.FC = () => {
       // Fall through cleanly to local engine
     }
 
-    return generateErrorexAiFallback(textToSend, historySlice, false);
+    return generateErrorexAiFallback(textToSend, historySlice);
   };
 
   const handleSendMessage = async (customPrompt?: string) => {
@@ -141,7 +154,7 @@ export const ErrorexAiView: React.FC = () => {
 
     const historySlice = messages
       .filter(m => m.id !== 'msg_ai_welcome')
-      .slice(-10)
+      .slice(-40)
       .map(m => ({ id: m.id, sender: m.sender, text: m.text }));
     setMessages(prev => [...prev, userMsg]);
     if (!customPrompt) setInput('');
@@ -170,7 +183,7 @@ export const ErrorexAiView: React.FC = () => {
     const actualIdx = messages.length - 1 - lastUserIdx;
     const lastUserMsg = messages[actualIdx];
     const historySlice = messages
-      .slice(Math.max(0, actualIdx - 10), actualIdx)
+      .slice(Math.max(0, actualIdx - 40), actualIdx)
       .filter(m => m.id !== 'msg_ai_welcome')
       .map(m => ({
         id: m.id,
@@ -346,9 +359,18 @@ export const ErrorexAiView: React.FC = () => {
                       <MarkdownMessage content={msg.text} />
                     )}
 
-                    {/* Regenerate Action on latest AI response */}
+                    {/* Quick Actions on latest AI response: Expand & Regenerate */}
                     {isLastAi && messages.some(m => m.sender === 'user') && (
-                      <div className="mt-3 pt-2 border-t border-neutral-200/50 dark:border-white/5 flex items-center justify-end">
+                      <div className="mt-3 pt-2 border-t border-neutral-200/50 dark:border-white/5 flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleSendMessage('Is par aur zyada detail aur examples likhein')}
+                          disabled={isLoading}
+                          className="inline-flex items-center gap-1.5 py-1 px-2.5 rounded-lg text-[11px] text-[var(--text-muted)] hover:text-[var(--accent-primary)] hover:bg-[var(--accent-surface)] transition-colors cursor-pointer disabled:opacity-50"
+                        >
+                          <Sparkles className="w-3 h-3" />
+                          <span>More Detail</span>
+                        </button>
                         <button
                           type="button"
                           onClick={handleRegenerateLast}

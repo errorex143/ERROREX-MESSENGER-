@@ -5,28 +5,11 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { GoogleGenAI } from '@google/genai';
-import {
-  ERROREX_AI_SYSTEM_INSTRUCTION,
-  buildGeminiContents,
-  generateErrorexAiFallback
-} from './src/lib/errorexAiEngine';
+import { generateErrorexAiFallback } from './src/lib/errorexAiEngine';
+import { generateServerAiReply } from './src/lib/serverAiRunner';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-function getGeminiClient(): GoogleGenAI | null {
-  const apiKey = process.env.GEMINI_API_KEY?.trim();
-  if (!apiKey) return null;
-  return new GoogleGenAI({
-    apiKey,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build'
-      }
-    }
-  });
-}
 
 // Load firebase-applet-config.json
 let firebaseConfig: {
@@ -381,37 +364,11 @@ app.post('/api/ai/chat', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Message is required' });
     }
 
-    const aiClient = getGeminiClient();
-    if (aiClient) {
-      const contents = buildGeminiContents(message, history);
-      for (let attempt = 0; attempt < 2; attempt++) {
-        try {
-          const response = await aiClient.models.generateContent({
-            model: 'gemini-4-hydrogen',
-            contents,
-            config: {
-              systemInstruction: ERROREX_AI_SYSTEM_INSTRUCTION
-            }
-          });
-
-          if (response && response.text && response.text.trim()) {
-            return res.json({ reply: response.text.trim(), engine: 'gemini' });
-          }
-        } catch (geminiError: any) {
-          console.warn(`[Server AI] Gemini attempt ${attempt + 1} notice:`, geminiError?.message || geminiError);
-          if (attempt === 0) {
-            await new Promise(resolve => setTimeout(resolve, 400));
-          }
-        }
-      }
-    }
-
-    // Offline / unconfigured fallback engine
-    const autonomousReply = generateErrorexAiFallback(message, history);
-    res.json({ reply: autonomousReply, engine: 'fallback' });
+    const result = await generateServerAiReply(message, history);
+    res.json(result);
   } catch (error: any) {
     console.error('Error in /api/ai/chat:', error);
-    const fallback = generateErrorexAiFallback(req.body?.message || 'help');
+    const fallback = generateErrorexAiFallback(req.body?.message || 'help', req.body?.history);
     res.json({ reply: fallback, engine: 'fallback' });
   }
 });

@@ -7,8 +7,8 @@ interface MarkdownMessageProps {
 
 function renderInline(text: string): React.ReactNode[] {
   const nodes: React.ReactNode[] = [];
-  // Match **bold**, *italic*, `code`, or https:// URLs
-  const tokenRegex = /(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|https?:\/\/[^\s)]+)/g;
+  // Match [label](https://url), **bold**, *italic*, `code`, or bare https:// URLs
+  const tokenRegex = /(\[[^\]]+\]\(https?:\/\/[^\s)]+\)|\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|https?:\/\/[^\s)]+)/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
   let keyIdx = 0;
@@ -19,7 +19,24 @@ function renderInline(text: string): React.ReactNode[] {
     }
 
     const token = match[0];
-    if (token.startsWith('**') && token.endsWith('**')) {
+    if (token.startsWith('[') && token.includes('](')) {
+      const linkMatch = token.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/);
+      if (linkMatch) {
+        nodes.push(
+          <a
+            key={keyIdx++}
+            href={linkMatch[2]}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[var(--accent-primary)] font-medium underline underline-offset-2 hover:opacity-80 break-words"
+          >
+            {linkMatch[1]}
+          </a>
+        );
+      } else {
+        nodes.push(token);
+      }
+    } else if (token.startsWith('**') && token.endsWith('**')) {
       nodes.push(
         <strong key={keyIdx++} className="font-semibold text-[var(--text-main)]">
           {token.slice(2, -2)}
@@ -76,7 +93,7 @@ const CodeBlock: React.FC<{ language: string; code: string }> = ({ language, cod
   };
 
   return (
-    <div className="my-2.5 rounded-xl overflow-hidden border border-neutral-300 dark:border-white/10 bg-[#0B0C10] text-neutral-100 shadow-sm">
+    <div className="my-3 rounded-xl overflow-hidden border border-neutral-300 dark:border-white/10 bg-[#0B0C10] text-neutral-100 shadow-sm">
       <div className="flex items-center justify-between px-3.5 py-1.5 bg-white/[0.04] border-b border-white/10 text-[10px] font-mono text-neutral-400">
         <span className="uppercase tracking-wider">{language || 'code'}</span>
         <button
@@ -96,7 +113,6 @@ const CodeBlock: React.FC<{ language: string; code: string }> = ({ language, cod
 };
 
 export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content }) => {
-  // Split content into text segments and fenced code blocks
   const segments: Array<{ type: 'text' | 'code'; content: string; lang?: string }> = [];
   const codeBlockRegex = /```([a-zA-Z0-9_+-]*)\n?([\s\S]*?)```/g;
   let lastIdx = 0;
@@ -119,7 +135,7 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content }) => 
   }
 
   return (
-    <div className="space-y-2.5 text-[13px] sm:text-[13.5px] leading-[1.68] text-[var(--text-main)] select-text max-w-[68ch]">
+    <div className="space-y-3 text-[13.5px] sm:text-[14px] leading-[1.72] text-[var(--text-main)] select-text max-w-[70ch] tracking-[0.005em]">
       {segments.map((seg, sIdx) => {
         if (seg.type === 'code') {
           return <CodeBlock key={sIdx} language={seg.lang || 'code'} code={seg.content} />;
@@ -129,14 +145,15 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content }) => 
         const blocks: React.ReactNode[] = [];
         let listItems: { ordered: boolean; items: string[] } | null = null;
         let quoteLines: string[] = [];
+        let tableLines: string[] = [];
 
         const flushList = (keyPrefix: string) => {
           if (!listItems) return;
           if (listItems.ordered) {
             blocks.push(
-              <ol key={`${keyPrefix}-ol`} className="list-decimal pl-5 space-y-1.5 my-1">
+              <ol key={`${keyPrefix}-ol`} dir="auto" className="list-decimal pl-5 space-y-1.5 my-1.5 marker:text-[var(--accent-primary)] marker:font-semibold">
                 {listItems.items.map((item, i) => (
-                  <li key={i} className="pl-0.5">
+                  <li key={i} className="pl-1">
                     {renderInline(item)}
                   </li>
                 ))}
@@ -144,9 +161,9 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content }) => 
             );
           } else {
             blocks.push(
-              <ul key={`${keyPrefix}-ul`} className="list-disc pl-5 space-y-1.5 my-1 marker:text-[var(--accent-primary)]">
+              <ul key={`${keyPrefix}-ul`} dir="auto" className="list-disc pl-5 space-y-1.5 my-1.5 marker:text-[var(--accent-primary)]">
                 {listItems.items.map((item, i) => (
-                  <li key={i} className="pl-0.5">
+                  <li key={i} className="pl-1">
                     {renderInline(item)}
                   </li>
                 ))}
@@ -161,14 +178,58 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content }) => 
           blocks.push(
             <blockquote
               key={`${keyPrefix}-bq`}
-              className="px-3.5 py-2.5 rounded-xl bg-[var(--accent-surface)] border border-[var(--accent-border)] text-[var(--text-main)] italic space-y-1"
+              dir="auto"
+              className="px-4 py-3 rounded-xl bg-[var(--accent-surface)] border border-[var(--accent-border)] text-[var(--text-main)] italic space-y-1.5 my-1.5"
             >
               {quoteLines.map((ql, qi) => (
-                <p key={qi}>{renderInline(ql)}</p>
+                <p key={qi} dir="auto">{renderInline(ql)}</p>
               ))}
             </blockquote>
           );
           quoteLines = [];
+        };
+
+        const flushTable = (keyPrefix: string) => {
+          if (tableLines.length === 0) return;
+          const rows = tableLines
+            .filter(r => !/^\|?\s*[-:]+\s*(\|\s*[-:]+\s*)+\|?$/.test(r))
+            .map(r =>
+              r
+                .replace(/^\|/, '')
+                .replace(/\|$/, '')
+                .split('|')
+                .map(c => c.trim())
+            );
+          if (rows.length > 0) {
+            const [header, ...body] = rows;
+            blocks.push(
+              <div key={`${keyPrefix}-tbl`} className="overflow-x-auto my-2 rounded-xl border border-[var(--accent-border)]">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-[var(--accent-surface)] text-[var(--accent-primary)] font-semibold">
+                    <tr>
+                      {header.map((cell, ci) => (
+                        <th key={ci} className="px-3 py-2 border-b border-[var(--accent-border)]">
+                          {renderInline(cell)}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-200/40 dark:divide-white/5">
+                    {body.map((row, ri) => (
+                      <tr key={ri}>
+                        {row.map((cell, ci) => (
+                          <td key={ci} className="px-3 py-2">
+                            {renderInline(cell)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          }
+          tableLines = [];
         };
 
         lines.forEach((rawLine, idx) => {
@@ -178,8 +239,29 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content }) => 
           if (!trimmed) {
             flushList(`${sIdx}-${idx}`);
             flushQuote(`${sIdx}-${idx}`);
+            flushTable(`${sIdx}-${idx}`);
             return;
           }
+
+          // Horizontal divider (--- or ***)
+          if (/^([-*_]){3,}$/.test(trimmed)) {
+            flushList(`${sIdx}-${idx}`);
+            flushQuote(`${sIdx}-${idx}`);
+            flushTable(`${sIdx}-${idx}`);
+            blocks.push(
+              <hr key={`${sIdx}-${idx}-hr`} className="my-2.5 border-t border-[var(--accent-border)] opacity-60" />
+            );
+            return;
+          }
+
+          // Markdown table row
+          if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+            flushList(`${sIdx}-${idx}`);
+            flushQuote(`${sIdx}-${idx}`);
+            tableLines.push(trimmed);
+            return;
+          }
+          flushTable(`${sIdx}-${idx}`);
 
           // Blockquote
           if (trimmed.startsWith('>')) {
@@ -197,12 +279,12 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content }) => 
             const text = headingMatch[2];
             const sizeClass =
               level === 1
-                ? 'text-base font-bold text-[var(--text-main)] pt-1'
+                ? 'text-base sm:text-[17px] font-bold text-[var(--text-main)] pt-1.5 tracking-tight'
                 : level === 2
-                ? 'text-[14.5px] font-bold text-[var(--text-main)] pt-1'
-                : 'text-[13.5px] font-semibold text-[var(--accent-primary)] pt-0.5';
+                ? 'text-[15px] font-bold text-[var(--text-main)] pt-1.5 tracking-tight'
+                : 'text-[14px] font-semibold text-[var(--accent-primary)] pt-1';
             blocks.push(
-              <div key={`${sIdx}-${idx}-h`} className={sizeClass}>
+              <div key={`${sIdx}-${idx}-h`} dir="auto" className={sizeClass}>
                 {renderInline(text)}
               </div>
             );
@@ -234,7 +316,7 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content }) => 
           // Regular paragraph line
           flushList(`${sIdx}-${idx}`);
           blocks.push(
-            <p key={`${sIdx}-${idx}-p`} className="break-words">
+            <p key={`${sIdx}-${idx}-p`} dir="auto" className="break-words">
               {renderInline(trimmed)}
             </p>
           );
@@ -242,6 +324,7 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content }) => 
 
         flushList(`${sIdx}-end`);
         flushQuote(`${sIdx}-end`);
+        flushTable(`${sIdx}-end`);
 
         return <React.Fragment key={sIdx}>{blocks}</React.Fragment>;
       })}

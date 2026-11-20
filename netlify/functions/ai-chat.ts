@@ -1,9 +1,5 @@
-import { GoogleGenAI } from '@google/genai';
-import {
-  ERROREX_AI_SYSTEM_INSTRUCTION,
-  buildGeminiContents,
-  generateErrorexAiFallback
-} from '../../src/lib/errorexAiEngine';
+import { generateErrorexAiFallback } from '../../src/lib/errorexAiEngine';
+import { generateServerAiReply } from '../../src/lib/serverAiRunner';
 
 export default async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') {
@@ -45,46 +41,17 @@ export default async (req: Request): Promise<Response> => {
     });
   }
 
-  const apiKey = process.env.GEMINI_API_KEY?.trim();
-  if (apiKey) {
-    const ai = new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build'
-        }
-      }
+  try {
+    const result = await generateServerAiReply(message, history);
+    return new Response(JSON.stringify(result), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
     });
-
-    const contents = buildGeminiContents(message, history);
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const response = await ai.models.generateContent({
-          model: 'gemini-4-hydrogen',
-          contents,
-          config: {
-            systemInstruction: ERROREX_AI_SYSTEM_INSTRUCTION
-          }
-        });
-
-        if (response?.text && response.text.trim()) {
-          return new Response(JSON.stringify({ reply: response.text.trim(), engine: 'gemini' }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' }
-          });
-        }
-      } catch (err: any) {
-        console.warn(`[Netlify AI Function] Gemini attempt ${attempt + 1}:`, err?.message || err);
-        if (attempt === 0) {
-          await new Promise(resolve => setTimeout(resolve, 400));
-        }
-      }
-    }
+  } catch {
+    const fallbackReply = generateErrorexAiFallback(message, history);
+    return new Response(JSON.stringify({ reply: fallbackReply, engine: 'fallback' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
-
-  const fallbackReply = generateErrorexAiFallback(message, history);
-  return new Response(JSON.stringify({ reply: fallbackReply, engine: 'fallback' }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' }
-  });
 };
