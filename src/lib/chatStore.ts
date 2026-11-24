@@ -1,11 +1,12 @@
 import { Conversation, ChatMessage, ContactItem, PrivacySettings, UserProfile } from '../types';
-import { supabase, isSupabaseConfigured } from './supabase';
+import { supabase, isSupabaseConfigured, initSupabaseRuntime } from './supabase';
 import {
   generateUUID,
   isLegacyTestAccount,
   isUserCurrentlyOnline,
   upsertSupabaseConversation,
   fetchSupabaseConversations,
+  fetchSupabaseConversationById,
   deleteSupabaseConversation,
   upsertSupabaseMessage,
   fetchSupabaseMessages
@@ -49,6 +50,20 @@ function notifyListeners() {
 
 let chatRealtimeChannel: any = null;
 let chatRealtimeUid: string | null = null;
+let chatPollTimer: any = null;
+let activeHydratePromise: Promise<void> | null = null;
+
+function computeUnreadCountForUser(messages: ChatMessage[], uid: string): number {
+  if (!uid) return 0;
+  return messages.filter(
+    m =>
+      m.senderId !== uid &&
+      m.senderId !== 'system' &&
+      !m.isDeleted &&
+      !m.deletedFor?.includes(uid) &&
+      !(Array.isArray(m.readBy) && m.readBy.includes(uid))
+  ).length;
+}
 
 export const chatStore = {
   subscribe(fn: Listener) {
@@ -59,47 +74,168 @@ export const chatStore = {
     };
   },
 
-  // --- Supabase Cloud Hydration & Realtime Sync ---
-  async hydrateFromSupabase(uid: string) {
-    if (!isSupabaseConfigured || !supabase || !uid) return;
-
-    try {
-      const remoteConvs = await fetchSupabaseConversations(uid);
-      if (remoteConvs.length > 0) {
-        const localConvs = this.getAllConversations();
-        const convMap = new Map<string, Conversation>();
-        localConvs.forEach(c => convMap.set(c.id, c));
-        remoteConvs.forEach(rc => {
-          const prev = convMap.get(rc.id);
-          convMap.set(rc.id, prev ? { ...prev, ...rc } : rc);
-        });
-        this.saveConversations(Array.from(convMap.values()));
-
-        // Fetch messages for each conversation
-        await Promise.all(
-          remoteConvs.map(async rc => {
-            const remoteMsgs = await fetchSupabaseMessages(rc.id);
-            if (remoteMsgs.length > 0) {
-              const localMsgs = this.getMessages(rc.id);
-              const msgMap = new Map<string, ChatMessage>();
-              localMsgs.forEach(m => msgMap.set(m.id, m));
-              remoteMsgs.forEach(rm => {
-                const prev = msgMap.get(rm.id);
-                msgMap.set(rm.id, prev ? { ...prev, ...rm } : rm);
-              });
-              const merged = Array.from(msgMap.values()).sort(
-                (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-              );
-              this.saveMessages(rc.id, merged);
-            }
-          })
-        );
+  stopRealtime() {
+    if (chatRealtimeChannel && supabase) {
+      try {
+        supabase.removeChannel(chatRealtimeChannel);
+      } catch {
+        // ignore
       }
-    } catch (err) {
-      console.warn('[ChatStore] Supabase hydrate notice:', err);
+    }
+    chatRealtimeChannel = null;
+    chatRealtimeUid = null;
+    if (chatPollTimer) {
+      clearInterval(chatPollTimer);
+      chatPollTimer = null;
+    }
+  },
+
+  mergeRemoteMessages(conversationId: string, remoteMsgs: ChatMessage[], currentUid?: string) {
+    const localMsgs = this.getMessages(conversationId);
+    const msgMap = new Map<string, ChatMessage>();
+    localMsgs.forEach(m => msgMap.set(m.id, m));
+
+    const toMarkDelivered: ChatMessage[] = [];
+    const browserOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+
+    remoteMsgs.forEach(rm => {
+      const prev = msgMap.get(rm.id);
+      const mergedMsg: ChatMessage = prev
+        ? {
+            ...prev,
+            ...rm,
+            readBy: Array.from(new Set([...(prev.readBy || []), ...(rm.readBy || [])])),
+            deliveryStatus:
+              rm.deliveryStatus === 'read' || prev.deliveryStatus === 'read'
+                ? 'read'
+                : rm.deliveryStatus === 'delivered' || prev.deliveryStatus === 'delivered'
+                ? 'delivered'
+                : rm.deliveryStatus || prev.deliveryStatus || 'sent'
+          }
+        : rm;
+
+      // If this client is the recipient and online, upgrade 'sent' -> 'delivered' so sender gets double grey ticks
+      if (
+        currentUid &&
+        browserOnline &&
+        mergedMsg.senderId !== currentUid &&
+        mergedMsg.senderId !== 'system' &&
+        mergedMsg.deliveryStatus === 'sent'
+      ) {
+        mergedMsg.deliveryStatus = 'delivered';
+        toMarkDelivered.push(mergedMsg);
+      }
+
+      msgMap.set(rm.id, mergedMsg);
+    });
+
+    const sorted = Array.from(msgMap.values()).sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+    this.saveMessages(conversationId, sorted);
+
+    // Update parent conversation summary & unread count for currentUid
+    if (sorted.length > 0 && currentUid) {
+      const last = sorted[sorted.length - 1];
+      const allConvs = this.getAllConversations();
+      const idx = allConvs.findIndex(c => c.id === conversationId);
+      if (idx !== -1) {
+        const conv = allConvs[idx];
+        const preview =
+          last.isDeleted || last.deletedForEveryone
+            ? '🚫 This message was deleted'
+            : last.mediaType === 'image'
+            ? '📷 Photo'
+            : last.mediaType === 'audio'
+            ? '🎤 Voice Memo'
+            : last.text;
+        conv.lastMessageText = preview;
+        conv.lastMessageSenderId = last.senderId;
+        conv.lastMessageAt = last.createdAt;
+        conv.unreadCount = conv.isBlocked ? 0 : computeUnreadCountForUser(sorted, currentUid);
+        allConvs[idx] = conv;
+        this.saveConversations(allConvs);
+      }
     }
 
-    // Subscribe to realtime messages & conversations
+    if (toMarkDelivered.length > 0) {
+      toMarkDelivered.forEach(m => {
+        upsertSupabaseMessage(m).catch(() => {});
+      });
+    }
+  },
+
+  mergeRemoteConversations(remoteConvs: Conversation[], currentUid: string) {
+    const localConvs = this.getAllConversations();
+    const convMap = new Map<string, Conversation>();
+    localConvs.forEach(c => convMap.set(c.id, c));
+
+    remoteConvs.forEach(rc => {
+      const prev = convMap.get(rc.id);
+      const localMsgs = this.getMessages(rc.id);
+      const computedUnread = prev?.isBlocked
+        ? 0
+        : localMsgs.length > 0
+        ? computeUnreadCountForUser(localMsgs, currentUid)
+        : rc.lastMessageSenderId && rc.lastMessageSenderId !== currentUid && rc.lastMessageSenderId !== 'system'
+        ? Math.max(prev?.unreadCount || 0, 1)
+        : 0;
+
+      convMap.set(rc.id, {
+        ...(prev || {}),
+        ...rc,
+        // Preserve per-device user preferences
+        isPinned: prev?.isPinned ?? rc.isPinned,
+        isMuted: prev?.isMuted ?? rc.isMuted,
+        isArchived: prev?.isArchived ?? rc.isArchived,
+        isBlocked: prev?.isBlocked ?? rc.isBlocked,
+        unreadCount: computedUnread
+      });
+    });
+
+    this.saveConversations(Array.from(convMap.values()));
+  },
+
+  async pullRemoteChats(uid: string) {
+    if (!isSupabaseConfigured || !supabase || !uid) return;
+    if (activeHydratePromise) return activeHydratePromise;
+
+    activeHydratePromise = (async () => {
+      try {
+        const remoteConvs = await fetchSupabaseConversations(uid);
+        if (remoteConvs.length > 0) {
+          this.mergeRemoteConversations(remoteConvs, uid);
+
+          await Promise.all(
+            remoteConvs.map(async rc => {
+              const remoteMsgs = await fetchSupabaseMessages(rc.id);
+              if (remoteMsgs.length > 0) {
+                this.mergeRemoteMessages(rc.id, remoteMsgs, uid);
+              }
+            })
+          );
+        }
+      } catch (err) {
+        console.warn('[ChatStore] Supabase hydrate notice:', err);
+      }
+    })();
+
+    try {
+      await activeHydratePromise;
+    } finally {
+      activeHydratePromise = null;
+    }
+  },
+
+  // --- Supabase Cloud Hydration & Realtime Sync ---
+  async hydrateFromSupabase(uid: string) {
+    if (!uid) return;
+    await initSupabaseRuntime();
+    if (!isSupabaseConfigured || !supabase) return;
+
+    await this.pullRemoteChats(uid);
+
+    // Subscribe to realtime messages & conversations once per UID
     if (chatRealtimeUid !== uid) {
       if (chatRealtimeChannel) {
         try {
@@ -108,47 +244,74 @@ export const chatStore = {
           // ignore
         }
       }
+      if (chatPollTimer) {
+        clearInterval(chatPollTimer);
+        chatPollTimer = null;
+      }
+
       chatRealtimeUid = uid;
       try {
         chatRealtimeChannel = supabase
           .channel(`errorex_chat_${uid}`)
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, async () => {
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, async payload => {
+            if (payload.eventType === 'DELETE') {
+              const oldId = (payload.old as any)?.id;
+              if (oldId) {
+                const filtered = this.getAllConversations().filter(c => c.id !== oldId);
+                this.saveConversations(filtered);
+              }
+              return;
+            }
             const remoteConvs = await fetchSupabaseConversations(uid);
             if (remoteConvs.length > 0) {
-              const localConvs = this.getAllConversations();
-              const convMap = new Map<string, Conversation>();
-              localConvs.forEach(c => convMap.set(c.id, c));
-              remoteConvs.forEach(rc => {
-                const prev = convMap.get(rc.id);
-                convMap.set(rc.id, prev ? { ...prev, ...rc } : rc);
-              });
-              this.saveConversations(Array.from(convMap.values()));
+              this.mergeRemoteConversations(remoteConvs, uid);
+              // Pull messages for any conversation that has 0 messages locally
+              for (const rc of remoteConvs) {
+                if (this.getMessages(rc.id).length === 0) {
+                  const remoteMsgs = await fetchSupabaseMessages(rc.id);
+                  if (remoteMsgs.length > 0) {
+                    this.mergeRemoteMessages(rc.id, remoteMsgs, uid);
+                  }
+                }
+              }
             }
           })
           .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, async payload => {
             const row = (payload.new || payload.old) as any;
             if (!row?.conversation_id) return;
-            const myConvs = this.getConversations(uid);
-            if (!myConvs.some(c => c.id === row.conversation_id)) return;
+
+            let myConvs = this.getConversations(uid);
+            if (!myConvs.some(c => c.id === row.conversation_id)) {
+              // Brand-new conversation might have just been created on another device!
+              const newConv = await fetchSupabaseConversationById(row.conversation_id);
+              if (!newConv || !Array.isArray(newConv.participants) || !newConv.participants.includes(uid)) {
+                return;
+              }
+              this.mergeRemoteConversations([newConv], uid);
+              myConvs = this.getConversations(uid);
+            }
+
+            const targetConv = myConvs.find(c => c.id === row.conversation_id);
+            if (targetConv?.isBlocked && row.sender_id !== uid) {
+              return;
+            }
+
             const remoteMsgs = await fetchSupabaseMessages(row.conversation_id);
             if (remoteMsgs.length > 0) {
-              const localMsgs = this.getMessages(row.conversation_id);
-              const msgMap = new Map<string, ChatMessage>();
-              localMsgs.forEach(m => msgMap.set(m.id, m));
-              remoteMsgs.forEach(rm => {
-                const prev = msgMap.get(rm.id);
-                msgMap.set(rm.id, prev ? { ...prev, ...rm } : rm);
-              });
-              const merged = Array.from(msgMap.values()).sort(
-                (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-              );
-              this.saveMessages(row.conversation_id, merged);
+              this.mergeRemoteMessages(row.conversation_id, remoteMsgs, uid);
             }
           })
           .subscribe();
       } catch {
         // quiet
       }
+
+      // Gentle 5s fallback refresh while browser is visible & online
+      chatPollTimer = setInterval(() => {
+        if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+        this.pullRemoteChats(uid).catch(() => {});
+      }, 5000);
     }
   },
 
@@ -246,6 +409,11 @@ export const chatStore = {
     const liveDirectoryUser = directoryProfiles.find(p => p.uid === otherParticipantId);
     const browserOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
 
+    const isVaultOrLocalOnly =
+      otherParticipantId === 'vault_secure' ||
+      conversationId === 'conv_vault' ||
+      (!liveDirectoryUser && Boolean(otherParticipantId?.startsWith('user_17')));
+
     const isRecipientOnline = !browserOnline
       ? false
       : targetConv?.isGroup
@@ -258,7 +426,12 @@ export const chatStore = {
       ? recipientContact.isOnline !== false
       : false;
 
-    const initialDeliveryStatus: 'sent' | 'delivered' | 'read' = isRecipientOnline ? 'delivered' : 'sent';
+    const initialDeliveryStatus: 'sent' | 'delivered' | 'read' =
+      senderId === 'system'
+        ? 'read'
+        : isRecipientOnline
+        ? 'delivered'
+        : 'sent';
 
     const newMsg: ChatMessage = {
       id: generateUUID(),
@@ -269,7 +442,7 @@ export const chatStore = {
       mediaUrl,
       mediaType,
       createdAt: nowIso,
-      readBy: [senderId],
+      readBy: senderId === 'system' ? [] : [senderId],
       deliveryStatus: initialDeliveryStatus,
       ...(replyTo && {
         replyToMessageId: replyTo.id,
@@ -279,9 +452,6 @@ export const chatStore = {
 
     messages.push(newMsg);
     this.saveMessages(conversationId, messages);
-    if (browserOnline) {
-      upsertSupabaseMessage(newMsg);
-    }
 
     if (targetConv) {
       targetConv.lastMessageText =
@@ -291,12 +461,20 @@ export const chatStore = {
       targetConv.updatedAt = nowIso;
       targetConv.unreadCount = 0;
       this.saveConversations([...convs]);
+
       if (browserOnline) {
-        upsertSupabaseConversation(targetConv);
+        // Sequential sync: upsert parent conversation first, then message!
+        upsertSupabaseConversation(targetConv).then(() => {
+          upsertSupabaseMessage(newMsg, targetConv);
+        });
       }
+    } else if (browserOnline) {
+      upsertSupabaseMessage(newMsg);
     }
 
-    if (isRecipientOnline) {
+    // Only simulate instant read for Vault / non-cloud local placeholder chats;
+    // real cloud members mark 'read' authentically via markAsRead -> Supabase Realtime!
+    if (isRecipientOnline && isVaultOrLocalOnly && !isSupabaseConfigured) {
       setTimeout(() => {
         const currentMsgs = this.getMessages(conversationId);
         const targetMsg = currentMsgs.find(m => m.id === newMsg.id);
@@ -308,7 +486,7 @@ export const chatStore = {
           }
           this.saveMessages(conversationId, currentMsgs);
           if (typeof navigator === 'undefined' || navigator.onLine) {
-            upsertSupabaseMessage(targetMsg);
+            upsertSupabaseMessage(targetMsg, targetConv);
           }
         }
       }, 1800);
@@ -318,6 +496,7 @@ export const chatStore = {
   },
 
   async syncPendingToSupabase(uid: string) {
+    await initSupabaseRuntime();
     if (!isSupabaseConfigured || !uid) return;
     if (typeof navigator !== 'undefined' && !navigator.onLine) return;
     const convs = this.getConversations(uid);
@@ -325,7 +504,7 @@ export const chatStore = {
       await upsertSupabaseConversation(conv);
       const msgs = this.getMessages(conv.id);
       for (const m of msgs) {
-        await upsertSupabaseMessage(m);
+        await upsertSupabaseMessage(m, conv);
       }
     }
   },
@@ -333,32 +512,54 @@ export const chatStore = {
   markAsRead(conversationId: string, userId?: string) {
     const convs = this.getAllConversations();
     const conv = convs.find(c => c.id === conversationId);
-    let changed = false;
+    let convChanged = false;
 
     if (conv && (conv.unreadCount || 0) > 0) {
       conv.unreadCount = 0;
-      changed = true;
+      convChanged = true;
     }
+
+    const privacy = this.getPrivacySettings();
+    const sendReadReceipt = privacy.readReceipts !== false;
 
     const messages = this.getMessages(conversationId);
     if (userId) {
       let msgsChanged = false;
+      const toSync: ChatMessage[] = [];
       messages.forEach(m => {
         if (!m.readBy) m.readBy = [];
-        if (!m.readBy.includes(userId)) {
+        const needsReadBy = !m.readBy.includes(userId);
+        const needsReadStatus =
+          sendReadReceipt &&
+          m.senderId !== userId &&
+          m.senderId !== 'system' &&
+          m.deliveryStatus !== 'read';
+
+        if (needsReadBy) {
           m.readBy.push(userId);
           msgsChanged = true;
-          upsertSupabaseMessage(m);
+        }
+        if (needsReadStatus) {
+          m.deliveryStatus = 'read';
+          msgsChanged = true;
+        }
+        if ((needsReadBy || needsReadStatus) && m.senderId !== userId && m.senderId !== 'system') {
+          toSync.push(m);
         }
       });
+
       if (msgsChanged) {
         this.saveMessages(conversationId, messages);
       }
+      if (toSync.length > 0) {
+        toSync.forEach(m => {
+          upsertSupabaseMessage(m, conv).catch(() => {});
+        });
+      }
     }
 
-    if (changed && conv) {
+    if (convChanged && conv) {
       this.saveConversations([...convs]);
-      upsertSupabaseConversation(conv);
     }
   },
 
@@ -369,6 +570,9 @@ export const chatStore = {
   deleteMessageForEveryone(conversationId: string, messageId: string) {
     const messages = this.getMessages(conversationId);
     const msg = messages.find(m => m.id === messageId);
+    const convs = this.getAllConversations();
+    const targetConv = convs.find(c => c.id === conversationId);
+
     if (msg) {
       msg.text = '🚫 This message was deleted';
       msg.isDeleted = true;
@@ -376,10 +580,8 @@ export const chatStore = {
       msg.mediaUrl = undefined;
       msg.mediaType = 'none';
       this.saveMessages(conversationId, messages);
-      upsertSupabaseMessage(msg);
+      upsertSupabaseMessage(msg, targetConv);
 
-      const convs = this.getAllConversations();
-      const targetConv = convs.find(c => c.id === conversationId);
       if (targetConv && targetConv.lastMessageText) {
         const lastMsg = messages[messages.length - 1];
         if (lastMsg && lastMsg.id === messageId) {
@@ -394,13 +596,14 @@ export const chatStore = {
   deleteMessageForMe(conversationId: string, messageId: string, userId: string) {
     const messages = this.getMessages(conversationId);
     const msg = messages.find(m => m.id === messageId);
+    const targetConv = this.getAllConversations().find(c => c.id === conversationId);
     if (msg) {
       if (!msg.deletedFor) msg.deletedFor = [];
       if (!msg.deletedFor.includes(userId)) {
         msg.deletedFor.push(userId);
       }
       this.saveMessages(conversationId, messages);
-      upsertSupabaseMessage(msg);
+      upsertSupabaseMessage(msg, targetConv);
     }
   },
 
@@ -418,21 +621,23 @@ export const chatStore = {
   editMessage(conversationId: string, messageId: string, newText: string) {
     const messages = this.getMessages(conversationId);
     const msg = messages.find(m => m.id === messageId);
+    const targetConv = this.getAllConversations().find(c => c.id === conversationId);
     if (msg) {
       msg.text = newText;
       msg.isEdited = true;
       this.saveMessages(conversationId, messages);
-      upsertSupabaseMessage(msg);
+      upsertSupabaseMessage(msg, targetConv);
     }
   },
 
   reactToMessage(conversationId: string, messageId: string, emoji: string, userId: string) {
     const messages = this.getMessages(conversationId);
     const msg = messages.find(m => m.id === messageId);
+    const targetConv = this.getAllConversations().find(c => c.id === conversationId);
     if (msg) {
       msg.reactions = { ...(msg.reactions || {}), [userId]: emoji };
       this.saveMessages(conversationId, messages);
-      upsertSupabaseMessage(msg);
+      upsertSupabaseMessage(msg, targetConv);
     }
   },
 
@@ -449,8 +654,25 @@ export const chatStore = {
     const allConvs = this.getAllConversations();
     const id = generateUUID();
     const nowIso = new Date().toISOString();
-    const contactUid = targetUid || `user_${Date.now()}`;
     const uName = customUsername || name.toLowerCase().replace(/\s+/g, '_');
+
+    // Try resolving real targetUid from directoryProfiles if caller didn't pass one
+    let resolvedTargetUid = targetUid;
+    if (!resolvedTargetUid && uName) {
+      try {
+        const rawProfiles = localStorage.getItem('errorex_standalone_db_userProfiles');
+        if (rawProfiles) {
+          const profiles: UserProfile[] = JSON.parse(rawProfiles);
+          const matched = profiles.find(
+            p => p.uid !== creatorId && p.username?.toLowerCase() === uName.toLowerCase()
+          );
+          if (matched) resolvedTargetUid = matched.uid;
+        }
+      } catch {
+        // quiet
+      }
+    }
+    const contactUid = resolvedTargetUid || `user_${Date.now()}`;
 
     const myProfile = this.getUserProfile();
     const myId = creatorId || myProfile.uid || 'current_user';
@@ -485,9 +707,11 @@ export const chatStore = {
 
     allConvs.unshift(newConv);
     this.saveConversations(allConvs);
-    upsertSupabaseConversation(newConv);
 
-    this.sendMessage(id, 'system', name, `Private dialogue started with ${name} (@${uName}).`);
+    // Ensure parent conversation row hits Supabase BEFORE initial system message
+    upsertSupabaseConversation(newConv).then(() => {
+      this.sendMessage(id, 'system', name, `Private dialogue started with ${name} (@${uName}).`);
+    });
 
     this.addContact({
       name,
@@ -607,49 +831,6 @@ export const chatStore = {
 
     contact.isOnline = forceOnline !== undefined ? forceOnline : !contact.isOnline;
     this.saveContacts(contacts);
-
-    if (contact.isOnline) {
-      const convs = this.getAllConversations();
-      convs.forEach(conv => {
-        const isTarget =
-          conv.participants.includes(contact.id) ||
-          (conv.participantDetails &&
-            Object.values(conv.participantDetails).some(
-              p => p.username.toLowerCase() === contact.username.toLowerCase()
-            ));
-
-        if (isTarget) {
-          const msgs = this.getMessages(conv.id);
-          let changed = false;
-          msgs.forEach(m => {
-            if (m.deliveryStatus === 'sent') {
-              m.deliveryStatus = 'delivered';
-              changed = true;
-            }
-          });
-
-          if (changed) {
-            this.saveMessages(conv.id, msgs);
-            setTimeout(() => {
-              const freshMsgs = this.getMessages(conv.id);
-              let readChanged = false;
-              freshMsgs.forEach(m => {
-                if (m.deliveryStatus === 'delivered') {
-                  m.deliveryStatus = 'read';
-                  if (!m.readBy) m.readBy = [];
-                  if (!m.readBy.includes(contact.id)) m.readBy.push(contact.id);
-                  readChanged = true;
-                }
-              });
-              if (readChanged) {
-                this.saveMessages(conv.id, freshMsgs);
-              }
-            }, 1600);
-          }
-        }
-      });
-    }
-
     return contact.isOnline;
   },
 

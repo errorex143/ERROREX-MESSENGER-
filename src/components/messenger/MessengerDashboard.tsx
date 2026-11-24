@@ -105,8 +105,9 @@ export const MessengerDashboard: React.FC = () => {
           const uSnap = await getDocs(collection(db, 'userProfiles'));
           const list: UserProfile[] = [];
           uSnap.forEach((d: any) => {
-            if (friendIds.includes(d.id)) {
-              list.push(d.data() as UserProfile);
+            const pData = d.data() as UserProfile;
+            if (friendIds.includes(d.id) || (pData?.uid && friendIds.includes(pData.uid))) {
+              list.push(pData);
             }
           });
           setFriends(list);
@@ -129,7 +130,9 @@ export const MessengerDashboard: React.FC = () => {
         ((targetUser.uid && c.participants.includes(targetUser.uid)) ||
           (targetUser.username &&
             c.participantDetails &&
-            Object.values(c.participantDetails).some(p => p.username === targetUser.username)))
+            Object.values(c.participantDetails).some(
+              p => p.username?.toLowerCase() === targetUser.username?.toLowerCase()
+            )))
     );
 
     if (existing) {
@@ -158,17 +161,40 @@ export const MessengerDashboard: React.FC = () => {
     setIsNewChatModalOpen(false);
   };
 
-  // Create chat by custom name and username
-  const handleCreateCustomChat = (e: React.FormEvent) => {
+  // Create chat by custom name and username (resolves real registered website member UID if matched)
+  const handleCreateCustomChat = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newChatNameInput.trim()) return;
 
+    const cleanName = newChatNameInput.trim();
     const customUsername = newChatUsernameInput.trim()
       ? newChatUsernameInput.trim().replace(/^@/, '').toLowerCase()
       : undefined;
 
+    let matchedMember: UserProfile | undefined;
+    try {
+      const uSnap = await getDocs(collection(db, 'userProfiles'));
+      const members: UserProfile[] = [];
+      uSnap.forEach((d: any) => members.push(d.data() as UserProfile));
+      matchedMember = members.find(
+        m =>
+          m.uid !== currentUserId &&
+          ((customUsername && m.username?.toLowerCase() === customUsername) ||
+            m.displayName?.toLowerCase() === cleanName.toLowerCase())
+      );
+    } catch {
+      // ignore lookup error
+    }
+
+    if (matchedMember) {
+      handleStartChatWithUser(matchedMember);
+      setNewChatNameInput('');
+      setNewChatUsernameInput('');
+      return;
+    }
+
     const newConv = chatStore.createConversation(
-      newChatNameInput.trim(),
+      cleanName,
       false,
       customUsername,
       undefined,
@@ -176,8 +202,8 @@ export const MessengerDashboard: React.FC = () => {
       currentUserId,
       {
         displayName: currentUserName,
-        username: storedProfile.username || 'user',
-        photoURL: storedProfile.photoURL || ''
+        username: userProfile?.username || storedProfile.username || 'user',
+        photoURL: userProfile?.photoURL || storedProfile.photoURL || ''
       }
     );
     setNewChatNameInput('');

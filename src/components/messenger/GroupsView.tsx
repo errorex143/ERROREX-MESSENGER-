@@ -10,6 +10,7 @@ import {
   OperationType
 } from '../../lib/firebase';
 import { Conversation, UserProfile } from '../../types';
+import { chatStore } from '../../lib/chatStore';
 import { Layers, Plus, Users, MessageSquare, X, Check } from 'lucide-react';
 
 interface GroupsViewProps {
@@ -32,6 +33,16 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
+    const syncGroups = (fromSnap: Conversation[] = []) => {
+      const map = new Map<string, Conversation>();
+      chatStore
+        .getConversations(currentUserId)
+        .filter(c => c.isGroup)
+        .forEach(c => map.set(c.id, c));
+      fromSnap.forEach(c => map.set(c.id, c));
+      setGroups(Array.from(map.values()));
+    };
+
     const q = query(
       collection(db, 'conversations'),
       where('isGroup', '==', true),
@@ -43,14 +54,20 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
       snap => {
         const list: Conversation[] = [];
         snap.forEach((d: any) => list.push({ id: d.id, ...(d.data() as Omit<Conversation, 'id'>) }));
-        setGroups(list);
+        syncGroups(list);
       },
       err => {
         handleFirestoreError(err, OperationType.GET, 'conversations');
       }
     );
 
-    return () => unsub();
+    const unsubChat = chatStore.subscribe(() => syncGroups());
+    syncGroups();
+
+    return () => {
+      unsub();
+      unsubChat();
+    };
   }, [currentUserId]);
 
   const toggleSelectFriend = (uid: string) => {
@@ -86,7 +103,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
     });
 
     try {
-      const docRef = await addDoc(collection(db, 'conversations'), {
+      const groupPayload = {
         participants,
         participantDetails,
         isGroup: true,
@@ -96,9 +113,12 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
         lastMessageText: 'Group created',
         lastMessageSenderId: currentUserId,
         lastMessageAt: nowIso,
+        unreadCount: 0,
         createdAt: nowIso,
         updatedAt: nowIso
-      });
+      };
+      const docRef = await addDoc(collection(db, 'conversations'), groupPayload);
+      chatStore.mergeRemoteConversations([{ id: docRef.id, ...groupPayload }], currentUserId);
 
       setIsCreatingGroup(false);
       setGroupName('');

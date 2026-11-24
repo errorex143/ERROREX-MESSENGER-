@@ -13,7 +13,7 @@ import {
   handleFirestoreError,
   OperationType
 } from '../../lib/firebase';
-import { isSupabaseConfigured } from '../../lib/supabase';
+import { isSupabaseConfigured, initSupabaseRuntime } from '../../lib/supabase';
 import { fetchSupabaseUserProfiles, isLegacyTestAccount, isUserCurrentlyOnline } from '../../lib/supabaseSync';
 import { hydrateStandaloneFromSupabase } from '../../lib/standaloneApi';
 import { FriendRequest, Friendship, UserProfile } from '../../types';
@@ -119,8 +119,9 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
         const userProfilesSnap = await getDocs(collection(db, 'userProfiles'));
         const profiles: UserProfile[] = [];
         userProfilesSnap.forEach(d => {
-          if (friendIds.includes(d.id)) {
-            profiles.push(d.data() as UserProfile);
+          const pData = d.data() as UserProfile;
+          if (friendIds.includes(d.id) || (pData?.uid && friendIds.includes(pData.uid))) {
+            profiles.push(pData);
           }
         });
         setFriends(profiles);
@@ -176,6 +177,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
       }
 
       // 3. Fetch from Supabase user_profiles (primary global directory across Netlify & all devices)
+      await initSupabaseRuntime();
       if (isSupabaseConfigured) {
         try {
           const suUsers = await fetchSupabaseUserProfiles();

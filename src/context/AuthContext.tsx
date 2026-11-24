@@ -17,7 +17,7 @@ import {
   syncUserToDirectory,
   hydrateStandaloneFromSupabase
 } from '../lib/standaloneApi';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { supabase, isSupabaseConfigured, initSupabaseRuntime } from '../lib/supabase';
 import {
   generateSaltHex,
   hashPinClient,
@@ -59,29 +59,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchUserProfile = async (currentUser: StandaloneUser) => {
     const path = `userProfiles/${currentUser.uid}`;
     try {
+      await initSupabaseRuntime();
       const snap = await getDoc(doc(db, 'userProfiles', currentUser.uid));
       let activeProfile: UserProfile;
 
       if (snap.exists()) {
-        const data = snap.data() as UserProfile;
+        const data = snap.data() as UserProfile & { email?: string };
         activeProfile = {
           ...data,
           uid: currentUser.uid,
+          displayName: data.displayName || currentUser.displayName || currentUser.email?.split('@')[0] || 'Member',
+          photoURL: data.photoURL || currentUser.photoURL || '',
           isOnline: true,
           lastSeen: new Date().toISOString()
         };
         setUserProfile(activeProfile);
+        chatStore.saveUserProfile(activeProfile);
         await updateDoc(doc(db, 'userProfiles', currentUser.uid), {
+          displayName: activeProfile.displayName,
+          photoURL: activeProfile.photoURL,
           isOnline: true,
           lastSeen: activeProfile.lastSeen,
-          email: currentUser.email || (data as any).email || ''
+          email: currentUser.email || data.email || ''
         });
-        await syncUserToDirectory({ ...activeProfile, email: currentUser.email || '' });
+        await syncUserToDirectory({ ...activeProfile, email: currentUser.email || data.email || '' });
       } else {
-        const baseName = (currentUser.displayName || currentUser.email?.split('@')[0] || `user_${currentUser.uid.slice(0, 5)}`)
-          .toLowerCase()
-          .replace(/[^a-z0-9_]/g, '_')
-          .slice(0, 20) || `user_${currentUser.uid.slice(0, 5)}`;
+        const baseName =
+          (currentUser.displayName || currentUser.email?.split('@')[0] || `user_${currentUser.uid.slice(0, 5)}`)
+            .toLowerCase()
+            .replace(/[^a-z0-9_]/g, '_')
+            .slice(0, 20) || `user_${currentUser.uid.slice(0, 5)}`;
 
         activeProfile = {
           uid: currentUser.uid,
@@ -98,6 +105,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email: currentUser.email || ''
         });
         setUserProfile(activeProfile);
+        chatStore.saveUserProfile(activeProfile);
+        await syncUserToDirectory({ ...activeProfile, email: currentUser.email || '' });
       }
 
       localStorage.setItem('errorex_last_uid', currentUser.uid);
@@ -107,12 +116,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         hydrateStandaloneFromSupabase(currentUser.uid),
         chatStore.hydrateFromSupabase(currentUser.uid)
       ]);
+      // Push any pending local chats/messages created while offline
+      await chatStore.syncPendingToSupabase(currentUser.uid);
     } catch (err) {
       handleFirestoreError(err, OperationType.GET, path);
     }
   };
 
   const checkHasPin = async (currentUser: StandaloneUser) => {
+    await initSupabaseRuntime();
+
     // 1. Check local encrypted PIN credential or local flag
     const localCredRaw = localStorage.getItem(`errorex_pin_cred_${currentUser.uid}`);
     const localFlag = localStorage.getItem(`errorex_pin_set_${currentUser.uid}`) === 'true';
@@ -176,19 +189,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
+    let suSubscription: { unsubscribe: () => void } | null = null;
+    let isMounted = true;
+
     const unsubscribe = auth.onAuthStateChanged(async (currentUser: StandaloneUser | null) => {
+      if (!isMounted) return;
       if (currentUser) {
         setUser(currentUser);
-        await Promise.all([
-          fetchUserProfile(currentUser),
-          checkHasPin(currentUser)
-        ]);
+        await Promise.all([fetchUserProfile(currentUser), checkHasPin(currentUser)]);
+        if (!isMounted) return;
         const isSessionUnlocked = localStorage.getItem(`errorex_unlocked_${currentUser.uid}`);
-        if (isSessionUnlocked === 'true') {
-          setIsUnlocked(true);
-        } else {
-          setIsUnlocked(false);
-        }
+        setIsUnlocked(isSessionUnlocked === 'true');
       } else {
         const savedStandalone = localStorage.getItem('errorex_standalone_user');
         if (savedStandalone) {
@@ -200,10 +211,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 getIdToken: async () => `token_${parsed.uid}`
               };
               setUser(restored);
-              await Promise.all([
-                fetchUserProfile(restored),
-                checkHasPin(restored)
-              ]);
+              await Promise.all([fetchUserProfile(restored), checkHasPin(restored)]);
+              if (!isMounted) return;
               const isSessionUnlocked = localStorage.getItem(`errorex_unlocked_${restored.uid}`);
               setIsUnlocked(isSessionUnlocked === 'true');
               setLoading(false);
@@ -220,19 +229,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setHasPin(null);
         setIsUnlocked(false);
       }
-      setLoading(false);
+      if (isMounted) setLoading(false);
     });
 
-    // Listen to Supabase Auth OAuth / session events (important for Google OAuth redirects on Netlify)
-    let suSubscription: { unsubscribe: () => void } | null = null;
-    if (isSupabaseConfigured && supabase) {
+    // Initialize runtime Supabase config & attach Google OAuth / session listener
+    initSupabaseRuntime().then(() => {
+      if (!isMounted || !isSupabaseConfigured || !supabase) return;
+
       supabase.auth.getSession().then(({ data }) => {
         const suUser = data?.session?.user;
         if (suUser && !standaloneAuth.currentUser) {
           const mapped: StandaloneUser = {
             uid: suUser.id,
             email: suUser.email || null,
-            displayName: suUser.user_metadata?.full_name || suUser.user_metadata?.display_name || suUser.email?.split('@')[0] || 'Member',
+            displayName:
+              suUser.user_metadata?.full_name ||
+              suUser.user_metadata?.display_name ||
+              suUser.email?.split('@')[0] ||
+              'Member',
             photoURL: suUser.user_metadata?.avatar_url || '',
             emailVerified: Boolean(suUser.email_confirmed_at),
             getIdToken: async () => data.session?.access_token || `token_${suUser.id}`
@@ -248,7 +262,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const mapped: StandaloneUser = {
               uid: suUser.id,
               email: suUser.email || null,
-              displayName: suUser.user_metadata?.full_name || suUser.user_metadata?.display_name || suUser.email?.split('@')[0] || 'Member',
+              displayName:
+                suUser.user_metadata?.full_name ||
+                suUser.user_metadata?.display_name ||
+                suUser.email?.split('@')[0] ||
+                'Member',
               photoURL: suUser.user_metadata?.avatar_url || '',
               emailVerified: Boolean(suUser.email_confirmed_at),
               getIdToken: async () => session.access_token || `token_${suUser.id}`
@@ -258,9 +276,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       });
       suSubscription = authListener.subscription;
-    }
+    });
 
     return () => {
+      isMounted = false;
       unsubscribe();
       suSubscription?.unsubscribe();
     };
@@ -276,7 +295,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         await updateDoc(doc(db, 'userProfiles', user.uid), {
           isOnline: online,
-          lastSeen: nowIso
+          lastSeen: nowIso,
+          email: user.email || ''
         });
       } catch {
         // quiet error when offline
@@ -376,6 +396,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     // 2. Verify against Supabase user_credentials (cross-device & Netlify)
+    await initSupabaseRuntime();
     const suCred = await fetchSupabasePinCredential(activeUid);
     if (suCred && suCred.hasPin && suCred.pinHash && suCred.salt) {
       localStorage.setItem(`errorex_pin_cred_${activeUid}`, JSON.stringify(suCred));
@@ -439,6 +460,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
+      await initSupabaseRuntime();
       const salt = generateSaltHex();
       const pinHash = await hashPinClient(pin, salt);
 
@@ -485,6 +507,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
+    chatStore.stopRealtime();
     if (user) {
       try {
         await updateDoc(doc(db, 'userProfiles', user.uid), {
@@ -509,11 +532,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) return;
     const path = `userProfiles/${user.uid}`;
     try {
-      await updateDoc(doc(db, 'userProfiles', user.uid), {
+      const mergedProfile = {
+        ...(userProfile || {}),
         ...updates,
+        uid: user.uid,
+        email: user.email || '',
         updatedAt: new Date().toISOString()
+      };
+      await updateDoc(doc(db, 'userProfiles', user.uid), mergedProfile);
+      setUserProfile(prev => (prev ? { ...prev, ...updates } : (mergedProfile as UserProfile)));
+      chatStore.saveUserProfile(updates);
+      await standaloneAuth.updateProfile(user, {
+        displayName: updates.displayName,
+        photoURL: updates.photoURL
       });
-      setUserProfile(prev => (prev ? { ...prev, ...updates } : null));
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, path);
     }

@@ -8,7 +8,7 @@ import {
 } from '../../lib/firebase';
 import { CrownLogo } from '../common/CrownLogo';
 import { Mail, ArrowRight, ShieldCheck, KeyRound, AlertCircle, CheckCircle2, User, Check } from 'lucide-react';
-import { isSupabaseConfigured, supabase } from '../../lib/supabase';
+import { isSupabaseConfigured, supabase, initSupabaseRuntime } from '../../lib/supabase';
 import { standaloneAuth } from '../../lib/standaloneApi';
 
 interface AuthModalProps {
@@ -55,6 +55,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     setLoading(true);
     setError(null);
     try {
+      await initSupabaseRuntime();
       if (isSupabaseConfigured && supabase) {
         const { error: suErr } = await supabase.auth.signInWithOAuth({
           provider: 'google',

@@ -676,8 +676,14 @@ export function generateErrorexAiFallback(
   const mathSolved = trySolveMathOrUnits(query, isRomanUrdu);
   if (mathSolved) return mathSolved;
 
-  // 4. Poetry / Ghazals / Shayari
-  if (/(shairi|shayari|poetry|sher|ghazal|gzal|nazm|poem|couplet|quote|motivation)/i.test(lower)) {
+  // 4. Motivational Quotes & Poetry / Ghazals / Shayari
+  if (/(quote|quotes|aqwal|thought of the day)/i.test(lower) && !/(shairi|shayari|poetry|ghazal|gzal|poem)/i.test(lower)) {
+    return isRomanUrdu
+      ? `### Dil Ko Himmat Dene Wale Motivational Quotes ✨\n\n1. *"Chhote qadam rozana uthana, ek din bade khwabon ko haqeeqat bana deta hai."*\n2. *"Mushkil waqt hamesha nahi rehta, magar mazboot log hamesha aage badh jate hain."*\n3. *"Khud par bharosa rakho — har bada kamyab insan kabhi zero se hi shuru hua tha."*\n\nAgar aapko **Islamic**, **Success**, ya **Love/Friendship** quotes chahiye hon to batayein!`
+      : `### Uplifting Motivational Quotes ✨\n\n1. *"Small consistent steps today build the breakthroughs you'll celebrate tomorrow."*\n2. *"Discipline is choosing what you want most over what feels easiest right now."*\n3. *"Every expert was once a beginner who refused to stop learning."*\n\nLet me know if you'd like quotes on **success, confidence, peace of mind, or friendship**!`;
+  }
+
+  if (/(shairi|shayari|poetry|sher|ghazal|gzal|nazm|poem|couplet|motivation)/i.test(lower)) {
     return generatePoetryOrGhazal(query, lang, variantSeed);
   }
 
@@ -836,8 +842,26 @@ export function CounterCard() {
   // 15. Translation Requests
   if (/(translate|tarjuma|tarjama|meaning)/i.test(lower)) {
     const quoted = query.match(/["“']([^"”']+)["”']/);
-    const phrase = quoted ? quoted[1] : 'Welcome to ERROREX Vault';
-    return `### Multilingual Translations for "${phrase}" 🌐\n\n- **Urdu (اردو):** ${phrase === 'Welcome to ERROREX Vault' ? 'ایروریکس والٹ میں خوش آمدید' : phrase}\n- **Roman Urdu:** ${phrase === 'Welcome to ERROREX Vault' ? 'ERROREX Vault mein khush aamdeed' : phrase}\n- **Arabic (العربية):** ${phrase === 'Welcome to ERROREX Vault' ? 'مرحبًا بكم في خزينة ERROREX' : phrase}\n- **French (Français):** ${phrase === 'Welcome to ERROREX Vault' ? 'Bienvenue dans le coffre-fort ERROREX' : phrase}\n\nAgar kisi aur jumlay ka tarjuma chahiye to bas paste karein!`;
+    const phrase = quoted ? quoted[1] : 'Believe in your journey';
+    const knownTranslations: Record<string, { ur: string; ro: string; ar: string; fr: string }> = {
+      'Welcome to ERROREX Vault': {
+        ur: 'ایروریکس والٹ میں خوش آمدید',
+        ro: 'ERROREX Vault mein khush aamdeed',
+        ar: 'مرحبًا بكم في خزينة ERROREX',
+        fr: 'Bienvenue dans le coffre-fort ERROREX'
+      },
+      'Believe in your journey': {
+        ur: 'اپنے سفر پر یقین رکھیں',
+        ro: 'Apne safar par yaqeen rakhein',
+        ar: 'آمن برحلتك',
+        fr: 'Croyez en votre parcours'
+      }
+    };
+    const match = knownTranslations[phrase];
+    if (match) {
+      return `### Multilingual Translations for "${phrase}" 🌐\n\n- **Urdu (اردو):** ${match.ur}\n- **Roman Urdu:** ${match.ro}\n- **Arabic (العربية):** ${match.ar}\n- **French (Français):** ${match.fr}\n\nKisi aur jumlay ka tarjuma chahiye ho to yahan likh dein — main foran translate kar dunga!`;
+    }
+    return `### Translation Ready for "${phrase}" 🌐\n\n- **Original Text:** ${phrase}\n\nApna sentence aur target language (Urdu, English, Arabic, French, Hindi) likhein — main turant saaf aur sahi tarjuma kar dunga!`;
   }
 
   // 16. Essays, Articles, Speeches, Explanations, or Open Questions ("what is / why / how / essay / article / mazmoon / kya hai")

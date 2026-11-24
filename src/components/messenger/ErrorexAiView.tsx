@@ -14,7 +14,13 @@ import {
   Smile,
   RotateCcw,
   Wifi,
-  WifiOff
+  WifiOff,
+  Feather,
+  Languages,
+  Quote,
+  Megaphone,
+  Code2,
+  BookOpen
 } from 'lucide-react';
 
 interface AiMessage {
@@ -31,6 +37,44 @@ const QUICK_PROMPTS = [
   'Write a clean sick leave application',
   'Write Python AES-256 encryption code',
   'Translate "Welcome to ERROREX Vault" into Urdu & Arabic'
+];
+
+const SUGGESTED_QUICK_REPLIES = [
+  {
+    label: 'Write a poem',
+    prompt: 'Write a poem',
+    icon: Feather
+  },
+  {
+    label: 'Motivational quote',
+    prompt: 'Share a motivational quote',
+    icon: Quote
+  },
+  {
+    label: 'Translate text',
+    prompt: 'Translate "Believe in your journey" into Urdu, Roman Urdu & Arabic',
+    icon: Languages
+  },
+  {
+    label: 'Sad Ghazal',
+    prompt: 'Koi pyari si sad ghazal sunao Roman Urdu me',
+    icon: Sparkles
+  },
+  {
+    label: 'Promote business',
+    prompt: 'Mera business promote karne ki viral post likho',
+    icon: Megaphone
+  },
+  {
+    label: 'Short story',
+    prompt: 'Write an inspiring short story',
+    icon: BookOpen
+  },
+  {
+    label: 'Write code',
+    prompt: 'Write a clean Python function example',
+    icon: Code2
+  }
 ];
 
 export const ErrorexAiView: React.FC = () => {
@@ -419,13 +463,35 @@ export const ErrorexAiView: React.FC = () => {
         />
       )}
 
+      {/* Suggested Quick-Reply Chips above Chat Input */}
+      <div
+        aria-label="Suggested quick replies"
+        className="px-3 sm:px-4 pt-2.5 pb-1.5 bg-[var(--bg-sidebar)] border-t border-[var(--accent-border)] flex items-center gap-2 overflow-x-auto scrollbar-none shrink-0"
+      >
+        {SUGGESTED_QUICK_REPLIES.map((item) => {
+          const Icon = item.icon;
+          return (
+            <button
+              key={item.label}
+              type="button"
+              disabled={isLoading}
+              onClick={() => handleSendMessage(item.prompt)}
+              className="inline-flex items-center gap-1.5 py-1.5 px-3 rounded-xl text-xs font-medium bg-[var(--bg-card)] border border-[var(--accent-border)] hover:border-[var(--accent-primary)] hover:bg-[var(--accent-surface)] text-[var(--text-main)] hover:text-[var(--accent-primary)] whitespace-nowrap shrink-0 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              <Icon className="w-3.5 h-3.5 text-[var(--accent-primary)] shrink-0" />
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
       {/* Input Bar (Multiline textarea: Enter sends, Shift+Enter newline) */}
       <form
         onSubmit={e => {
           e.preventDefault();
           handleSendMessage();
         }}
-        className="p-3 sm:p-4 bg-[var(--bg-sidebar)] border-t border-[var(--accent-border)] flex items-end gap-2 shrink-0"
+        className="px-3 sm:px-4 pb-3 sm:pb-4 pt-1.5 bg-[var(--bg-sidebar)] flex items-end gap-2 shrink-0"
       >
         <button
           type="button"

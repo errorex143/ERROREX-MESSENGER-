@@ -95,25 +95,35 @@ export const ChatList: React.FC<ChatListProps> = ({
 
   const savedContacts = chatStore.getContacts();
 
+  const getLiveProfileForConv = (conv: Conversation): UserProfile | undefined => {
+    if (conv.isGroup) return undefined;
+    const otherId = conv.participants.find(p => p !== currentUserId) || conv.participants[0];
+    const details = otherId ? conv.participantDetails?.[otherId] : null;
+    const uName = details?.username || '';
+    return directoryProfiles.find(
+      p => p.uid === otherId || (p.username && uName && p.username.toLowerCase() === uName.toLowerCase())
+    );
+  };
+
   const getChatTitle = (conv: Conversation): string => {
     if (conv.isGroup) return conv.groupName || 'Group Conversation';
     const otherId = conv.participants.find(p => p !== currentUserId) || conv.participants[0];
     const details = otherId ? conv.participantDetails?.[otherId] : null;
-    const uName = details?.username || '';
+    const liveProfile = getLiveProfileForConv(conv);
+    const uName = liveProfile?.username || details?.username || '';
     const contactItem = savedContacts.find(
       c => (c.username && uName && c.username.toLowerCase() === uName.toLowerCase()) || c.id === otherId
     );
-    if (contactItem) {
-      return contactItem.name;
-    }
-    if (details) {
-      return details.displayName;
-    }
+    if (liveProfile?.displayName) return liveProfile.displayName;
+    if (contactItem) return contactItem.name;
+    if (details) return details.displayName;
     return conv.groupName || 'Private Contact';
   };
 
   const getChatUsername = (conv: Conversation): string => {
     if (conv.isGroup) return 'group';
+    const liveProfile = getLiveProfileForConv(conv);
+    if (liveProfile?.username) return liveProfile.username;
     const otherId = conv.participants.find(p => p !== currentUserId) || conv.participants[0];
     if (otherId && conv.participantDetails?.[otherId]?.username) {
       return conv.participantDetails[otherId].username;
@@ -125,26 +135,25 @@ export const ChatList: React.FC<ChatListProps> = ({
     if (conv.isGroup) return conv.groupPhoto || null;
     const otherId = conv.participants.find(p => p !== currentUserId) || conv.participants[0];
     const details = otherId ? conv.participantDetails?.[otherId] : null;
-    const uName = details?.username || '';
+    const liveProfile = getLiveProfileForConv(conv);
+    const uName = liveProfile?.username || details?.username || '';
     const contactItem = savedContacts.find(
       c => (c.username && uName && c.username.toLowerCase() === uName.toLowerCase()) || c.id === otherId
     );
-    if (contactItem?.photoURL) {
-      return contactItem.photoURL;
-    }
-    if (details?.photoURL) {
-      return details.photoURL;
-    }
+    if (liveProfile?.photoURL) return liveProfile.photoURL;
+    if (contactItem?.photoURL) return contactItem.photoURL;
+    if (details?.photoURL) return details.photoURL;
     return null;
   };
 
   const getChatBio = (conv: Conversation): string => {
     const otherId = conv.participants.find(p => p !== currentUserId) || conv.participants[0];
+    const liveProfile = getLiveProfileForConv(conv);
     const uName = getChatUsername(conv);
     const contactItem = savedContacts.find(
       c => (c.username && uName && c.username.toLowerCase() === uName.toLowerCase()) || c.id === otherId
     );
-    return contactItem?.bio || 'Sovereign ERROREX Member • Verified End-to-End Encryption Active 👑';
+    return liveProfile?.bio || contactItem?.bio || 'Sovereign ERROREX Member • Verified End-to-End Encryption Active';
   };
 
   const formatTime = (isoString?: string) => {

@@ -700,7 +700,22 @@ I'm **ERROREX AI**, your warm, thoughtful personal assistant built to give clean
   }
   const mathSolved = trySolveMathOrUnits(query, isRomanUrdu);
   if (mathSolved) return mathSolved;
-  if (/(shairi|shayari|poetry|sher|ghazal|gzal|nazm|poem|couplet|quote|motivation)/i.test(lower)) {
+  if (/(quote|quotes|aqwal|thought of the day)/i.test(lower) && !/(shairi|shayari|poetry|ghazal|gzal|poem)/i.test(lower)) {
+    return isRomanUrdu ? `### Dil Ko Himmat Dene Wale Motivational Quotes \u2728
+
+1. *"Chhote qadam rozana uthana, ek din bade khwabon ko haqeeqat bana deta hai."*
+2. *"Mushkil waqt hamesha nahi rehta, magar mazboot log hamesha aage badh jate hain."*
+3. *"Khud par bharosa rakho \u2014 har bada kamyab insan kabhi zero se hi shuru hua tha."*
+
+Agar aapko **Islamic**, **Success**, ya **Love/Friendship** quotes chahiye hon to batayein!` : `### Uplifting Motivational Quotes \u2728
+
+1. *"Small consistent steps today build the breakthroughs you'll celebrate tomorrow."*
+2. *"Discipline is choosing what you want most over what feels easiest right now."*
+3. *"Every expert was once a beginner who refused to stop learning."*
+
+Let me know if you'd like quotes on **success, confidence, peace of mind, or friendship**!`;
+  }
+  if (/(shairi|shayari|poetry|sher|ghazal|gzal|nazm|poem|couplet|motivation)/i.test(lower)) {
     return generatePoetryOrGhazal(query, lang, variantSeed);
   }
   if (/(promote|promotion|marketing|advertise|ad copy|caption|hashtags|viral|tiktok|youtube|instagram|facebook|business|shop|product|sale|offer|brand)/i.test(lower)) {
@@ -983,15 +998,37 @@ export function CounterCard() {
   }
   if (/(translate|tarjuma|tarjama|meaning)/i.test(lower)) {
     const quoted = query.match(/["“']([^"”']+)["”']/);
-    const phrase = quoted ? quoted[1] : "Welcome to ERROREX Vault";
-    return `### Multilingual Translations for "${phrase}" \u{1F310}
+    const phrase = quoted ? quoted[1] : "Believe in your journey";
+    const knownTranslations = {
+      "Welcome to ERROREX Vault": {
+        ur: "\u0627\u06CC\u0631\u0648\u0631\u06CC\u06A9\u0633 \u0648\u0627\u0644\u0679 \u0645\u06CC\u06BA \u062E\u0648\u0634 \u0622\u0645\u062F\u06CC\u062F",
+        ro: "ERROREX Vault mein khush aamdeed",
+        ar: "\u0645\u0631\u062D\u0628\u064B\u0627 \u0628\u0643\u0645 \u0641\u064A \u062E\u0632\u064A\u0646\u0629 ERROREX",
+        fr: "Bienvenue dans le coffre-fort ERROREX"
+      },
+      "Believe in your journey": {
+        ur: "\u0627\u067E\u0646\u06D2 \u0633\u0641\u0631 \u067E\u0631 \u06CC\u0642\u06CC\u0646 \u0631\u06A9\u06BE\u06CC\u06BA",
+        ro: "Apne safar par yaqeen rakhein",
+        ar: "\u0622\u0645\u0646 \u0628\u0631\u062D\u0644\u062A\u0643",
+        fr: "Croyez en votre parcours"
+      }
+    };
+    const match = knownTranslations[phrase];
+    if (match) {
+      return `### Multilingual Translations for "${phrase}" \u{1F310}
 
-- **Urdu (\u0627\u0631\u062F\u0648):** ${phrase === "Welcome to ERROREX Vault" ? "\u0627\u06CC\u0631\u0648\u0631\u06CC\u06A9\u0633 \u0648\u0627\u0644\u0679 \u0645\u06CC\u06BA \u062E\u0648\u0634 \u0622\u0645\u062F\u06CC\u062F" : phrase}
-- **Roman Urdu:** ${phrase === "Welcome to ERROREX Vault" ? "ERROREX Vault mein khush aamdeed" : phrase}
-- **Arabic (\u0627\u0644\u0639\u0631\u0628\u064A\u0629):** ${phrase === "Welcome to ERROREX Vault" ? "\u0645\u0631\u062D\u0628\u064B\u0627 \u0628\u0643\u0645 \u0641\u064A \u062E\u0632\u064A\u0646\u0629 ERROREX" : phrase}
-- **French (Fran\xE7ais):** ${phrase === "Welcome to ERROREX Vault" ? "Bienvenue dans le coffre-fort ERROREX" : phrase}
+- **Urdu (\u0627\u0631\u062F\u0648):** ${match.ur}
+- **Roman Urdu:** ${match.ro}
+- **Arabic (\u0627\u0644\u0639\u0631\u0628\u064A\u0629):** ${match.ar}
+- **French (Fran\xE7ais):** ${match.fr}
 
-Agar kisi aur jumlay ka tarjuma chahiye to bas paste karein!`;
+Kisi aur jumlay ka tarjuma chahiye ho to yahan likh dein \u2014 main foran translate kar dunga!`;
+    }
+    return `### Translation Ready for "${phrase}" \u{1F310}
+
+- **Original Text:** ${phrase}
+
+Apna sentence aur target language (Urdu, English, Arabic, French, Hindi) likhein \u2014 main turant saaf aur sahi tarjuma kar dunga!`;
   }
   const topic = extractCleanTopic(query);
   if (/(essay|article|paragraph|mazmoon|speech|taqreer|what is|who is|why |how |kya hai|kya hota|kon hai|kaun hai|explain|samjhao|smjhao|tell me about|baare me|bare me|history|benefit|faide|advantage|disadvantage|tips|guide)/i.test(
@@ -1248,6 +1285,18 @@ app.get("/api/health", (req, res) => {
     time: (/* @__PURE__ */ new Date()).toISOString(),
     mode: "standalone-sovereign",
     configured: true
+  });
+});
+app.get("/api/public-config", (_req, res) => {
+  const supabaseUrl = (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "").trim();
+  const supabaseAnonKey = (process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "").trim();
+  res.setHeader("Cache-Control", "no-store");
+  res.json({
+    supabaseUrl,
+    supabaseAnonKey,
+    configured: Boolean(
+      supabaseUrl && supabaseAnonKey && !supabaseUrl.includes("your-project") && !supabaseAnonKey.includes("your-anon")
+    )
   });
 });
 app.get("/api/webrtc-config", (req, res) => {

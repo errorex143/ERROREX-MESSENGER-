@@ -1,11 +1,17 @@
 // STANDALONE LOCAL API & REACTIVE STORE FOR ERROREX
 // Integrated with Supabase PostgreSQL (Primary Cloud DB) + Express Backend + Local Reactive Cache
-import { supabase, isSupabaseConfigured } from './supabase';
+import { supabase, isSupabaseConfigured, initSupabaseRuntime } from './supabase';
 import {
   generateUUID,
+  generateSaltHex,
+  hashPinClient,
   isLegacyTestAccount,
   upsertSupabaseUserProfile,
   fetchSupabaseUserProfiles,
+  fetchSupabaseUserProfileByUid,
+  fetchSupabaseUserProfileByEmail,
+  upsertSupabaseAuthCredential,
+  fetchSupabaseAuthCredential,
   upsertSupabaseFriendRequest,
   fetchSupabaseFriendRequests,
   upsertSupabaseFriendship,
@@ -92,17 +98,34 @@ export function saveCollectionData<T = any>(collectionName: string, data: T[]): 
   }
 }
 
-function mergeCollectionByKey(collectionName: string, incoming: any[], keyField = 'id') {
-  if (!Array.isArray(incoming) || incoming.length === 0) return;
+function mergeCollectionByKey(
+  collectionName: string,
+  incoming: any[],
+  keyField = 'id',
+  replaceRemoteOwned = false
+) {
+  if (!Array.isArray(incoming)) return;
   const existing = getCollectionData<any>(collectionName);
   const map = new Map<string, any>();
 
-  existing.forEach(item => {
-    const k = item[keyField] || item.uid || item.id;
-    if (k && !isLegacyTestAccount(item.uid, item.username, item.displayName)) {
-      map.set(k, item);
-    }
-  });
+  if (!replaceRemoteOwned) {
+    existing.forEach(item => {
+      const k = item[keyField] || item.uid || item.id;
+      if (k && !isLegacyTestAccount(item.uid, item.username, item.displayName)) {
+        map.set(k, item);
+      }
+    });
+  } else {
+    // Keep only non-UUID/unsynced local items if incoming replaces remote state cleanly
+    const incomingKeys = new Set(incoming.map(item => item[keyField] || item.uid || item.id).filter(Boolean));
+    existing.forEach(item => {
+      const k = item[keyField] || item.uid || item.id;
+      if (!k || isLegacyTestAccount(item.uid, item.username, item.displayName)) return;
+      if (incomingKeys.has(k)) {
+        map.set(k, item);
+      }
+    });
+  }
 
   incoming.forEach(item => {
     const k = item[keyField] || item.uid || item.id;
@@ -115,12 +138,14 @@ function mergeCollectionByKey(collectionName: string, incoming: any[], keyField 
   saveCollectionData(collectionName, Array.from(map.values()));
 }
 
-export async function syncUserToDirectory(profile: any): Promise<void> {
-  if (!profile || !profile.uid) return;
-  if (isLegacyTestAccount(profile.uid, profile.username, profile.displayName)) return;
+export async function syncUserToDirectory(profile: any): Promise<boolean> {
+  if (!profile || !profile.uid) return false;
+  if (isLegacyTestAccount(profile.uid, profile.username, profile.displayName)) return false;
+
+  await initSupabaseRuntime();
 
   // 1. Sync to Supabase PostgreSQL (primary cloud persistence for Netlify & all devices)
-  await upsertSupabaseUserProfile({
+  const suSaved = await upsertSupabaseUserProfile({
     uid: profile.uid,
     username: profile.username,
     displayName: profile.displayName,
@@ -151,14 +176,16 @@ export async function syncUserToDirectory(profile: any): Promise<void> {
   } catch {
     // quiet on static hosting (Netlify)
   }
+
+  return suSaved;
 }
 
 let realtimeSubscribedUid: string | null = null;
 let realtimeChannel: any = null;
+let socialPollTimer: any = null;
 
-export async function hydrateStandaloneFromSupabase(uid: string): Promise<void> {
+async function pullSocialFromSupabase(uid: string): Promise<void> {
   if (!isSupabaseConfigured || !supabase || !uid) return;
-
   try {
     const [profiles, requests, friendships, statuses] = await Promise.all([
       fetchSupabaseUserProfiles(),
@@ -171,21 +198,25 @@ export async function hydrateStandaloneFromSupabase(uid: string): Promise<void> 
       mergeCollectionByKey(
         'userProfiles',
         profiles.map(p => ({ ...p, id: p.uid })),
-        'uid'
+        'uid',
+        false
       );
     }
-    if (requests.length > 0) {
-      mergeCollectionByKey('friendRequests', requests, 'id');
-    }
-    if (friendships.length > 0) {
-      mergeCollectionByKey('friendships', friendships, 'id');
-    }
-    if (statuses.length > 0) {
-      mergeCollectionByKey('statuses', statuses, 'id');
-    }
+    // Reconcile requests, friendships, statuses with authoritative Supabase data
+    mergeCollectionByKey('friendRequests', requests, 'id', true);
+    mergeCollectionByKey('friendships', friendships, 'id', true);
+    mergeCollectionByKey('statuses', statuses, 'id', true);
   } catch (err) {
     console.warn('[Supabase Hydrate] Notice:', err);
   }
+}
+
+export async function hydrateStandaloneFromSupabase(uid: string): Promise<void> {
+  if (!uid) return;
+  await initSupabaseRuntime();
+  if (!isSupabaseConfigured || !supabase) return;
+
+  await pullSocialFromSupabase(uid);
 
   // Subscribe to Supabase Realtime updates once per UID
   if (realtimeSubscribedUid !== uid) {
@@ -196,6 +227,11 @@ export async function hydrateStandaloneFromSupabase(uid: string): Promise<void> 
         // ignore
       }
     }
+    if (socialPollTimer) {
+      clearInterval(socialPollTimer);
+      socialPollTimer = null;
+    }
+
     realtimeSubscribedUid = uid;
     try {
       realtimeChannel = supabase
@@ -203,25 +239,53 @@ export async function hydrateStandaloneFromSupabase(uid: string): Promise<void> 
         .on('postgres_changes', { event: '*', schema: 'public', table: 'user_profiles' }, async () => {
           const profiles = await fetchSupabaseUserProfiles();
           if (profiles.length > 0) {
-            mergeCollectionByKey('userProfiles', profiles.map(p => ({ ...p, id: p.uid })), 'uid');
+            mergeCollectionByKey(
+              'userProfiles',
+              profiles.map(p => ({ ...p, id: p.uid })),
+              'uid',
+              false
+            );
           }
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'friend_requests' }, async () => {
           const requests = await fetchSupabaseFriendRequests(uid);
-          mergeCollectionByKey('friendRequests', requests, 'id');
+          mergeCollectionByKey('friendRequests', requests, 'id', true);
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships' }, async () => {
           const friendships = await fetchSupabaseFriendships(uid);
-          mergeCollectionByKey('friendships', friendships, 'id');
+          mergeCollectionByKey('friendships', friendships, 'id', true);
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'statuses' }, async () => {
           const statuses = await fetchSupabaseStatuses();
-          mergeCollectionByKey('statuses', statuses, 'id');
+          mergeCollectionByKey('statuses', statuses, 'id', true);
         })
         .subscribe();
     } catch {
       // ignore realtime subscription errors
     }
+
+    // Gentle fallback refresh if Realtime replication is paused or mobile socket dropped
+    socialPollTimer = setInterval(() => {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      pullSocialFromSupabase(uid).catch(() => {});
+    }, 10000);
+  }
+}
+
+export function stopStandaloneRealtime(): void {
+  if (realtimeChannel && supabase) {
+    try {
+      supabase.removeChannel(realtimeChannel);
+    } catch {
+      // ignore
+    }
+  }
+  realtimeChannel = null;
+  realtimeSubscribedUid = null;
+  if (socialPollTimer) {
+    clearInterval(socialPollTimer);
+    socialPollTimer = null;
   }
 }
 
@@ -313,84 +377,139 @@ class StandaloneAuthService {
     });
   }
 
+  private cacheProfileLocally(profile: any) {
+    if (!profile || !profile.uid) return;
+    mergeCollectionByKey('userProfiles', [{ ...profile, id: profile.uid }], 'uid', false);
+  }
+
   async signInWithEmailAndPassword(email: string, pass: string): Promise<{ user: StandaloneUser }> {
     const cleanEmail = email.toLowerCase().trim();
+    await initSupabaseRuntime();
 
-    // 1. Authenticate via Supabase Auth when configured
+    const regUsersRaw = localStorage.getItem('errorex_registered_users');
+    const regUsers: any[] = regUsersRaw ? JSON.parse(regUsersRaw) : [];
+    const matchedLocal = regUsers.find(u => u.email === cleanEmail);
+
+    let supabaseAuthErrorMsg = '';
+
+    // 1. Try primary Supabase Auth signInWithPassword
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase.auth.signInWithPassword({
           email: cleanEmail,
           password: pass
         });
+
         if (data?.user) {
+          // Fetch full cloud profile from user_profiles so displayName, username, DP, bio stay intact
+          const cloudProfile =
+            (await fetchSupabaseUserProfileByUid(data.user.id)) ||
+            (await fetchSupabaseUserProfileByEmail(cleanEmail));
+
+          const resolvedUid = cloudProfile?.uid || data.user.id;
+          const resolvedDisplayName =
+            cloudProfile?.displayName ||
+            data.user.user_metadata?.display_name ||
+            cleanEmail.split('@')[0];
+
           const suUser: StandaloneUser = {
-            uid: data.user.id,
+            uid: resolvedUid,
             email: data.user.email || cleanEmail,
-            displayName: data.user.user_metadata?.display_name || cleanEmail.split('@')[0],
-            photoURL: data.user.user_metadata?.avatar_url || '',
+            displayName: resolvedDisplayName,
+            photoURL: cloudProfile?.photoURL || data.user.user_metadata?.avatar_url || '',
             emailVerified: Boolean(data.user.email_confirmed_at),
-            getIdToken: async () => data.session?.access_token || `token_${data.user.id}`
+            getIdToken: async () => data.session?.access_token || `token_${resolvedUid}`
           };
+
+          if (cloudProfile) {
+            this.cacheProfileLocally({ ...cloudProfile, isOnline: true, lastSeen: new Date().toISOString() });
+          }
+
+          // Store salted auth hash so future cross-device logins stay resilient
+          const authSalt = generateSaltHex();
+          const authHash = await hashPinClient(pass, authSalt);
+          upsertSupabaseAuthCredential(resolvedUid, authHash, authSalt).catch(() => {});
+
           this.setCurrentUser(suUser);
           return { user: suUser };
         }
+
         if (error) {
-          const msg = error.message?.toLowerCase() || '';
-          // If email/password invalid and no local fallback match, throw if confirmed wrong password
-          if (msg.includes('invalid login credentials')) {
-            // Check local registered users in case they registered during SMTP rate limit fallback
-            const regUsersRaw = localStorage.getItem('errorex_registered_users');
-            const regUsers: any[] = regUsersRaw ? JSON.parse(regUsersRaw) : [];
-            const matchedLocal = regUsers.find(u => u.email === cleanEmail);
-            if (!matchedLocal) {
+          supabaseAuthErrorMsg = error.message?.toLowerCase() || '';
+        }
+      } catch (err: any) {
+        console.warn('[Supabase Auth] Login fallback check:', err?.message || err);
+      }
+
+      // 2. Cross-device resilience: If Supabase Auth has "Confirm Email" ON or account was created during SMTP fallback,
+      // resolve exact UID & profile from public.user_profiles by email + verify salted password hash!
+      try {
+        const existingProfile = await fetchSupabaseUserProfileByEmail(cleanEmail);
+        if (existingProfile) {
+          const authCred = await fetchSupabaseAuthCredential(existingProfile.uid);
+          let passwordVerified = false;
+
+          if (authCred) {
+            const candidate = await hashPinClient(pass, authCred.authSalt);
+            if (candidate === authCred.authHash) {
+              passwordVerified = true;
+            } else {
               throw new Error('Invalid email or password.');
             }
-          } else if (!msg.includes('email not confirmed')) {
-            console.warn('[Supabase Auth] Login notice:', error.message);
+          } else if (matchedLocal) {
+            if (matchedLocal.password === pass) {
+              passwordVerified = true;
+            } else {
+              throw new Error('Invalid email or password.');
+            }
+          } else if (supabaseAuthErrorMsg.includes('email not confirmed')) {
+            // Email confirmation is ON in Supabase dashboard and no auth_hash was saved on an older account
+            passwordVerified = true;
+          } else if (supabaseAuthErrorMsg.includes('invalid login credentials')) {
+            throw new Error('Invalid email or password.');
+          }
+
+          if (passwordVerified) {
+            this.cacheProfileLocally({
+              ...existingProfile,
+              isOnline: true,
+              lastSeen: new Date().toISOString()
+            });
+            const restoredUser: StandaloneUser = {
+              uid: existingProfile.uid,
+              email: existingProfile.email || cleanEmail,
+              displayName: existingProfile.displayName,
+              photoURL: existingProfile.photoURL || '',
+              emailVerified: true,
+              getIdToken: async () => `token_${existingProfile.uid}`
+            };
+            this.setCurrentUser(restoredUser);
+            return { user: restoredUser };
           }
         }
       } catch (err: any) {
         if (err?.message === 'Invalid email or password.') throw err;
-        console.warn('[Supabase Auth] Fallback to standalone store:', err);
       }
     }
 
-    // 2. Check registered accounts in localStorage
-    const regUsersRaw = localStorage.getItem('errorex_registered_users');
-    const regUsers: any[] = regUsersRaw ? JSON.parse(regUsersRaw) : [];
-    const matched = regUsers.find(u => u.email === cleanEmail);
-
-    if (matched) {
-      if (matched.password !== pass) {
+    // 3. Local registered accounts fallback (offline or before cloud sync)
+    if (matchedLocal) {
+      if (matchedLocal.password !== pass) {
         throw new Error('Invalid email or password.');
       }
       const user: StandaloneUser = {
-        uid: matched.uid,
-        email: matched.email,
-        displayName: matched.displayName,
-        photoURL: matched.photoURL || '',
+        uid: matchedLocal.uid,
+        email: matchedLocal.email,
+        displayName: matchedLocal.displayName,
+        photoURL: matchedLocal.photoURL || '',
         emailVerified: true,
-        getIdToken: async () => `token_${matched.uid}`
+        getIdToken: async () => `token_${matchedLocal.uid}`
       };
       this.setCurrentUser(user);
       return { user };
     }
 
-    // 3. Check if user already exists in Supabase user_profiles by email (e.g. unconfirmed email login)
-    const emailSlug = cleanEmail.replace(/[^a-z0-9]/g, '_');
-    const stableUid = `user_${emailSlug}`;
-    const newUser: StandaloneUser = {
-      uid: stableUid,
-      email: cleanEmail,
-      displayName: cleanEmail.split('@')[0],
-      photoURL: '',
-      emailVerified: true,
-      getIdToken: async () => `token_${stableUid}`
-    };
-
-    this.setCurrentUser(newUser);
-    return { user: newUser };
+    throw new Error('Invalid email or password. Please check your details or Create Account first.');
   }
 
   async createUserWithEmailAndPassword(
@@ -400,10 +519,24 @@ class StandaloneAuthService {
   ): Promise<{ user: StandaloneUser }> {
     const cleanEmail = email.toLowerCase().trim();
     const displayName = (customDisplayName || '').trim() || cleanEmail.split('@')[0];
-    const cleanUsername = displayName.toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 20) || `user_${Date.now().toString().slice(-5)}`;
+    const cleanUsername =
+      displayName
+        .toLowerCase()
+        .replace(/[^a-z0-9_]/g, '_')
+        .slice(0, 20) || `user_${Date.now().toString().slice(-5)}`;
     const nowIso = new Date().toISOString();
 
-    let resolvedUid = `user_${cleanEmail.replace(/[^a-z0-9]/g, '_')}`;
+    await initSupabaseRuntime();
+
+    // Check if email already registered in Supabase directory first
+    if (isSupabaseConfigured && supabase) {
+      const alreadyInCloud = await fetchSupabaseUserProfileByEmail(cleanEmail);
+      if (alreadyInCloud) {
+        throw new Error('An account with this email already exists. Please Sign In instead.');
+      }
+    }
+
+    let resolvedUid = generateUUID();
 
     // 1. Register in Supabase Auth if configured
     if (isSupabaseConfigured && supabase) {
@@ -421,13 +554,15 @@ class StandaloneAuthService {
           if (msg.includes('already registered') || msg.includes('already exists')) {
             throw new Error('An account with this email already exists. Please Sign In instead.');
           }
-          // If Supabase SMTP email rate-limit or confirmation email error occurs, fall back gracefully
-          // while still writing the user to public.user_profiles!
           if (!msg.includes('rate limit') && !msg.includes('sending confirmation') && !msg.includes('email')) {
             throw new Error(error.message);
           }
-          console.warn('[Supabase Auth] Email dispatch notice, completing profile registration:', error.message);
+          console.warn('[Supabase Auth] Email dispatch notice, completing cloud profile registration:', error.message);
         } else if (data?.user) {
+          // Supabase returns identities: [] when email already exists and Confirm Email is enabled
+          if (Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+            throw new Error('An account with this email already exists. Please Sign In instead.');
+          }
           resolvedUid = data.user.id;
         }
       } catch (err: any) {
@@ -438,7 +573,7 @@ class StandaloneAuthService {
       }
     }
 
-    // 2. Save local registered credentials for seamless cross-fallback login
+    // 2. Save local registered credentials for offline/quick fallback
     const regUsersRaw = localStorage.getItem('errorex_registered_users');
     const regUsers: any[] = regUsersRaw ? JSON.parse(regUsersRaw) : [];
     const existingLocal = regUsers.find(u => u.email === cleanEmail);
@@ -466,7 +601,7 @@ class StandaloneAuthService {
       getIdToken: async () => `token_${resolvedUid}`
     };
 
-    // 3. Create & immediately sync profile to localStorage + Supabase user_profiles + server directory
+    // 3. Create & immediately persist full profile + cross-device auth hash to Supabase
     const newProfile = {
       id: resolvedUid,
       uid: resolvedUid,
@@ -485,13 +620,20 @@ class StandaloneAuthService {
     profiles.push(newProfile);
     saveCollectionData('userProfiles', profiles);
 
-    await syncUserToDirectory(newProfile);
+    const authSalt = generateSaltHex();
+    const authHash = await hashPinClient(pass, authSalt);
+
+    await Promise.all([
+      syncUserToDirectory(newProfile),
+      upsertSupabaseAuthCredential(resolvedUid, authHash, authSalt)
+    ]);
 
     this.setCurrentUser(newUser);
     return { user: newUser };
   }
 
   async signOut(): Promise<void> {
+    stopStandaloneRealtime();
     if (isSupabaseConfigured && supabase) {
       try {
         await supabase.auth.signOut();
@@ -505,6 +647,7 @@ class StandaloneAuthService {
   }
 
   async sendPasswordResetEmail(email: string): Promise<void> {
+    await initSupabaseRuntime();
     if (isSupabaseConfigured && supabase) {
       try {
         await supabase.auth.resetPasswordForEmail(email, {
@@ -529,12 +672,16 @@ class StandaloneAuthService {
   }
 
   async updatePassword(user: StandaloneUser, newPass: string): Promise<void> {
+    await initSupabaseRuntime();
     if (isSupabaseConfigured && supabase) {
       try {
         await supabase.auth.updateUser({ password: newPass });
       } catch {
         // quiet
       }
+      const authSalt = generateSaltHex();
+      const authHash = await hashPinClient(newPass, authSalt);
+      await upsertSupabaseAuthCredential(user.uid, authHash, authSalt);
     }
     const regUsersRaw = localStorage.getItem('errorex_registered_users');
     if (regUsersRaw) {
@@ -707,17 +854,19 @@ export async function getDoc(docRef: StandaloneDocRef): Promise<DocumentSnapshot
   const items = getCollectionData<any>(docRef.collectionName);
   let matched = items.find(i => i.id === docRef.id || i.uid === docRef.id);
 
-  // If not found locally and Supabase is configured, try fetching user profile directly
-  if (!matched && docRef.collectionName === 'userProfiles' && isSupabaseConfigured && supabase) {
-    try {
-      const profiles = await fetchSupabaseUserProfiles();
-      const found = profiles.find(p => p.uid === docRef.id);
-      if (found) {
-        matched = { ...found, id: found.uid };
-        mergeCollectionByKey('userProfiles', [matched], 'uid');
+  // If Supabase is configured, always check cloud profile if missing locally
+  if (!matched && docRef.collectionName === 'userProfiles') {
+    await initSupabaseRuntime();
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const found = await fetchSupabaseUserProfileByUid(docRef.id);
+        if (found) {
+          matched = { ...found, id: found.uid };
+          mergeCollectionByKey('userProfiles', [matched], 'uid', false);
+        }
+      } catch {
+        // quiet
       }
-    } catch {
-      // quiet
     }
   }
 
@@ -729,6 +878,25 @@ export async function getDoc(docRef: StandaloneDocRef): Promise<DocumentSnapshot
 }
 
 export async function getDocs(target: StandaloneCollectionRef | StandaloneQuery): Promise<QuerySnapshot> {
+  if (target.collectionName === 'userProfiles') {
+    await initSupabaseRuntime();
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const remoteProfiles = await fetchSupabaseUserProfiles();
+        if (remoteProfiles.length > 0) {
+          mergeCollectionByKey(
+            'userProfiles',
+            remoteProfiles.map(p => ({ ...p, id: p.uid })),
+            'uid',
+            false
+          );
+        }
+      } catch {
+        // quiet
+      }
+    }
+  }
+
   const q = target instanceof StandaloneQuery ? target : new StandaloneQuery(target.collectionName);
   const results = q.execute();
   const docs: DocumentSnapshot[] = results.map(item => ({
@@ -744,17 +912,17 @@ export async function getDocs(target: StandaloneCollectionRef | StandaloneQuery)
   };
 }
 
-function syncCollectionRecordToSupabase(collectionName: string, record: any) {
+async function syncCollectionRecordToSupabase(collectionName: string, record: any): Promise<void> {
   if (collectionName === 'userProfiles') {
-    syncUserToDirectory(record);
+    await syncUserToDirectory(record);
   } else if (collectionName === 'friendRequests') {
-    upsertSupabaseFriendRequest(record);
+    await upsertSupabaseFriendRequest(record);
   } else if (collectionName === 'friendships') {
-    upsertSupabaseFriendship(record);
+    await upsertSupabaseFriendship(record);
   } else if (collectionName === 'conversations') {
-    upsertSupabaseConversation(record);
+    await upsertSupabaseConversation(record);
   } else if (collectionName === 'statuses') {
-    upsertSupabaseStatus(record);
+    await upsertSupabaseStatus(record);
   }
 }
 
@@ -779,7 +947,7 @@ export async function setDoc(docRef: StandaloneDocRef, data: any, options?: { me
     items.push(record);
   }
   saveCollectionData(docRef.collectionName, items);
-  syncCollectionRecordToSupabase(docRef.collectionName, existingIndex !== -1 ? items[existingIndex] : record);
+  await syncCollectionRecordToSupabase(docRef.collectionName, existingIndex !== -1 ? items[existingIndex] : record);
 }
 
 export async function updateDoc(docRef: StandaloneDocRef, updates: any): Promise<void> {
@@ -793,7 +961,17 @@ export async function updateDoc(docRef: StandaloneDocRef, updates: any): Promise
       updatedAt: new Date().toISOString()
     };
     saveCollectionData(docRef.collectionName, items);
-    syncCollectionRecordToSupabase(docRef.collectionName, items[existingIndex]);
+    await syncCollectionRecordToSupabase(docRef.collectionName, items[existingIndex]);
+  } else {
+    const newRecord = {
+      ...updates,
+      id: docRef.id,
+      uid: updates.uid || docRef.id,
+      updatedAt: new Date().toISOString()
+    };
+    items.push(newRecord);
+    saveCollectionData(docRef.collectionName, items);
+    await syncCollectionRecordToSupabase(docRef.collectionName, newRecord);
   }
 }
 
@@ -802,6 +980,7 @@ export async function deleteDoc(docRef: StandaloneDocRef): Promise<void> {
   const filtered = items.filter(i => i.id !== docRef.id && i.uid !== docRef.id);
   saveCollectionData(docRef.collectionName, filtered);
 
+  await initSupabaseRuntime();
   if (isSupabaseConfigured && supabase) {
     try {
       const tableMap: Record<string, string> = {
@@ -813,7 +992,8 @@ export async function deleteDoc(docRef: StandaloneDocRef): Promise<void> {
       };
       const table = tableMap[docRef.collectionName];
       if (table) {
-        await supabase.from(table).delete().eq('id', docRef.id);
+        const keyCol = docRef.collectionName === 'userProfiles' ? 'uid' : 'id';
+        await supabase.from(table).delete().eq(keyCol, docRef.id);
       }
     } catch {
       // quiet

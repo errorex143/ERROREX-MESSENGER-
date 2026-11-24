@@ -4,7 +4,13 @@ import { useTheme } from '../../context/ThemeContext';
 import { THEMES } from '../../context/ThemeContext';
 import { PrivacySettings } from '../../types';
 import { chatStore } from '../../lib/chatStore';
-import { isSupabaseConfigured, testSupabaseConnection } from '../../lib/supabase';
+import {
+  isSupabaseConfigured,
+  testSupabaseConnection,
+  getSupabaseCredentials,
+  setRuntimeSupabaseConfig,
+  SupabaseDiagnostics
+} from '../../lib/supabase';
 import { syncUserToDirectory, hydrateStandaloneFromSupabase } from '../../lib/standaloneApi';
 import {
   Palette,
@@ -98,18 +104,28 @@ export const SettingsView: React.FC = () => {
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
   // Supabase connection & sync state
-  const [supabaseStatus, setSupabaseStatus] = useState<{ connected: boolean; message: string } | null>(null);
+  const [supabaseStatus, setSupabaseStatus] = useState<SupabaseDiagnostics | null>(null);
   const [syncingCloud, setSyncingCloud] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [customSuUrl, setCustomSuUrl] = useState(() => getSupabaseCredentials().url || '');
+  const [customSuKey, setCustomSuKey] = useState(() => getSupabaseCredentials().anonKey || '');
+  const [showRuntimeConfig, setShowRuntimeConfig] = useState(false);
 
   useEffect(() => {
     if (activeTab === 'account') {
-      testSupabaseConnection().then(setSupabaseStatus);
+      testSupabaseConnection().then(res => {
+        setSupabaseStatus(res);
+        if (!res.connected && !isSupabaseConfigured) {
+          setShowRuntimeConfig(true);
+        }
+      });
     }
   }, [activeTab]);
 
   const handleManualCloudSync = async () => {
     if (!user) return;
     setSyncingCloud(true);
+    setSyncMessage(null);
     try {
       await syncUserToDirectory({
         uid: user.uid,
@@ -121,15 +137,33 @@ export const SettingsView: React.FC = () => {
         isOnline: true,
         lastSeen: new Date().toISOString()
       });
+      await chatStore.syncPendingToSupabase(user.uid);
       await Promise.all([
         hydrateStandaloneFromSupabase(user.uid),
         chatStore.hydrateFromSupabase(user.uid)
       ]);
       const health = await testSupabaseConnection();
       setSupabaseStatus(health);
+      if (health.connected) {
+        setSyncMessage('Profile, directory members, and all chats synced with Supabase!');
+      }
     } finally {
       setSyncingCloud(false);
     }
+  };
+
+  const handleSaveRuntimeSupabase = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSyncMessage(null);
+    const ok = setRuntimeSupabaseConfig(customSuUrl, customSuKey, true);
+    if (!ok) {
+      setSupabaseStatus({
+        connected: false,
+        message: 'Please enter a valid Supabase Project URL (https://...) and Anon Key.'
+      });
+      return;
+    }
+    await handleManualCloudSync();
   };
 
   // Handle Privacy Change
@@ -866,47 +900,108 @@ export const SettingsView: React.FC = () => {
       {/* Tab 5: Account & Supabase */}
       {activeTab === 'account' && (
         <div className="mt-6 max-w-xl space-y-5">
-          {/* Read-Only Supabase PostgreSQL Status & Manual Sync */}
-          <div className="p-5 rounded-2xl bg-[var(--bg-card)] border border-[var(--accent-border)] space-y-3 shadow-sm">
+          {/* Supabase PostgreSQL Status, Table Diagnostics & Cloud Sync */}
+          <div className="p-5 rounded-2xl bg-[var(--bg-card)] border border-[var(--accent-border)] space-y-3.5 shadow-sm">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-[var(--accent-surface)] border border-[var(--accent-border)] flex items-center justify-center text-[var(--accent-primary)]">
+                <div className="w-9 h-9 rounded-xl bg-[var(--accent-surface)] border border-[var(--accent-border)] flex items-center justify-center text-[var(--accent-primary)] shrink-0">
                   <Database className="w-4 h-4" />
                 </div>
                 <div>
                   <h2 className="text-xs font-bold text-[var(--text-main)]">Supabase Cloud Sync</h2>
                   <p className="text-[11px] text-[var(--text-muted)]">
-                    {isSupabaseConfigured
-                      ? supabaseStatus?.message || 'Checking PostgreSQL tables...'
-                      : 'Environment variables VITE_SUPABASE_URL & VITE_SUPABASE_ANON_KEY required.'}
+                    {supabaseStatus?.message || 'Checking PostgreSQL tables...'}
                   </p>
                 </div>
               </div>
               <span
-                className={`text-[10px] font-mono px-2.5 py-1 rounded-full font-bold border ${
+                className={`text-[10px] font-mono px-2.5 py-1 rounded-full font-bold border shrink-0 ${
                   supabaseStatus?.connected
                     ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
                     : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
                 }`}
               >
-                {supabaseStatus?.connected ? 'CONNECTED' : 'LOCAL MODE'}
+                {supabaseStatus?.connected ? 'CONNECTED' : 'NEEDS SETUP'}
               </span>
             </div>
 
-            <div className="flex items-center justify-between pt-2 border-t border-white/5">
+            {supabaseStatus?.tableStatus && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-1">
+                {Object.entries(supabaseStatus.tableStatus).map(([tbl, ok]) => (
+                  <div
+                    key={tbl}
+                    className={`px-2 py-1 rounded-lg text-[10px] font-mono border flex items-center justify-between ${
+                      ok
+                        ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-400'
+                        : 'bg-rose-500/10 border-rose-500/25 text-rose-400'
+                    }`}
+                  >
+                    <span className="truncate">{tbl}</span>
+                    <span>{ok ? 'OK' : 'MISSING'}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {syncMessage && (
+              <div className="p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 text-[11px] flex items-center gap-2">
+                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>{syncMessage}</span>
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-white/5">
               <span className="text-[11px] text-[var(--text-muted)]">
                 Account: <strong className="text-[var(--text-main)]">{user?.email || 'Local Session'}</strong>
               </span>
-              <button
-                type="button"
-                onClick={handleManualCloudSync}
-                disabled={syncingCloud}
-                className="py-1.5 px-3 rounded-xl gold-button text-xs font-semibold text-[var(--accent-primary)] flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${syncingCloud ? 'animate-spin' : ''}`} />
-                <span>{syncingCloud ? 'Syncing...' : 'Sync Profile & Members'}</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowRuntimeConfig(v => !v)}
+                  className="py-1.5 px-3 rounded-xl border border-neutral-300 dark:border-neutral-700 text-[11px] font-semibold text-[var(--text-muted)] hover:text-[var(--text-main)] cursor-pointer"
+                >
+                  {showRuntimeConfig ? 'Hide Keys' : 'Cloud Keys'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleManualCloudSync}
+                  disabled={syncingCloud}
+                  className="py-1.5 px-3 rounded-xl gold-button text-xs font-semibold text-[var(--accent-primary)] flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${syncingCloud ? 'animate-spin' : ''}`} />
+                  <span>{syncingCloud ? 'Syncing...' : 'Sync All Data Now'}</span>
+                </button>
+              </div>
             </div>
+
+            {showRuntimeConfig && (
+              <form onSubmit={handleSaveRuntimeSupabase} className="pt-3 border-t border-white/10 space-y-2.5">
+                <p className="text-[10px] text-[var(--text-muted)]">
+                  If Netlify was deployed before setting <code className="text-[var(--accent-primary)]">VITE_SUPABASE_URL</code> &amp; <code className="text-[var(--accent-primary)]">VITE_SUPABASE_ANON_KEY</code>, connect your Supabase Project URL and public Anon Key here:
+                </p>
+                <input
+                  type="url"
+                  value={customSuUrl}
+                  onChange={e => setCustomSuUrl(e.target.value)}
+                  placeholder="https://your-project.supabase.co"
+                  className="w-full px-3 py-2 text-xs font-mono rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] focus:outline-none"
+                />
+                <input
+                  type="text"
+                  value={customSuKey}
+                  onChange={e => setCustomSuKey(e.target.value)}
+                  placeholder="Supabase Anon / Public Key"
+                  className="w-full px-3 py-2 text-xs font-mono rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  disabled={syncingCloud}
+                  className="py-2 px-4 rounded-xl gold-button-accent text-xs font-bold text-black uppercase tracking-wider cursor-pointer disabled:opacity-50"
+                >
+                  Connect &amp; Sync Supabase
+                </button>
+              </form>
+            )}
           </div>
 
           <div className="p-5 rounded-2xl bg-[var(--bg-card)] border border-[var(--accent-border)] space-y-4 shadow-sm">
