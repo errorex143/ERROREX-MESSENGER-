@@ -151,7 +151,8 @@ export async function syncUserToDirectory(profile: any): Promise<boolean> {
     displayName: profile.displayName,
     email: profile.email || '',
     photoURL: profile.photoURL || '',
-    bio: profile.bio || 'Available on ERROREX',
+    bio: profile.bio !== undefined ? profile.bio : 'Available on ERROREX',
+    privacySettings: profile.privacySettings,
     isOnline: profile.isOnline !== false,
     lastSeen: profile.lastSeen || new Date().toISOString(),
     createdAt: profile.createdAt || new Date().toISOString()
@@ -657,6 +658,141 @@ class StandaloneAuthService {
         // quiet
       }
     }
+  }
+
+  async checkRegisteredEmail(email: string): Promise<{
+    exists: boolean;
+    uid?: string;
+    displayName?: string;
+    photoURL?: string;
+    email?: string;
+  }> {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) return { exists: false };
+
+    await initSupabaseRuntime();
+
+    // 1. Check Supabase user_profiles first (live cloud directory)
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const suProfile = await fetchSupabaseUserProfileByEmail(cleanEmail);
+        if (suProfile && suProfile.uid && !isLegacyTestAccount(suProfile.uid, suProfile.username, suProfile.displayName)) {
+          return {
+            exists: true,
+            uid: suProfile.uid,
+            displayName: suProfile.displayName,
+            photoURL: suProfile.photoURL || '',
+            email: suProfile.email || cleanEmail
+          };
+        }
+      } catch {
+        // continue to local check
+      }
+    }
+
+    // 2. Check local userProfiles & local registered credentials
+    try {
+      const localProfiles = getCollectionData<any>('userProfiles');
+      const localProfileMatch = localProfiles.find(
+        p => typeof p.email === 'string' && p.email.toLowerCase().trim() === cleanEmail
+      );
+      if (localProfileMatch?.uid) {
+        return {
+          exists: true,
+          uid: localProfileMatch.uid,
+          displayName: localProfileMatch.displayName || cleanEmail.split('@')[0],
+          photoURL: localProfileMatch.photoURL || '',
+          email: cleanEmail
+        };
+      }
+
+      const regUsersRaw = localStorage.getItem('errorex_registered_users');
+      const regUsers: any[] = regUsersRaw ? JSON.parse(regUsersRaw) : [];
+      const regMatch = regUsers.find(u => typeof u.email === 'string' && u.email.toLowerCase().trim() === cleanEmail);
+      if (regMatch?.uid) {
+        return {
+          exists: true,
+          uid: regMatch.uid,
+          displayName: regMatch.displayName || cleanEmail.split('@')[0],
+          photoURL: regMatch.photoURL || '',
+          email: cleanEmail
+        };
+      }
+    } catch {
+      // quiet
+    }
+
+    return { exists: false };
+  }
+
+  async recoverPasswordAndStartPinSetup(
+    email: string,
+    newPass: string
+  ): Promise<{ user: StandaloneUser }> {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const check = await this.checkRegisteredEmail(cleanEmail);
+    if (!check.exists || !check.uid) {
+      throw new Error('This Gmail address is not registered yet. Please Create Account first.');
+    }
+
+    const uid = check.uid;
+    const displayName = check.displayName || cleanEmail.split('@')[0];
+
+    await initSupabaseRuntime();
+
+    // Store salted SHA-256 hash of new password in Supabase user_credentials
+    const authSalt = generateSaltHex();
+    const authHash = await hashPinClient(newPass, authSalt);
+    if (isSupabaseConfigured && supabase) {
+      await upsertSupabaseAuthCredential(uid, authHash, authSalt);
+    }
+
+    // Update local credential store for offline resilience
+    try {
+      const regUsersRaw = localStorage.getItem('errorex_registered_users');
+      const regUsers: any[] = regUsersRaw ? JSON.parse(regUsersRaw) : [];
+      const idx = regUsers.findIndex(
+        u => u.uid === uid || (typeof u.email === 'string' && u.email.toLowerCase().trim() === cleanEmail)
+      );
+      if (idx !== -1) {
+        regUsers[idx].password = newPass;
+      } else {
+        regUsers.push({
+          uid,
+          email: cleanEmail,
+          password: newPass,
+          displayName,
+          createdAt: new Date().toISOString()
+        });
+      }
+      localStorage.setItem('errorex_registered_users', JSON.stringify(regUsers));
+    } catch {
+      // quiet
+    }
+
+    // Clear lock & trigger Calculator Password selection screen next
+    try {
+      localStorage.removeItem(`errorex_pin_cred_${uid}`);
+      localStorage.removeItem(`errorex_pin_set_${uid}`);
+      localStorage.removeItem(`errorex_unlocked_${uid}`);
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem(`errorex_force_pin_setup_${uid}`, 'true');
+      }
+    } catch {
+      // quiet
+    }
+
+    const recoveredUser: StandaloneUser = {
+      uid,
+      email: cleanEmail,
+      displayName,
+      photoURL: check.photoURL || '',
+      emailVerified: true,
+      getIdToken: async () => `token_${uid}`
+    };
+
+    this.setCurrentUser(recoveredUser);
+    return { user: recoveredUser };
   }
 
   async updateProfile(user: StandaloneUser, updates: { displayName?: string; photoURL?: string }): Promise<void> {

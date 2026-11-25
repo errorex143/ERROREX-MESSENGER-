@@ -65,19 +65,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (snap.exists()) {
         const data = snap.data() as UserProfile & { email?: string };
+        const effectivePrivacy = data.privacySettings || chatStore.getPrivacySettings();
         activeProfile = {
           ...data,
           uid: currentUser.uid,
           displayName: data.displayName || currentUser.displayName || currentUser.email?.split('@')[0] || 'Member',
           photoURL: data.photoURL || currentUser.photoURL || '',
+          privacySettings: effectivePrivacy,
           isOnline: true,
           lastSeen: new Date().toISOString()
         };
         setUserProfile(activeProfile);
         chatStore.saveUserProfile(activeProfile);
+        if (data.privacySettings) {
+          localStorage.setItem('errorex_privacy_v5', JSON.stringify(data.privacySettings));
+        }
         await updateDoc(doc(db, 'userProfiles', currentUser.uid), {
           displayName: activeProfile.displayName,
           photoURL: activeProfile.photoURL,
+          privacySettings: effectivePrivacy,
           isOnline: true,
           lastSeen: activeProfile.lastSeen,
           email: currentUser.email || data.email || ''
@@ -96,6 +102,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           displayName: currentUser.displayName || baseName,
           photoURL: currentUser.photoURL || '',
           bio: 'Available on ERROREX',
+          privacySettings: chatStore.getPrivacySettings(),
           createdAt: new Date().toISOString(),
           isOnline: true,
           lastSeen: new Date().toISOString()
@@ -125,6 +132,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const checkHasPin = async (currentUser: StandaloneUser) => {
     await initSupabaseRuntime();
+
+    // If user just reset their password via Forgot Password, prompt Calculator PIN selection once
+    if (
+      typeof sessionStorage !== 'undefined' &&
+      sessionStorage.getItem(`errorex_force_pin_setup_${currentUser.uid}`) === 'true'
+    ) {
+      setHasPin(false);
+      return;
+    }
 
     // 1. Check local encrypted PIN credential or local flag
     const localCredRaw = localStorage.getItem(`errorex_pin_cred_${currentUser.uid}`);
@@ -490,7 +506,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const salt = generateSaltHex();
       const pinHash = await hashPinClient(pin, salt);
 
-      // 1. Persist locally
+      // 1. Persist locally & clear any pending recovery PIN prompt
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem(`errorex_force_pin_setup_${user.uid}`);
+      }
       localStorage.setItem(
         `errorex_pin_cred_${user.uid}`,
         JSON.stringify({ pinHash, salt, hasPin: true })
@@ -563,11 +582,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ...updates,
         uid: user.uid,
         email: user.email || '',
+        privacySettings: updates.privacySettings || userProfile?.privacySettings || chatStore.getPrivacySettings(),
         updatedAt: new Date().toISOString()
       };
       await updateDoc(doc(db, 'userProfiles', user.uid), mergedProfile);
       setUserProfile(prev => (prev ? { ...prev, ...updates } : (mergedProfile as UserProfile)));
-      chatStore.saveUserProfile(updates);
+      chatStore.saveUserProfile(mergedProfile);
       await standaloneAuth.updateProfile(user, {
         displayName: updates.displayName,
         photoURL: updates.photoURL

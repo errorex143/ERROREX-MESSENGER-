@@ -1,9 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Conversation, UserProfile } from '../../types';
+import { Conversation, Friendship, UserProfile } from '../../types';
 import { chatStore } from '../../lib/chatStore';
 import { db, collection, onSnapshot } from '../../lib/firebase';
 import { getCollectionData } from '../../lib/standaloneApi';
 import { isUserCurrentlyOnline } from '../../lib/supabaseSync';
+import {
+  canViewProfilePhoto,
+  canViewBio,
+  canViewLastSeen,
+  canExchangeReadReceipts,
+  resolveTargetPrivacy
+} from '../../lib/privacyUtils';
+import { AvatarPreviewModal, AvatarPreviewTarget } from '../common/AvatarPreviewModal';
 import {
   Search,
   Plus,
@@ -59,7 +67,11 @@ export const ChatList: React.FC<ChatListProps> = ({
     isOnline?: boolean;
     isGroup?: boolean;
     conversationId?: string;
+    showOnlineStatus?: boolean;
+    photoHiddenByPrivacy?: boolean;
+    bioHiddenByPrivacy?: boolean;
   } | null>(null);
+  const [dpPreviewTarget, setDpPreviewTarget] = useState<AvatarPreviewTarget | null>(null);
 
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -94,6 +106,8 @@ export const ChatList: React.FC<ChatListProps> = ({
   }, []);
 
   const savedContacts = chatStore.getContacts();
+  const friendships = getCollectionData<Friendship>('friendships');
+  const myPrivacy = chatStore.getPrivacySettings();
 
   const getLiveProfileForConv = (conv: Conversation): UserProfile | undefined => {
     if (conv.isGroup) return undefined;
@@ -148,12 +162,13 @@ export const ChatList: React.FC<ChatListProps> = ({
 
   const getChatBio = (conv: Conversation): string => {
     const otherId = conv.participants.find(p => p !== currentUserId) || conv.participants[0];
+    const details = otherId ? conv.participantDetails?.[otherId] : null;
     const liveProfile = getLiveProfileForConv(conv);
     const uName = getChatUsername(conv);
     const contactItem = savedContacts.find(
       c => (c.username && uName && c.username.toLowerCase() === uName.toLowerCase()) || c.id === otherId
     );
-    return liveProfile?.bio || contactItem?.bio || 'Sovereign ERROREX Member • Verified End-to-End Encryption Active';
+    return liveProfile?.bio || details?.bio || contactItem?.bio || 'Available on ERROREX';
   };
 
   const formatTime = (isoString?: string) => {
@@ -221,6 +236,7 @@ export const ChatList: React.FC<ChatListProps> = ({
     e.stopPropagation();
     setOpenMenuConvId(null);
     const otherId = conv.participants.find(p => p !== currentUserId) || conv.participants[0];
+    const otherDetail = otherId ? conv.participantDetails?.[otherId] : undefined;
     const username = getChatUsername(conv);
     const liveProfile = directoryProfiles.find(
       p => p.uid === otherId || (p.username && username && p.username.toLowerCase() === username.toLowerCase())
@@ -228,6 +244,15 @@ export const ChatList: React.FC<ChatListProps> = ({
     const matchedContact = savedContacts.find(
       c => (c.username && username && c.username.toLowerCase() === username.toLowerCase()) || c.id === otherId
     );
+    const allowPhoto =
+      conv.isGroup ||
+      canViewProfilePhoto(currentUserId, otherId, username, liveProfile, otherDetail, savedContacts, friendships);
+    const allowBio =
+      conv.isGroup ||
+      canViewBio(currentUserId, otherId, username, liveProfile, otherDetail, savedContacts, friendships);
+    const allowOnline =
+      conv.isGroup ||
+      canViewLastSeen(currentUserId, otherId, username, liveProfile, otherDetail, savedContacts, friendships);
     const isOnlineNow = conv.isGroup
       ? true
       : liveProfile
@@ -238,11 +263,14 @@ export const ChatList: React.FC<ChatListProps> = ({
     setViewingProfileUser({
       displayName: getChatTitle(conv),
       username,
-      photoURL: getChatAvatar(conv) || undefined,
-      bio: liveProfile?.bio || getChatBio(conv),
-      isOnline: isOnlineNow,
+      photoURL: allowPhoto ? getChatAvatar(conv) || undefined : undefined,
+      bio: allowBio ? getChatBio(conv) : undefined,
+      isOnline: allowOnline ? isOnlineNow : false,
       isGroup: conv.isGroup,
-      conversationId: conv.id
+      conversationId: conv.id,
+      showOnlineStatus: allowOnline,
+      photoHiddenByPrivacy: !allowPhoto,
+      bioHiddenByPrivacy: !allowBio
     });
   };
 
@@ -396,13 +424,28 @@ export const ChatList: React.FC<ChatListProps> = ({
             const isFromMe = conv.lastMessageSenderId === currentUserId;
 
             const otherId = conv.participants.find(p => p !== currentUserId) || conv.participants[0];
+            const otherDetail = otherId ? conv.participantDetails?.[otherId] : undefined;
             const liveProfile = directoryProfiles.find(
               p => p.uid === otherId || (p.username && username && p.username.toLowerCase() === username.toLowerCase())
             );
             const matchedContact = savedContacts.find(
               c => (c.username && username && c.username.toLowerCase() === username.toLowerCase()) || c.id === otherId
             );
-            const isContactNetActive = conv.isGroup
+            const allowPhoto =
+              conv.isGroup ||
+              canViewProfilePhoto(currentUserId, otherId, username, liveProfile, otherDetail, savedContacts, friendships);
+            const allowBio =
+              conv.isGroup ||
+              canViewBio(currentUserId, otherId, username, liveProfile, otherDetail, savedContacts, friendships);
+            const allowOnline =
+              conv.isGroup ||
+              canViewLastSeen(currentUserId, otherId, username, liveProfile, otherDetail, savedContacts, friendships);
+            const targetPrivacy = resolveTargetPrivacy(liveProfile, otherDetail);
+            const allowReadReceipts = conv.isGroup
+              ? myPrivacy.readReceipts !== false
+              : canExchangeReadReceipts(myPrivacy, targetPrivacy);
+
+            const isContactNetActiveRaw = conv.isGroup
               ? true
               : otherId === 'vault_secure' || conv.id === 'conv_vault'
               ? true
@@ -411,11 +454,21 @@ export const ChatList: React.FC<ChatListProps> = ({
               : matchedContact
               ? matchedContact.isOnline === true
               : false;
+            const isContactNetActive = allowOnline ? isContactNetActiveRaw : false;
+            const visibleAvatar = allowPhoto ? avatar : null;
+            const visibleBio = allowBio ? getChatBio(conv) : null;
 
             const msgs = chatStore.getMessages(conv.id);
             const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
-            const isSeen = lastMsg?.deliveryStatus === 'read' || Boolean(lastMsg?.readBy && lastMsg.readBy.some(id => id !== currentUserId));
-            const isDelivered = lastMsg?.deliveryStatus === 'delivered' || (!lastMsg?.deliveryStatus && isContactNetActive);
+            const isSeen =
+              allowReadReceipts &&
+              (lastMsg?.deliveryStatus === 'read' ||
+                Boolean(lastMsg?.readBy && lastMsg.readBy.some(id => id !== currentUserId)));
+            const isDelivered =
+              !isSeen &&
+              (lastMsg?.deliveryStatus === 'delivered' ||
+                lastMsg?.deliveryStatus === 'read' ||
+                (!lastMsg?.deliveryStatus && isContactNetActive));
 
             const isMenuOpen = openMenuConvId === conv.id;
 
@@ -429,33 +482,52 @@ export const ChatList: React.FC<ChatListProps> = ({
                 }`}
                 onClick={() => onSelectConversation(conv.id)}
               >
-                {/* Contact DP / Avatar with real online/offline indicator */}
-                <div className="relative shrink-0">
-                  <div className="w-11 h-11 rounded-full bg-neutral-200 dark:bg-neutral-900 border border-[var(--accent-border)] flex items-center justify-center text-[var(--accent-primary)] font-bold text-sm overflow-hidden shadow-inner">
-                    {avatar ? (
-                      <img src={avatar} alt={title} className="w-full h-full object-cover" />
+                {/* Contact DP / Avatar with click-to-zoom lightbox & privacy-respecting online dot */}
+                <button
+                  type="button"
+                  onClick={e => {
+                    e.stopPropagation();
+                    setDpPreviewTarget({
+                      displayName: title,
+                      username,
+                      photoURL: visibleAvatar,
+                      bio: visibleBio,
+                      isOnline: isContactNetActive,
+                      showOnlineStatus: allowOnline,
+                      photoHiddenByPrivacy: !allowPhoto,
+                      bioHiddenByPrivacy: !allowBio
+                    });
+                  }}
+                  className="relative shrink-0 cursor-pointer group/dp"
+                  title="Tap to view DP & Bio"
+                >
+                  <div className="w-11 h-11 rounded-full bg-neutral-200 dark:bg-neutral-900 border border-[var(--accent-border)] group-hover/dp:border-[var(--accent-primary)] flex items-center justify-center text-[var(--accent-primary)] font-bold text-sm overflow-hidden shadow-inner transition-colors">
+                    {visibleAvatar ? (
+                      <img src={visibleAvatar} alt={title} className="w-full h-full object-cover" />
                     ) : conv.isGroup ? (
                       <Users className="w-5 h-5 text-[var(--accent-primary)]" />
                     ) : (
                       title.slice(0, 1).toUpperCase()
                     )}
                   </div>
-                  <span
-                    title={isContactNetActive ? 'Online' : 'Offline'}
-                    className={`w-2.5 h-2.5 rounded-full border-2 border-[var(--bg-list)] absolute bottom-0 right-0 ${
-                      isContactNetActive ? 'bg-emerald-500' : 'bg-neutral-500'
-                    }`}
-                  />
-                </div>
+                  {allowOnline && (
+                    <span
+                      title={isContactNetActive ? 'Online' : 'Offline'}
+                      className={`w-2.5 h-2.5 rounded-full border-2 border-[var(--bg-list)] absolute bottom-0 right-0 ${
+                        isContactNetActive ? 'bg-emerald-500' : 'bg-neutral-500'
+                      }`}
+                    />
+                  )}
+                </button>
 
                 {/* Details Column: Title, Username, Last Message, Time, Badges */}
                 <div className="flex-1 min-w-0 pr-6">
-                  <div className="flex items-center justify-between mb-0.5">
-                    <div className="flex items-center gap-1.5 min-w-0 pr-1">
-                      <span className="text-xs font-bold text-[var(--text-main)] truncate max-w-[120px] sm:max-w-[150px]">
+                  <div className="flex items-center justify-between gap-2 mb-0.5">
+                    <div className="flex items-center gap-1.5 min-w-0 flex-1 pr-1">
+                      <span className="text-xs font-bold text-[var(--text-main)] truncate">
                         {title}
                       </span>
-                      <span className="text-[10px] font-mono text-[var(--accent-primary)] truncate opacity-80">
+                      <span className="text-[10px] font-mono text-[var(--accent-primary)] truncate opacity-80 shrink-0 max-w-[90px] sm:max-w-[120px]">
                         @{username}
                       </span>
                       {conv.isPinned && (
@@ -520,7 +592,7 @@ export const ChatList: React.FC<ChatListProps> = ({
                   <button
                     type="button"
                     onClick={e => handleOpenMenu(e, conv.id)}
-                    className="w-7 h-7 rounded-lg hover:bg-black/40 text-neutral-400 hover:text-[var(--accent-primary)] flex items-center justify-center transition-all cursor-pointer"
+                    className="w-8 h-8 rounded-lg hover:bg-black/20 dark:hover:bg-black/40 text-neutral-500 dark:text-neutral-400 hover:text-[var(--accent-primary)] flex items-center justify-center transition-all cursor-pointer"
                     title="Chat Options (Profile, Pin, Mute, Archive, Block, Delete)"
                   >
                     <MoreVertical className="w-4 h-4" />
@@ -529,7 +601,7 @@ export const ChatList: React.FC<ChatListProps> = ({
                   {/* 3-DOT DROPDOWN MENU */}
                   {isMenuOpen && (
                     <div
-                      className="absolute right-0 top-8 w-48 rounded-2xl bg-[#0F0F13] border border-[var(--accent-border)] gold-glow shadow-2xl py-1.5 z-50 text-[var(--text-main)] animate-in fade-in zoom-in-95 duration-100"
+                      className="absolute right-0 top-9 w-48 max-w-[calc(100vw-2rem)] rounded-2xl bg-[var(--bg-sidebar)] border border-[var(--accent-border)] gold-glow shadow-2xl py-1.5 z-50 text-[var(--text-main)]"
                       onClick={e => e.stopPropagation()}
                     >
                       {/* Option 1: Profile View */}
@@ -614,11 +686,11 @@ export const ChatList: React.FC<ChatListProps> = ({
       {/* USER PROFILE VIEW MODAL */}
       {viewingProfileUser && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+          className="fixed inset-0 z-50 flex flex-col items-center p-3 sm:p-4 bg-black/80 backdrop-blur-md overflow-y-auto"
           onClick={() => setViewingProfileUser(null)}
         >
           <div
-            className="w-full max-w-sm rounded-3xl bg-[#0E0E12] border border-[var(--accent-border)] gold-glow shadow-2xl p-6 text-[var(--text-main)] relative animate-in fade-in zoom-in-95 duration-150"
+            className="w-full max-w-sm rounded-3xl bg-[#0E0E12] border border-[var(--accent-border)] gold-glow shadow-2xl p-5 sm:p-6 text-[var(--text-main)] relative my-auto max-h-[90dvh] overflow-y-auto"
             onClick={e => e.stopPropagation()}
           >
             {/* Close Button */}
@@ -629,9 +701,25 @@ export const ChatList: React.FC<ChatListProps> = ({
               <X className="w-4 h-4" />
             </button>
 
-            {/* Profile Avatar with Gold Aura */}
+            {/* Profile Avatar with Gold Aura (Clickable to open full-size DP) */}
             <div className="flex flex-col items-center text-center">
-              <div className="relative mb-3">
+              <button
+                type="button"
+                onClick={() =>
+                  setDpPreviewTarget({
+                    displayName: viewingProfileUser.displayName,
+                    username: viewingProfileUser.username,
+                    photoURL: viewingProfileUser.photoURL || null,
+                    bio: viewingProfileUser.bio || null,
+                    isOnline: viewingProfileUser.isOnline,
+                    showOnlineStatus: viewingProfileUser.showOnlineStatus,
+                    photoHiddenByPrivacy: viewingProfileUser.photoHiddenByPrivacy,
+                    bioHiddenByPrivacy: viewingProfileUser.bioHiddenByPrivacy
+                  })
+                }
+                className="relative mb-3 cursor-pointer hover:scale-105 transition-transform"
+                title="Tap to open full-size DP"
+              >
                 <div className="w-24 h-24 rounded-full bg-neutral-900 border-2 border-[var(--accent-primary)] flex items-center justify-center overflow-hidden shadow-xl gold-glow-sm">
                   {viewingProfileUser.photoURL ? (
                     <img
@@ -645,13 +733,15 @@ export const ChatList: React.FC<ChatListProps> = ({
                     </span>
                   )}
                 </div>
-                <span
-                  className={`w-4 h-4 rounded-full border-2 border-[#0E0E12] absolute bottom-1 right-1 shadow-md ${
-                    viewingProfileUser.isOnline ? 'bg-emerald-500' : 'bg-neutral-500'
-                  }`}
-                  title={viewingProfileUser.isOnline ? 'Online' : 'Offline'}
-                />
-              </div>
+                {viewingProfileUser.showOnlineStatus !== false && (
+                  <span
+                    className={`w-4 h-4 rounded-full border-2 border-[#0E0E12] absolute bottom-1 right-1 shadow-md ${
+                      viewingProfileUser.isOnline ? 'bg-emerald-500' : 'bg-neutral-500'
+                    }`}
+                    title={viewingProfileUser.isOnline ? 'Online' : 'Offline'}
+                  />
+                )}
+              </button>
 
               {/* Display Name & Sovereign Badge */}
               <h2 className="text-base font-bold text-white flex items-center gap-1.5">
@@ -666,10 +756,12 @@ export const ChatList: React.FC<ChatListProps> = ({
               <div className="w-full mt-4 p-3.5 rounded-2xl bg-black/50 border border-white/5 text-left space-y-2">
                 <div>
                   <span className="text-[10px] uppercase font-mono tracking-wider text-neutral-500">
-                    Sovereign Bio / Status
+                    Bio / Status
                   </span>
-                  <p className="text-xs text-neutral-200 mt-0.5 leading-relaxed">
-                    {viewingProfileUser.bio}
+                  <p className={`text-xs mt-0.5 leading-relaxed ${viewingProfileUser.bioHiddenByPrivacy ? 'text-neutral-400 italic' : 'text-neutral-200'}`}>
+                    {viewingProfileUser.bioHiddenByPrivacy
+                      ? 'Bio hidden by privacy settings'
+                      : viewingProfileUser.bio || 'Available on ERROREX'}
                   </p>
                 </div>
 
@@ -708,6 +800,8 @@ export const ChatList: React.FC<ChatListProps> = ({
           </div>
         </div>
       )}
+
+      <AvatarPreviewModal target={dpPreviewTarget} onClose={() => setDpPreviewTarget(null)} />
     </div>
   );
 };

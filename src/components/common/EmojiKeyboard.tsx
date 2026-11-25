@@ -64,7 +64,7 @@ export const EmojiKeyboard: React.FC<EmojiKeyboardProps> = ({ onSelectEmoji, onC
   };
 
   return (
-    <div className="w-full bg-[var(--bg-card)] border-t border-[var(--accent-border)] flex flex-col max-h-80 sm:max-h-96 shadow-2xl select-none animate-fadeIn transition-colors">
+    <div className="w-full bg-[var(--bg-card)] border-t border-[var(--accent-border)] flex flex-col max-h-[42dvh] sm:max-h-80 md:max-h-96 shadow-2xl select-none animate-fadeIn transition-colors">
       {/* Top Filter Strip: Live Categories & Standard Emojis */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-200 dark:border-white/5 bg-[var(--bg-sidebar)] gap-2">
         <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5 flex-1">
@@ -268,13 +268,13 @@ export const EmojiKeyboard: React.FC<EmojiKeyboardProps> = ({ onSelectEmoji, onC
               </span>
             </div>
 
-            <div className="grid grid-cols-8 sm:grid-cols-12 md:grid-cols-14 gap-1 sm:gap-1.5">
+            <div className="grid grid-cols-7 sm:grid-cols-10 md:grid-cols-12 gap-1 sm:gap-1.5">
               {displayedStandardEmojis.map((emoji: string, idx: number) => (
                 <button
                   key={idx}
                   type="button"
                   onClick={() => onSelectEmoji(emoji)}
-                  className="w-8 h-8 sm:w-9 sm:h-9 text-lg sm:text-xl flex items-center justify-center rounded-xl hover:bg-[var(--accent-surface)] hover:scale-125 active:scale-95 transition-all cursor-pointer"
+                  className="w-full aspect-square max-w-[40px] mx-auto text-lg sm:text-xl flex items-center justify-center rounded-xl hover:bg-[var(--accent-surface)] hover:scale-125 active:scale-95 transition-all cursor-pointer"
                 >
                   {emoji}
                 </button>
@@ -285,12 +285,12 @@ export const EmojiKeyboard: React.FC<EmojiKeyboardProps> = ({ onSelectEmoji, onC
       </div>
 
       {/* Footer Info Strip */}
-      <div className="px-3 py-1.5 border-t border-neutral-200 dark:border-white/5 bg-[var(--bg-sidebar)] flex items-center justify-between text-[10px] font-mono text-[var(--text-muted)] shrink-0">
-        <span className="flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
-          <span>1000 Unique Live Animated Stickers + {STANDARD_EMOJIS.length} Emojis</span>
+      <div className="px-3 py-1.5 border-t border-neutral-200 dark:border-white/5 bg-[var(--bg-sidebar)] flex items-center justify-between gap-2 text-[10px] font-mono text-[var(--text-muted)] shrink-0">
+        <span className="flex items-center gap-1.5 truncate">
+          <Sparkles className="w-3.5 h-3.5 text-[var(--accent-primary)] shrink-0" />
+          <span className="truncate">1000 Live Animated Stickers + {STANDARD_EMOJIS.length} Emojis</span>
         </span>
-        <span className="text-[var(--accent-primary)] font-semibold">
+        <span className="hidden sm:inline text-[var(--accent-primary)] font-semibold shrink-0">
           Tap any sticker or emoji to send
         </span>
       </div>

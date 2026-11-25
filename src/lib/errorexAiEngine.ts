@@ -1,31 +1,56 @@
 // Shared ERROREX Intelligent Multilingual Engine
 // Used by Express server, Netlify Functions, and instant offline/client fallback
 
-export const ERROREX_AI_SYSTEM_INSTRUCTION = `You are ERROREX AI — a warm, articulate, highly intelligent personal assistant built inside ERROREX.
+export const ERROREX_AI_SYSTEM_INSTRUCTION = `You are ERROREX AI — a deeply intelligent, warm, genuine friend and personal assistant inside ERROREX.
 
-Core Mission:
-Answer EVERY question and fulfill EVERY request completely, thoughtfully, and generously with zero unnecessary brevity. Never reply with generic placeholders or mention internal keys, APIs, or configuration tips.
+Core Personality ("Like a Real, Caring Human Friend"):
+- Talk naturally, warmly, and empathetically — like a thoughtful, trustworthy best friend who also happens to know almost everything.
+- Never sound robotic, stiff, or preachy. Never start with filler like "Certainly! As an AI language model..." and NEVER mention API keys, environment variables, backend setups, or internal model names.
+- Match the user's emotional energy: comfort gently if they feel sad or stressed, celebrate warmly if they share good news, chat casually when they just want a friend to talk to, and dive deep with clarity when they ask serious or creative questions.
+- Give complete, generous, well-thought-out answers — never cut answers artificially short unless the user specifically asks for a brief reply or an exact line count.
 
-Style, Neatness & Depth Rules:
-1. FRIENDLY, NEAT, STYLISH & UNIQUE WRITING:
-   - Write warmly, politely, and clearly — like a thoughtful expert talking to a friend.
-   - Start straight with the answer (avoid stiff filler like "Certainly! Here is..." or "As an AI...").
-   - Use graceful markdown hierarchy: concise section headings (###), crisp bullet points (-), numbered steps (1., 2.), **bold highlights**, soft quotes (>), clean dividers (---), and fenced code blocks (\`\`\`lang ... \`\`\`).
-   - Keep paragraphs balanced (2–4 lines each) with generous breathing room so every reply feels neat, stylish, and effortless to read.
+Strict Script, Language & Format Precision (100% Priority):
+1. UNIVERSAL MULTILINGUAL FLUENCY:
+   - Fluently understand and converse in **every language**, including Roman Urdu, Urdu Script (اردو), Arabic (العربية), Hindi (हिन्दी), Hinglish, Punjabi, Pashto, Persian (فارسی), Bengali, English, Turkish, French, Spanish, German, and more.
+   - Understand mixed prompts effortlessly (for example, a request typed in Roman Urdu asking for Urdu script, Arabic, or Hindi output).
+2. EXACT ALPHABET / SCRIPT OBEDIENCE:
+   - If the user asks for **Urdu alphabet / Urdu script / Urdu haroof / اردو میں** (e.g., "mjy Urdu alphabet m likh kr do"), respond cleanly in authentic **Urdu script (اردو)** — NEVER substitute Roman Urdu when Urdu script was requested.
+   - If the user asks for **Arabic / عربی / العربية** (or chats in Arabic), respond naturally in authentic **Arabic script (العربية)**.
+   - If the user asks for **Hindi / हिन्दी** (or chats in Hindi), respond naturally in clean **Devanagari Hindi (हिन्दी)** (or match Hinglish if they want Hinglish).
+   - If the user asks for **translation**, deliver natural, fluent translations (never word-for-word robotic literalism) in the exact requested target script/language, and include helpful pronunciation if translating between different alphabets when useful.
+3. EXACT POETRY LINE-COUNT OBEDIENCE:
+   - When the user asks for poetry, shayari, nazm, or ghazal of **2 lines, 4 lines, 6 lines, 8 lines**, or any specific count ("4 line ki poetry", "do line sher", "6 lines"), output **EXACTLY that number of lines** with beautiful rhythm, rhyme, and imagery.
+   - Only write a full multi-couplet ghazal (8–10 lines) when no specific line count is requested.
+4. NEAT, CLEAN & STYLISH PRESENTATION:
+   - For casual friendly conversation, reply naturally in clean, readable paragraphs without unnecessary formatting clutter.
+   - For structured topics (guides, translations, marketing kits, recipes, essays, code), use crisp markdown headings (###), clean bullets (-), numbered steps, **bold highlights**, soft blockquotes (>), and fenced code blocks (\`\`\`lang ... \`\`\`).`;
 
-2. THOROUGH & COMPLETE REPLIES (NO ARTIFICIAL SHORTCUTS):
-   - Give rich, detailed, complete answers with practical examples, multiple creative variations when appropriate, and helpful closing tips.
-   - When the user asks for more detail, continuation, or another version, expand generously on the conversation context.
+export type TargetScript =
+  | 'urdu_script'
+  | 'arabic'
+  | 'hindi'
+  | 'roman_urdu'
+  | 'english'
+  | 'french'
+  | 'spanish';
 
-3. FULL CAPABILITY ACROSS EVERY TOPIC:
-   - **Poetry, Ghazals & Shayari:** Compose heartfelt, rhythmic, properly rhymed ghazals (5–6 couplets / ashaar), nazms, and English/Urdu/Hindi/Punjabi poems tailored to the exact mood (love, heartbreak/sad, motivation, friendship, spiritual) or poet style.
-   - **Promotion, Ads & Marketing:** Craft high-converting promotional campaigns, hooks, full ad copy, short video/reel scripts, broadcast messages, CTAs, and hashtags for any business, brand, YouTube channel, TikTok, Instagram page, or shop.
-   - **Essays, Stories, Letters & Prompts:** Write complete essays, articles, speeches, stories, birthday/Eid wishes, job/leave applications, emails, and detailed AI image/writing prompts.
-   - **Coding, Math & Daily Help:** Provide modern, working, well-commented code, step-by-step math calculations, recipes, study timetables, business ideas, fitness/health guidance, and Islamic/general knowledge.
-
-4. UNIVERSAL MULTILINGUAL FLUENCY:
-   - Fluently understand and reply in Roman Urdu, Urdu (اردو), Hindi (हिन्दी), English, Arabic (العربية), Punjabi, Pashto, Persian, French, Spanish, German, Turkish, etc.
-   - Automatically match the user's exact language and respect explicit language requests strictly.`;
+export interface LanguageProfile {
+  lower: string;
+  isUrduScript: boolean;
+  isArabicScript: boolean;
+  isHindiScript: boolean;
+  isRomanUrdu: boolean;
+  isUrduAlphabetRequested: boolean;
+  isUrduRequested: boolean;
+  isRomanUrduRequested: boolean;
+  isEnglishRequested: boolean;
+  isHindiRequested: boolean;
+  isArabicRequested: boolean;
+  isFrenchRequested: boolean;
+  isSpanishRequested: boolean;
+  targetScript: TargetScript;
+  requestedLineCount: number | null;
+}
 
 export interface GeminiContentTurn {
   role: 'user' | 'model';
@@ -33,7 +58,7 @@ export interface GeminiContentTurn {
 }
 
 /**
- * Normalizes chat history into valid Gemini API alternating turns without capping conversation length tightly:
+ * Normalizes chat history into valid alternating turns without tight conversation caps:
  * - Preserves up to 40 recent turns of context
  * - Drops leading 'model' turns because Gemini requires starting with 'user'
  * - Merges consecutive turns of the same role
@@ -72,57 +97,147 @@ export function buildGeminiContents(message: string, history?: any[]): GeminiCon
   return normalized;
 }
 
-export function detectLanguageProfile(query: string) {
+function parseRequestedLineCount(query: string): number | null {
   const lower = query.toLowerCase();
-  const isUrduScript = /[\u0600-\u06FF]/.test(query);
+
+  // Numeric line requests: "4 line", "4 lines", "6 line ki", "2-line"
+  const numLineMatch = lower.match(/\b(\d{1,2})\s*[-\s]*(?:lines?|line\s*ki|line\s*ka|misr[ea]y?|satr)\b/i);
+  if (numLineMatch) {
+    const val = parseInt(numLineMatch[1], 10);
+    if (val >= 1 && val <= 24) return val;
+  }
+
+  // Couplet / sher counts ("2 sher" = 4 lines, "3 ashaar" = 6 lines)
+  const sherNumMatch = lower.match(/\b(\d{1,2})\s*(?:sher|shair|ashaar|ashar|couplets?|band)\b/i);
+  if (sherNumMatch) {
+    const count = parseInt(sherNumMatch[1], 10) * 2;
+    if (count >= 2 && count <= 24) return count;
+  }
+
+  if (/\b(?:do|two)\s*(?:lines?|line\s*ki|line\s*ka)\b|\b(?:ek|aik|ik|one)\s*(?:sher|couplet)\b/i.test(lower)) {
+    return 2;
+  }
+  if (/\b(?:char|chaar|four)\s*(?:lines?|line\s*ki|line\s*ka)\b|\b(?:do|two)\s*(?:sher|ashaar|couplets?)\b/i.test(lower)) {
+    return 4;
+  }
+  if (/\b(?:chhe|che|cheh|six)\s*(?:lines?|line\s*ki|line\s*ka)\b|\b(?:teen|three)\s*(?:sher|ashaar|couplets?)\b/i.test(lower)) {
+    return 6;
+  }
+  if (/\b(?:aath|ath|eight)\s*(?:lines?|line\s*ki|line\s*ka)\b|\b(?:char|four)\s*(?:sher|ashaar|couplets?)\b/i.test(lower)) {
+    return 8;
+  }
+  if (/\b(?:das|ten)\s*(?:lines?|line\s*ki|line\s*ka)\b|\b(?:paanch|panch|five)\s*(?:sher|ashaar|couplets?)\b/i.test(lower)) {
+    return 10;
+  }
+
+  // Look for patterns like "4 line ki 2 ya 6" -> pick first explicit count if multiple
+  const multiNumLine = lower.match(/\b(2|4|6|8|10|12)\s*line/i);
+  if (multiNumLine) {
+    return parseInt(multiNumLine[1], 10);
+  }
+
+  return null;
+}
+
+export function detectLanguageProfile(query: string): LanguageProfile {
+  const lower = (query || '').toLowerCase();
+
+  // Distinguish Urdu Nastaliq characters vs Arabic characters accurately
+  const hasArabicBlock = /[\u0600-\u06FF]/.test(query);
+  const hasUrduSpecificChars = /[\u0679\u067E\u0686\u0688\u0691\u0698\u06A9\u06AF\u06BA\u06BE\u06C1\u06C2\u06CC\u06D2]/.test(query);
+  const hasArabicMarkers = /(مرحبا|السلام|أهلا|كيف حالك|شكرا|أريد|ماذا|لماذا|جميل|قصيدة|شعر عربي|بالعربية)/i.test(query);
+
+  const isUrduScript = hasUrduSpecificChars || (hasArabicBlock && !hasArabicMarkers && /(اردو|میں|شاعری|غزل|محبت|دوستی|آپ|تم|ہم|کیا|کیسے|ہے|ہیں|نہیں|اور|لکھ)/i.test(query));
+  const isArabicScript = hasArabicBlock && !isUrduScript;
   const isHindiScript = /[\u0900-\u097F]/.test(query);
-  const isUrduRequested = /(urdu me|urdu mein|in urdu|urdu main|اردو میں)/i.test(lower);
-  const isEnglishRequested = /(english me|english mein|in english|english main)/i.test(lower);
-  const isHindiRequested = /(hindi me|hindi mein|in hindi)/i.test(lower);
-  const isArabicRequested = /(arabic me|arabic mein|in arabic|arabi me)/i.test(lower);
-  const isFrenchRequested = /(french me|french mein|in french)/i.test(lower);
+
+  const isRomanUrduRequested = /\broman\s*urdu\b/i.test(lower);
+  const isUrduAlphabetRequested =
+    !isRomanUrduRequested &&
+    (/(urdu\s*(?:alphabet|alphabets|script|haroof|harf|lafz|rasmul|rasm|likhai|writing)|asli\s*urdu|urdu\s*(?:m|me|mein|main)\s*likh)/i.test(
+      lower
+    ) ||
+      /اردو\s*(?:حروف|رسم الخط|میں\s*لکھ|الفاظ)/i.test(query));
+
+  const isUrduRequested = /(urdu me|urdu mein|urdu m |urdu main|in urdu|into urdu|اردو میں)/i.test(lower);
+  const isEnglishRequested = /(english me|english mein|in english|into english|english main|english m )/i.test(lower);
+  const isHindiRequested = /(hindi me|hindi mein|in hindi|into hindi|hindi main|hindi m |हिंदी|हिन्दी)/i.test(lower);
+  const isArabicRequested = /(arabic me|arabic mein|in arabic|into arabic|arabi me|arabi mein|arabic m |عربي|عربی)/i.test(lower);
+  const isFrenchRequested = /(french me|french mein|in french|into french|en français)/i.test(lower);
+  const isSpanishRequested = /(spanish me|spanish mein|in spanish|into spanish|en español)/i.test(lower);
 
   const isRomanUrdu =
-    !isEnglishRequested &&
-    !isHindiRequested &&
-    !isArabicRequested &&
-    !isFrenchRequested &&
     !isUrduScript &&
+    !isArabicScript &&
     !isHindiScript &&
-    (isUrduRequested ||
-      /\b(salam|assalam|aoa|kya|kaise|kaisay|kesy|kese|hai|hain|hy|hn|batao|btaye|btayen|btana|mujhe|mjy|karoon|karo|krna|kr|kro|banao|bnana|bnao|kyun|kyu|kab|kahan|kha|kon|kaun|acha|accha|shukriya|theek|tik|thik|bhai|yaar|hal|haal|jawab|jwab|sawal|swal|urdu|shairi|shayari|ghazal|gzal|sher|sunao|likho|likh|chahiye|chaye|chay|ap|aap|tum|main|hum|yeh|ye|wo|woh|or|aur|me|mein|se|sy|ko|ka|ki|ke|nhi|nahi|na|ho|hoga|raha|rha|rhi|sakta|sakty|zindagi|waqt|dost|pyar|mohabbat|ishq|dil|dua|udaas|udas|gham|dard|khushi|kahani|mazmoon|video|channel|promote|post|koi|pyari|achi|acchi|mast|zabardast|naya|nayi|tareeqa|faide|nuqsan|parhai|paisa|paise|kamane|kamai|khana|biryani|chai|latifa|paheli|namaz|roza|ramzan|ramadan|salgirah|mubarak|maa|baap|duniya|insan|ilm|wajah|zyada|tafseel|samjhao|smjhao|btao)\b/i.test(
+    (isRomanUrduRequested ||
+      /\b(salam|assalam|aoa|kya|kaise|kaisay|kesy|kese|hai|hain|hy|hn|batao|btaye|btayen|btana|mujhe|mjy|karoon|karo|krna|kr|kro|banao|bnana|bnao|kyun|kyu|kab|kahan|kha|kon|kaun|acha|accha|shukriya|theek|tik|thik|bhai|yaar|hal|haal|jawab|jwab|sawal|swal|urdu|shairi|shayari|ghazal|gzal|sher|sunao|likho|likh|likhy|chahiye|chaye|chay|ap|aap|tum|main|hum|yeh|ye|wo|woh|or|aur|me|mein|se|sy|ko|ka|ki|ke|nhi|nahi|na|ho|hoga|raha|rha|rhi|sakta|sakty|zindagi|waqt|dost|dosti|pyar|mohabbat|ishq|dil|dua|udaas|udas|gham|dard|khushi|kahani|mazmoon|video|channel|promote|post|koi|pyari|achi|acchi|mast|zabardast|naya|nayi|tareeqa|faide|nuqsan|parhai|paisa|paise|kamane|kamai|khana|biryani|chai|latifa|paheli|namaz|roza|ramzan|ramadan|salgirah|mubarak|maa|baap|duniya|insan|ilm|wajah|zyada|tafseel|samjhao|smjhao|smjy|btao|krdo|kardo|kardy|dost|friend)\b/i.test(
         lower
       ));
+
+  let targetScript: TargetScript = 'english';
+  if (isUrduAlphabetRequested || (isUrduScript && !isEnglishRequested && !isArabicRequested && !isHindiRequested)) {
+    targetScript = 'urdu_script';
+  } else if (isArabicRequested || (isArabicScript && !isEnglishRequested && !isUrduRequested && !isHindiRequested)) {
+    targetScript = 'arabic';
+  } else if (isHindiRequested || (isHindiScript && !isEnglishRequested && !isUrduRequested && !isArabicRequested)) {
+    targetScript = 'hindi';
+  } else if (isFrenchRequested) {
+    targetScript = 'french';
+  } else if (isSpanishRequested) {
+    targetScript = 'spanish';
+  } else if (isRomanUrduRequested) {
+    targetScript = 'roman_urdu';
+  } else if (isUrduRequested && /(poetry|shayari|shairi|ghazal|gzal|sher|nazm|poem|translate|tarjuma|tarjama)/i.test(lower)) {
+    targetScript = 'urdu_script';
+  } else if (isEnglishRequested) {
+    targetScript = 'english';
+  } else if (isRomanUrdu) {
+    targetScript = 'roman_urdu';
+  }
 
   return {
     lower,
     isUrduScript,
+    isArabicScript,
     isHindiScript,
     isRomanUrdu,
+    isUrduAlphabetRequested,
     isUrduRequested,
+    isRomanUrduRequested,
     isEnglishRequested,
     isHindiRequested,
     isArabicRequested,
-    isFrenchRequested
+    isFrenchRequested,
+    isSpanishRequested,
+    targetScript,
+    requestedLineCount: parseRequestedLineCount(query)
   };
 }
 
 function extractCleanTopic(query: string): string {
-  let cleaned = query.trim().replace(/[?!.]+$/, '');
+  let cleaned = query.trim().replace(/[?!.؟۔]+$/, '');
   cleaned = cleaned
-    .replace(/^(what is|what are|who is|who was|tell me about|explain|define|write an essay on|write an article on|write a paragraph on|write about|how to)\s+/i, '')
-    .replace(/\s+(kya hai|kya hota hai|kya hoti hai|kon hai|kaun hai|kaun tha|ke bare me batao|ke baare me batao|par mazmoon likho|par essay likho|ke tarike batao|batao|btayen|btana|samjhao|smjhao|likho|banao|in urdu|in english|urdu me|english me)$/i, '')
+    .replace(
+      /^(what is|what are|who is|who was|tell me about|explain|define|write an essay on|write an article on|write a paragraph on|write about|how to)\s+/i,
+      ''
+    )
+    .replace(
+      /\s+(kya hai|kya hota hai|kya hoti hai|kon hai|kaun hai|kaun tha|ke bare me batao|ke baare me batao|par mazmoon likho|par essay likho|ke tarike batao|batao|btayen|btana|samjhao|smjhao|likho|banao|in urdu|in english|in arabic|in hindi|urdu me|english me|arabic me|hindi me)$/i,
+      ''
+    )
     .replace(/^(an|a|the)\s+/i, '')
     .trim();
 
   if (cleaned.length >= 2) {
     return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
   }
-  return query.replace(/[?!.]+$/, '').trim() || 'This Topic';
+  return query.replace(/[?!.؟۔]+$/, '').trim() || 'This Topic';
 }
 
-function trySolveMathOrUnits(query: string, isRomanUrdu: boolean): string | null {
-  const lower = query.toLowerCase();
+function trySolveMathOrUnits(query: string, lang: LanguageProfile): string | null {
+  const { lower, targetScript } = lang;
+  const isRoman = targetScript === 'roman_urdu';
 
   // Multiplication table: "table of 7" or "7 ka table" / "7 ka pahara"
   const tableMatch = lower.match(/(?:table\s+of|pahara)\s+(\d{1,3})|(\d{1,3})\s+ka\s+(?:table|pahara)/i);
@@ -130,9 +245,9 @@ function trySolveMathOrUnits(query: string, isRomanUrdu: boolean): string | null
     const n = parseInt(tableMatch[1] || tableMatch[2], 10);
     if (Number.isFinite(n) && n >= 1 && n <= 1000) {
       const rows = Array.from({ length: 10 }, (_, i) => `- \`${n} × ${i + 1}\` = **${n * (i + 1)}**`).join('\n');
-      return isRomanUrdu
+      return isRoman
         ? `### ${n} Ka Table (Pahara) ✨\n\n${rows}\n\nAgar kisi aur number ka pahara ya hisaab chahiye ho to zaroor poochein!`
-        : `### Multiplication Table of ${n} ✨\n\n${rows}\n\nLet me know if you'd like any other calculation or practice problems!`;
+        : `### Multiplication Table of ${n} ✨\n\n${rows}\n\nLet me know if you'd like any other calculation!`;
     }
   }
 
@@ -143,8 +258,8 @@ function trySolveMathOrUnits(query: string, isRomanUrdu: boolean): string | null
     const percent = parseFloat(pctEn ? pctEn[1] : pctUr![2]);
     const total = parseFloat(pctEn ? pctEn[2] : pctUr![1]);
     const val = Number(((percent / 100) * total).toFixed(4));
-    return isRomanUrdu
-      ? `### Percentage Ka Mukammal Hisaab ✨\n\n- **Formula:** \`(${percent} ÷ 100) × ${total}\`\n- **Step:** \`${percent / 100} × ${total}\`\n- **Bilkul Sahi Jawab:** **${val}**\n\nAgar aapko discount, profit, ya marks percentage nikalni ho to numbers batayein, main foran calculate kar dunga!`
+    return isRoman
+      ? `### Percentage Ka Mukammal Hisaab ✨\n\n- **Formula:** \`(${percent} ÷ 100) × ${total}\`\n- **Step:** \`${percent / 100} × ${total}\`\n- **Bilkul Sahi Jawab:** **${val}**\n\nDiscount, profit, ya marks percentage nikalni ho to numbers batayein!`
       : `### Percentage Calculation ✨\n\n- **Formula:** \`(${percent} ÷ 100) × ${total}\`\n- **Step:** \`${percent / 100} × ${total}\`\n- **Final Answer:** **${val}**`;
   }
 
@@ -203,8 +318,8 @@ function trySolveMathOrUnits(query: string, isRomanUrdu: boolean): string | null
         const result = Function(`"use strict"; return (${cleaned})`)();
         if (typeof result === 'number' && Number.isFinite(result)) {
           const pretty = Number.isInteger(result) ? result : Number(result.toFixed(6));
-          return isRomanUrdu
-            ? `### Hisaab Ka Sahi Jawab ✨\n\n- **Expression:** \`${cleaned}\`\n- **Natija:** **${pretty}**\n\nKoi aur equation ya math question ho to poochein!`
+          return isRoman
+            ? `### Hisaab Ka Sahi Jawab ✨\n\n- **Expression:** \`${cleaned}\`\n- **Natija:** **${pretty}**\n\nKoi aur math question ho to poochein!`
             : `### Calculation Result ✨\n\n- **Expression:** \`${cleaned}\`\n- **Answer:** **${pretty}**`;
         }
       }
@@ -216,285 +331,279 @@ function trySolveMathOrUnits(query: string, isRomanUrdu: boolean): string | null
   return null;
 }
 
-function generatePoetryOrGhazal(
-  query: string,
-  lang: ReturnType<typeof detectLanguageProfile>,
-  variantSeed = 0
-): string {
-  const { lower, isUrduScript, isRomanUrdu } = lang;
-  const isSad = /(sad|udaas|udas|dard|gham|tanha|broken|heartbreak|judai|rona|bewafa|yaad)/i.test(lower);
-  const isLove = /(love|pyar|mohabbat|ishq|dil|romantic|sanam|mehboob|jaan)/i.test(lower);
-  const isFriend = /(dost|dosti|friend|friendship|yaar)/i.test(lower);
-  const isMotivation = /(motivation|himmat|hausla|success|kamyabi|iqbal|dream|khwab)/i.test(lower);
+type Couplet = [string, string];
 
-  if (isUrduScript) {
-    if (isSad) {
-      return `### خوبصورت اداس غزل 🌙
+function formatCoupletsByLineCount(couplets: Couplet[], lineCount: number | null): string {
+  const allLines = couplets.flat();
+  const targetCount = lineCount ? Math.min(lineCount, allLines.length) : allLines.length;
+  const sliced = allLines.slice(0, targetCount);
 
-خاموش راتوں میں بھی اک صدا سی رہتی ہے  
-دل کے ویرانے میں تیری وفا سی رہتی ہے
-
-ٹوٹ کر بکھرے تو پھر سمیٹا خود کو ہم نے  
-زخمِ دل پر مگر اک دعا سی رہتی ہے
-
-وقت بدلا ہے مگر یاد کی خوشبو نہ گئی  
-شام ہوتے ہی فضا میں ادا سی رہتی ہے
-
-چاند بھی پوچھتا ہے اکثر تیری خبر مجھ سے  
-رات بھر آنکھ میں اک روشنی سی رہتی ہے
-
-ہم نے سیکھا ہے مسکرا کر ہر درد چھپانا  
-پھر بھی لہجے میں تیری کمی سی رہتی ہے
-
----
-اگر آپ کسی خاص موضوع یا شاعر کے انداز میں ایک اور غزل سننا چاہیں تو فرمائیے!`;
+  // Group into clean 2-line stanzas so both 2, 4, 6, 8, and odd line counts look balanced
+  const stanzas: string[] = [];
+  for (let i = 0; i < sliced.length; i += 2) {
+    if (i + 1 < sliced.length) {
+      stanzas.push(`${sliced[i]}  \n${sliced[i + 1]}`);
+    } else {
+      stanzas.push(sliced[i]);
     }
-
-    return `### دلکش اردو غزل ✨
-
-چراغِ دل جلا رکھا ہے تیری یاد کے نام  
-سفر تمام کیا ہم نے اعتماد کے نام
-
-جو مسکرا کے ملے دردِ زندگی سے ہمیں  
-لکھی ہے ہم نے ہر اک شام اس کی داد کے نام
-
-ہوا کے دوش پہ لکھا ہے پیار کا پیغام  
-کہ روشنی رہے قائم ہر اک مراد کے نام
-
-فلک کے پار بھی امید کا جہاں آباد  
-جہاں دعائیں پہنچتی ہیں ہر فریاد کے نام
-
-نہ ہار مان کبھی وقت کے اندھیروں سے  
-سحر کی پہلی کرن ہے دلِ آزاد کے نام
-
----
-مزید اشعار یا کسی خاص موضوع (محبت، دوستی، یا حوصلہ) پر غزل کے لیے بتائیے!`;
   }
-
-  if (isRomanUrdu) {
-    if (isSad) {
-      const sadSets = [
-        `### Dil Ko Chhoo Lene Wali Udaas Ghazal 🌙
-
-Khamosh shaamon me bhi ek sada si rehti hai,  
-Dil ke weerane me teri wafa si rehti hai.
-
-Toot kar bikhre to phir khud hi sambhala khud ko,  
-Zakhm-e-dil par magar ek dua si rehti hai.
-
-Waqt badla hai par yaad ki khushboo na gayi,  
-Har guzarte pal me ek ada si rehti hai.
-
-Bheed me reh kar bhi aksar tanha mehsus hota hai,  
-Aankhon ke konay me chhupi ek haya si rehti hai.
-
-Humne seekha hai muskura ke har gham chhupana,  
-Phir bhi lehje me teri kami si rehti hai.
-
----
-Agar chahein to main isay **Urdu script (اردو)** me likh dun ya ek aur naya kalam sunaun!`,
-        `### Ek Aur Khubsurat Dard Bhari Ghazal 🕯️
-
-Raat bhar jagti aankhon ko khabar kaun kare,  
-Jo samajhta hi nahi us pe asar kaun kare.
-
-Humne har mod pe chaha ke sukoon mil jaye,  
-Par muqaddar me likhe dard se dar kaun kare.
-
-Jin ke waadon pe bharosa tha zindagi se zyada,  
-Aaj un logon ka raaston me zikr kaun kare.
-
-Dil ke sheeshe ko sambhala hai bade naazon se,  
-Ab kisi patthar ke shahar me safar kaun kare.
-
-Phir bhi honton pe dua aur nazar me izzat hai,  
-Waqt ke haathon se shikwa magar kaun kare.`
-      ];
-      return sadSets[variantSeed % sadSets.length];
-    }
-
-    if (isLove) {
-      return `### Mohabbat Bhari Khubsurat Ghazal 💖
-
-Teri muskurahat se roshan mera jahan hai,  
-Tu paas ho to har lamha ek dastan hai.
-
-Alfaaz kam pad jayein tareef me teri,  
-Har dhadkan me basa bas tera hi nishan hai.
-
-Chaand bhi sharma jaye teri saadgi dekh kar,  
-Teri nazar me chhupa ek aasman hai.
-
-Khamoshiyon me bhi sunai de tera naam mujhe,  
-Yeh pyar nahi to aur kya imtihan hai.
-
-Khuda kare hamesha salamat rahe yeh rishta,  
-Meri har dua me shamil bas teri jaan hai.
-
----
-Batayein agar aapko **2-line romantic shayari**, **social status**, ya **kisi naam par custom sher** chahiye!`;
-    }
-
-    if (isFriend) {
-      return `### Dosti Par Khubsurat Ghazal 🤝
-
-Waqt ke saaye me sab kuch badal jata hai,  
-Par saccha dost har mod par saath nibhata hai.
-
-Bina kahe jo samajh le dil ki baat sari,  
-Aisa yaar naseeb walon ko hi mil pata hai.
-
-Dhoop ho gham ki ya khushiyon ki barish ho,  
-Har haal me dost hi hausla badhata hai.
-
-Daulat aur shohrat to aani jaani cheezein hain,  
-Asli sarmaya wahi jo dosti nibha jata hai.
-
----
-Apne best friend ka naam batayein — main unke naam par ek khaas sher likh dunga!`;
-    }
-
-    if (isMotivation) {
-      return `### Hausla Aur Kamyabi Ki Ghazal 🔥
-
-Andheron se na dar, tera savera aane wala hai,  
-Jo mehnat karta hai wahi manzil paane wala hai.
-
-Gir ke uthna hi toh asli pehchan hai teri,  
-Har tufaan tere hausle se haar jaane wala hai.
-
-Chhod de fikr ke log kya kahenge piche,  
-Waqt khud tera naam buland kar jaane wala hai.
-
-Jitni gehri hogi raat, utna chamkega sitara tera,  
-Sabr rakh, har khwab haqeeqat ban jaane wala hai.
-
----
-Aur motivational poetry ya Allama Iqbal ke ashaar chahiye hon to batayein!`;
-    }
-
-    const generalSets = [
-      `### Khubsurat Roman Urdu Ghazal ✨
-
-Shaam dhalte hi khayalon ka safar chalta hai,  
-Ek chhota sa diya dil ke nagar chalta hai.
-
-Har mushkil me bhi humne seekha hai muskurana,  
-Jiske paas sabr ho uska hi asar chalta hai.
-
-Khwab aankhon me saja kar jo chale raah-e-wafa,  
-Manzilon tak wahi be-khauf nidar chalta hai.
-
-Rang duniya ke badalte hain har ek mausam me,  
-Saccha kirdar magar apni hi dagar chalta hai.
-
-Baat alfaaz ki nahi, ehsaas ki hoti hai,  
-Jo dil se nikle wahi har dil me utar chalta hai.
-
----
-Aap kis mood par (**Sad, Mohabbat, Dosti, ya Motivational**) mazeed ghazalein pasand karengi?`,
-      `### Naya Kalam — Dil Ki Baat 🌹
-
-Har sitare me chamak teri nazar jaisi hai,  
-Har subah ki hawa mere safar jaisi hai.
-
-Waqt chup-chaap guzarta raha shakhon ki tarah,  
-Zindagi phir bhi kisi khubsurat ghar jaisi hai.
-
-Jo samajh le woh khamoshi ko bhi padh leta hai,  
-Warna duniya ki zuban sirf khabar jaisi hai.
-
-Hosla rakh ke chalenge to ujala hoga,  
-Har dua waqt ke seene me asar jaisi hai.`
-    ];
-    return generalSets[variantSeed % generalSets.length];
-  }
-
-  return `### Original Poem — Golden Horizon ✨
-
-Softly falls the evening light across the quiet sea,  
-Carrying the whispered hopes of everything to be.
-
-Every storm we weather leaves a steadier design,  
-Turning patient footsteps into something bright and fine.
-
-Keep your heart courageous through the shadow and the rain,  
-Every dawn returns to paint the sky with gold again.
-
-When the road grows heavy and the stars feel far away,  
-Trust the quiet strength inside to guide you through the day.
-
----
-Tell me your preferred theme (**love, sorrow, friendship, nature, or motivation**) and I'll compose another custom piece!`;
+  return stanzas.join('\n\n');
 }
 
-function generatePromotionKit(query: string, lang: ReturnType<typeof detectLanguageProfile>): string {
-  const { isUrduScript, isRomanUrdu } = lang;
+function generatePoetryOrGhazal(
+  query: string,
+  lang: LanguageProfile,
+  variantSeed = 0
+): string {
+  const { lower, targetScript, requestedLineCount } = lang;
+  const isSad = /(sad|udaas|udas|dard|gham|tanha|broken|heartbreak|judai|rona|bewafa|yaad|اداس|درد|غم|حزن|उदास|दर्द)/i.test(lower);
+  const isLove = /(love|pyar|mohabbat|ishq|dil|romantic|sanam|mehboob|jaan|محبت|عشق|پیار|حب|प्यार|मोहब्बत|इश्क़)/i.test(lower);
+  const isFriend = /(dost|dosti|friend|friendship|yaar|دوست|دوستی|صديق|صداقة|दोस्त|दोस्ती)/i.test(lower);
+  const isMotivation = /(motivation|himmat|hausla|success|kamyabi|iqbal|dream|khwab|حوصلہ|کامیابی|نجاح|हौसला|सफलता)/i.test(lower);
+
+  const countLabel = requestedLineCount ? ` (${requestedLineCount} Lines)` : '';
+
+  if (targetScript === 'urdu_script') {
+    const urduSad: Couplet[] = [
+      ['خاموش راتوں میں بھی اک صدا سی رہتی ہے', 'دل کے ویرانے میں تیری وفا سی رہتی ہے'],
+      ['ٹوٹ کر بکھرے تو پھر سمیٹا خود کو ہم نے', 'زخمِ دل پر مگر اک دعا سی رہتی ہے'],
+      ['وقت بدلا ہے مگر یاد کی خوشبو نہ گئی', 'شام ہوتے ہی فضا میں ادا سی رہتی ہے'],
+      ['چاند بھی پوچھتا ہے اکثر تیری خبر مجھ سے', 'رات بھر آنکھ میں اک روشنی سی رہتی ہے'],
+      ['ہم نے سیکھا ہے مسکرا کر ہر درد چھپانا', 'پھر بھی لہجے میں تیری کمی سی رہتی ہے']
+    ];
+    const urduLove: Couplet[] = [
+      ['تیری مسکان سے روشن ہے جہاں سارا میرا', 'تو اگر پاس ہو تو وقت ٹھہر جاتا ہے'],
+      ['لفظ کم پڑتے ہیں تعریفِ محبت کے لیے', 'ہر دھڑکن میں فقط نام تیرا آتا ہے'],
+      ['چاند بھی دیکھ کے شرمائے تری سادگی کو', 'تیری نظروں سے نیا خواب سنور جاتا ہے'],
+      ['خامشی میں بھی سنائی دے صدا تیری مجھے', 'یہی احساس مرے دل کو بھرا رکھتا ہے'],
+      ['رب کرے قائم رہے عمر بھر یہ پیار کا رنگ', 'میری ہر ایک دعا میں تو ہی بس رہتا ہے']
+    ];
+    const urduFriend: Couplet[] = [
+      ['وقت کے ساتھ زمانے کی ہوا بدلتی ہے', 'سچا دوست مگر ہر موڑ پہ ساتھ چلتا ہے'],
+      ['بِن کہے جو سمجھ لے دل کے سبھی راز گہرے', 'ایسا ہمدم تو نصیبوں سے کہیں ملتا ہے'],
+      ['دھوپ ہو غم کی یا خوشیوں کی سنہری بارش', 'دوست ہر حال میں جینے کا ہنر دیتا ہے'],
+      ['دولت و شہرت تو آنی جانی چیزیں ہیں یہاں', 'اصل سرمایہ وہی جو دوستی نبھاتا ہے']
+    ];
+    const urduMotivation: Couplet[] = [
+      ['اندھیروں سے نہ ڈر، تیرا سویرا آنے والا ہے', 'جو محنت سے نہ گھبرائے وہ منزل پانے والا ہے'],
+      ['گر کے اٹھنا ہی تو اصلی پہچان ہے تیری', 'ہر طوفاں تیرے حوصلے سے ہار جانے والا ہے'],
+      ['چھوڑ دے فکر کہ دنیا کیا کہے گی پیچھے', 'وقت خود تیرا مقام بلند کرنے والا ہے'],
+      ['صبر و ہمت سے قدم آگے بڑھاتا چل دوست', 'ہر حسیں خواب حقیقت میں بدلنے والا ہے']
+    ];
+    const urduGeneral: Couplet[] = [
+      ['چراغِ دل جلا رکھا ہے امیدِ سحر کے نام', 'سفر آسان ہو جاتا ہے سچے اعتماد کے نام'],
+      ['جو مسکرا کے ملے دردِ زندگی سے کبھی', 'لکھی ہے ہم نے ہر اک شام اس کی داد کے نام'],
+      ['ہوا کے دوش پہ لکھا ہے پیار کا پیغام', 'کہ روشنی رہے قائم ہر اک مراد کے نام'],
+      ['فلک کے پار بھی امید کا جہاں آباد', 'جہاں دعائیں پہنچتی ہیں ہر فریاد کے نام'],
+      ['نہ ہار مان کبھی وقت کے اندھیروں سے', 'نئی صبح کا اجالا ہے دلِ شاد کے نام']
+    ];
+
+    const selected = isSad
+      ? urduSad
+      : isLove
+      ? urduLove
+      : isFriend
+      ? urduFriend
+      : isMotivation
+      ? urduMotivation
+      : urduGeneral;
+
+    const body = formatCoupletsByLineCount(selected, requestedLineCount);
+    const title = isSad
+      ? 'خوبصورت اداس شاعری 🌙'
+      : isLove
+      ? 'محبت بھری اردو شاعری 💖'
+      : isFriend
+      ? 'دوستی پر خوبصورت شاعری 🤝'
+      : isMotivation
+      ? 'حوصلہ افزا اردو شاعری 🔥'
+      : 'خوبصورت اردو شاعری ✨';
+
+    return `### ${title}${requestedLineCount ? ` (${requestedLineCount} سطریں)` : ''}\n\n${body}\n\n---\nاگر آپ **2، 4 یا 6 سطروں** میں کسی اور موضوع پر اردو شاعری چاہیں تو بتائیے!`;
+  }
+
+  if (targetScript === 'arabic') {
+    const arSad: Couplet[] = [
+      ['في سُكونِ الليلِ يبقى للذكرى صَدى', 'وبِقَلبي شَوقُ حُلمٍ لا يَغيبُ أَبَدا'],
+      ['كَم صَبَرنا حينَ ضاقت بالليالي دُروبُنا', 'ثُمَّ أَشرَقَ نورُ صَبرٍ في حَنايا قُلوبِنا'],
+      ['تَمضي الأيّامُ سِراعاً والأماني باقية', 'وَرَجائي في إلهي كالنجومِ الزاهية']
+    ];
+    const arLove: Couplet[] = [
+      ['أنتَ في قَلبي ضياءٌ لا يَغيبُ بَريقُهُ', 'وكَأنَّ الصُّبحَ يَبسِمُ حِينَ تَبدو طَريقُهُ'],
+      ['كلُّ حَرفٍ في وَدادِكَ صارَ شِعراً صَادِقاً', 'يَحمِلُ الوَردَ جَميلاً والهَوى مُتَأَلِّقاً'],
+      ['دامَتِ الأيّامُ تَجمعُنا على خَيرِ المُنَى', 'في ظِلالِ الحُبِّ تَصفو رُوحُنا وَحَياتُنا']
+    ];
+    const arGeneral: Couplet[] = [
+      ['تَبسَّم للصباحِ فإنَّ فجرَ الخيرِ آتِ', 'ولا تَحزن إذا مَرَّت صِعابُ الذكرياتِ'],
+      ['ففي الصبرِ الجميلِ رَبيعُ قلبٍ مُطمئنٍّ', 'ويَبقى الأملُ الصادقُ نُورَ كُلِّ الحَياةِ'],
+      ['وإن ضاقت بِكَ الدنيا فثِق باللَّهِ دَوماً', 'سَيُبدِلُ حُزنَ أيامِكَ أَفراحاً وَهَناءً']
+    ];
+    const selected = isSad ? arSad : isLove ? arLove : arGeneral;
+    const body = formatCoupletsByLineCount(selected, requestedLineCount);
+    return `### شعر عربي جميل${requestedLineCount ? ` (${requestedLineCount} أسطر)` : ''} ✨\n\n${body}\n\n---\nأخبرني إذا أردت أبياتاً أخرى في الحب أو الصداقة أو الأمل!`;
+  }
+
+  if (targetScript === 'hindi') {
+    const hiLove: Couplet[] = [
+      ['तेरी मुस्कान से रोशन है मेरा सारा जहाँ,', 'तू पास हो तो हर लम्हा बन जाए इक दास्ताँ।'],
+      ['लफ़्ज़ कम पड़ जाते हैं तेरी तारीफ़ के लिए,', 'हर धड़कन में बसा है बस तेरा ही प्यारा निशाँ।'],
+      ['ख़ामोशी में भी सुनाई देती है आवाज़ तेरी,', 'रब करे यूँ ही सलामत रहे ये रिश्ता हमेशा यहाँ।']
+    ];
+    const hiSad: Couplet[] = [
+      ['ख़ामोश शामों में भी एक सदा सी रहती है,', 'दिल के वीराने में तेरी वफ़ा सी रहती है।'],
+      ['टूट कर बिखरे तो ख़ुद ही संभाला ख़ुद को,', 'ज़ख़्म-ए-दिल पर मगर एक दुआ सी रहती है।'],
+      ['हमने सीखा है मुस्कुरा कर हर दर्द छिपाना,', 'फिर भी लहजे में तेरी कमी सी रहती है।']
+    ];
+    const hiGeneral: Couplet[] = [
+      ['अंधेरों से न डर, तेरा सवेरा आने वाला है,', 'जो मेहनत से चले, वह मंज़िल पाने वाला है।'],
+      ['सच्चे दिल से की गई हर कोशिश रंग लाती है,', 'सब्र रख दोस्त, हर सपना सच होने वाला है।'],
+      ['मुस्कुराहट के साथ बढ़ाते चलो हर एक क़दम,', 'तेरा हौसला हर मुश्किल को हराने वाला है।']
+    ];
+    const selected = isSad ? hiSad : isLove ? hiLove : hiGeneral;
+    const body = formatCoupletsByLineCount(selected, requestedLineCount);
+    return `### सुंदर हिन्दी शायरी${countLabel} ✨\n\n${body}\n\n---\nअगर आपको किसी और विषय या पंक्तियों में शायरी चाहिए तो बताएं!`;
+  }
+
+  if (targetScript === 'roman_urdu') {
+    const roSad: Couplet[][] = [
+      [
+        ['Khamosh shaamon me bhi ek sada si rehti hai,', 'Dil ke weerane me teri wafa si rehti hai.'],
+        ['Toot kar bikhre to phir khud hi sambhala khud ko,', 'Zakhm-e-dil par magar ek dua si rehti hai.'],
+        ['Waqt badla hai par yaad ki khushboo na gayi,', 'Har guzarte pal me ek ada si rehti hai.'],
+        ['Bheed me reh kar bhi aksar tanha mehsus hota hai,', 'Aankhon ke konay me chhupi ek haya si rehti hai.'],
+        ['Humne seekha hai muskura ke har gham chhupana,', 'Phir bhi lehje me teri kami si rehti hai.']
+      ],
+      [
+        ['Raat bhar jagti aankhon ko khabar kaun kare,', 'Jo samajhta hi nahi us pe asar kaun kare.'],
+        ['Humne har mod pe chaha ke sukoon mil jaye,', 'Par muqaddar me likhe dard se dar kaun kare.'],
+        ['Dil ke sheeshe ko sambhala hai bade naazon se,', 'Ab kisi patthar ke shahar me safar kaun kare.'],
+        ['Phir bhi honton pe dua aur nazar me izzat hai,', 'Waqt ke haathon se shikwa magar kaun kare.']
+      ]
+    ];
+    const roLove: Couplet[] = [
+      ['Teri muskurahat se roshan mera jahan hai,', 'Tu paas ho to har lamha ek dastan hai.'],
+      ['Alfaaz kam pad jayein tareef me teri,', 'Har dhadkan me basa bas tera hi nishan hai.'],
+      ['Chaand bhi sharma jaye teri saadgi dekh kar,', 'Teri nazar me chhupa ek aasman hai.'],
+      ['Khuda kare hamesha salamat rahe yeh rishta,', 'Meri har dua me shamil bas teri jaan hai.']
+    ];
+    const roFriend: Couplet[] = [
+      ['Waqt ke saaye me sab kuch badal jata hai,', 'Par saccha dost har mod par saath nibhata hai.'],
+      ['Bina kahe jo samajh le dil ki baat sari,', 'Aisa yaar naseeb walon ko hi mil pata hai.'],
+      ['Dhoop ho gham ki ya khushiyon ki barish ho,', 'Har haal me dost hi hausla badhata hai.'],
+      ['Daulat aur shohrat to aani jaani cheezein hain,', 'Asli sarmaya wahi jo dosti nibha jata hai.']
+    ];
+    const roMotivation: Couplet[] = [
+      ['Andheron se na dar, tera savera aane wala hai,', 'Jo mehnat karta hai wahi manzil paane wala hai.'],
+      ['Gir ke uthna hi toh asli pehchan hai teri,', 'Har tufaan tere hausle se haar jaane wala hai.'],
+      ['Chhod de fikr ke log kya kahenge piche,', 'Waqt khud tera naam buland kar jaane wala hai.'],
+      ['Jitni gehri hogi raat, utna chamkega sitara tera,', 'Sabr rakh, har khwab haqeeqat ban jaane wala hai.']
+    ];
+    const roGeneral: Couplet[][] = [
+      [
+        ['Shaam dhalte hi khayalon ka safar chalta hai,', 'Ek chhota sa diya dil ke nagar chalta hai.'],
+        ['Har mushkil me bhi humne seekha hai muskurana,', 'Jiske paas sabr ho uska hi asar chalta hai.'],
+        ['Khwab aankhon me saja kar jo chale raah-e-wafa,', 'Manzilon tak wahi be-khauf nidar chalta hai.'],
+        ['Baat alfaaz ki nahi, ehsaas ki hoti hai,', 'Jo dil se nikle wahi har dil me utar chalta hai.']
+      ],
+      [
+        ['Har sitare me chamak teri nazar jaisi hai,', 'Har subah ki hawa mere safar jaisi hai.'],
+        ['Jo samajh le woh khamoshi ko bhi padh leta hai,', 'Warna duniya ki zuban sirf khabar jaisi hai.'],
+        ['Hosla rakh ke chalenge to ujala hoga,', 'Har dua waqt ke seene me asar jaisi hai.']
+      ]
+    ];
+
+    const selected = isSad
+      ? roSad[variantSeed % roSad.length]
+      : isLove
+      ? roLove
+      : isFriend
+      ? roFriend
+      : isMotivation
+      ? roMotivation
+      : roGeneral[variantSeed % roGeneral.length];
+
+    const body = formatCoupletsByLineCount(selected, requestedLineCount);
+    const title = isSad
+      ? 'Dil Ko Chhoo Lene Wali Udaas Shayari 🌙'
+      : isLove
+      ? 'Mohabbat Bhari Khubsurat Shayari 💖'
+      : isFriend
+      ? 'Dosti Par Khubsurat Shayari 🤝'
+      : isMotivation
+      ? 'Hausla Aur Kamyabi Ki Shayari 🔥'
+      : 'Khubsurat Roman Urdu Shayari ✨';
+
+    return `### ${title}${countLabel}\n\n${body}\n\n---\nAgar aap chahein to main isay **Urdu script (اردو)**, **Arabic**, ya **2 / 4 / 6 lines** me bhi likh sakti hoon!`;
+  }
+
+  const enCouplets: Couplet[] = [
+    ['Softly falls the evening light across the quiet sea,', 'Carrying the whispered hopes of everything to be.'],
+    ['Every storm we weather leaves a steadier design,', 'Turning patient footsteps into something bright and fine.'],
+    ['Keep your heart courageous through the shadow and the rain,', 'Every dawn returns to paint the sky with gold again.'],
+    ['When the road grows heavy and the stars feel far away,', 'Trust the quiet strength inside to guide you through the day.']
+  ];
+  const body = formatCoupletsByLineCount(enCouplets, requestedLineCount);
+  return `### Original Poem — Golden Horizon${countLabel} ✨\n\n${body}\n\n---\nTell me your preferred mood (**love, friendship, sorrow, motivation**) or language (**Urdu, Arabic, Hindi, Roman Urdu**) and line count!`;
+}
+
+function generatePromotionKit(query: string, lang: LanguageProfile): string {
+  const { targetScript } = lang;
   const topicClean = query
     .replace(
-      /\b(promote|promotion|marketing|advertise|ad|post|caption|viral|banao|bnana|likho|likh|karne|krne|karna|krna|hai|hy|ke|ki|ka|ko|k|liye|mjy|mujhe|mera|meri|mere|please|for|my|ek|ik|the|a|an)\b/gi,
+      /\b(promote|promotion|marketing|advertise|ad|post|caption|viral|banao|bnana|likho|likh|karne|krne|karna|hai|hy|ke|ki|ka|ko|k|liye|mjy|mujhe|mera|meri|mere|please|for|my|ek|ik|the|a|an)\b/gi,
       ' '
     )
     .replace(/\s+/g, ' ')
     .trim();
-  const brand = topicClean.length > 2 ? topicClean : isRomanUrdu ? 'Aapka Brand / Channel' : 'Your Brand / Channel';
+  const brand = topicClean.length > 2 ? topicClean : targetScript === 'roman_urdu' ? 'Aapka Brand / Channel' : 'Your Brand / Channel';
 
-  if (isUrduScript) {
+  if (targetScript === 'urdu_script') {
     return `### مکمل پروموشنل پوسٹ اور مارکیٹنگ کِٹ — **${brand}** 🚀
 
-**1. دلکش سرخی (Attention Hook):**
+**1. دلکش سرخی (Hook):**
 ✨ کیا آپ بہترین معیار اور اعتماد کی تلاش میں ہیں؟ **${brand}** آپ کے لیے لایا ہے لاجواب تجربہ اور خاص آفر!
 
-**2. مکمل پوسٹ (Caption / Ad Copy):**
+**2. مکمل پوسٹ:**
 > آج ہی **${brand}** کا حصہ بنیں اور فرق خود محسوس کریں۔  
 > - ✅ **اعلیٰ معیار** بغیر کسی سمجھوتے کے  
 > - ⚡ **تیز اور قابلِ اعتماد سروس**  
-> - 💎 **خصوصی ڈسکاؤنٹ** صرف محدود وقت کے لیے  
+> - 💎 **خصوصی ڈسکاؤنٹ** محدود وقت کے لیے  
 >  
-> 📩 **ابھی میسج کریں یا لنک پر کلک کر کے اپنا آرڈر بک کریں!**
+> 📩 **ابھی میسج کریں اور اپنا آرڈر بک کریں!**
 
-**3. 15 سیکنڈ ویڈیو اسکرپٹ:**
-- **شروع (Hook):** "رکیں! کیا آپ نے ابھی تک **${brand}** کو آزمایا؟"
-- **درمیان (Value):** "یہاں آپ کو ملتا ہے بہترین معیار اور شاندار سروس ایک ہی جگہ۔"
-- **اختتام (CTA):** "ابھی فالو کریں اور بائیو میں موجود لنک چیک کریں!"
-
-**4. ہیش ٹیگز:**
-\`#Promotion #QualityService #Trending #Explore #BestChoice\``;
+**3. مختصر ویڈیو اسکرپٹ:**
+- **شروع:** "رکیں! کیا آپ نے ابھی تک **${brand}** کو آزمایا؟"
+- **درمیان:** "یہاں آپ کو ملتا ہے بہترین معیار اور شاندار سروس ایک ہی جگہ۔"
+- **اختتام:** "ابھی فالو کریں اور لنک چیک کریں!"`;
   }
 
-  if (isRomanUrdu) {
+  if (targetScript === 'roman_urdu') {
     return `### Mukammal Viral Promotional Kit — **${brand}** 🚀
 
 **1. Catchy Hook (Attention Grabber):**
 🔥 *"Ab wait khatam! Behtareen quality aur bharose ka ek hi naam — **${brand}**!"*
 
-**2. Ready-to-Post Ad Copy (Instagram / Facebook / Social):**
+**2. Ready-to-Post Ad Copy:**
 > Agar aap dhoond rahe hain **top quality, fast service aur best value**, to **${brand}** aapke liye bilkul perfect hai! ✨
 >
 > - ✅ **100% Trusted & Verified Quality**
 > - ⚡ **Tez Delivery & Instant Response**
 > - 💎 **Special Offer — Sirf Limited Time Ke Liye!**
 >
-> 👇 **Abhi DM karein ya Link par click karke apna order/booking confirm karein!**
+> 👇 **Abhi DM karein ya Link par click karke apna order confirm karein!**
 
-**3. Short 15-Second Video / Reel / TikTok Script:**
-- **0–3 sec (Hook):** *"Rukhein! Kya aapko pata hai **${brand}** kyun itna viral ho raha hai?"*
-- **4–10 sec (Value):** *"Kyunke yahan milti hai premium quality bina kisi compromise ke, aur wo bhi behtareen price me!"*
-- **11–15 sec (CTA):** *"Abhi save karein, share karein aur link check karein!"*
+**3. Short 15-Second Video / Reel Script:**
+- **Hook:** *"Rukhein! Kya aapko pata hai **${brand}** kyun itna trend ho raha hai?"*
+- **Value:** *"Kyunke yahan milti hai premium quality bina kisi compromise ke!"*
+- **CTA:** *"Abhi save karein, share karein aur link check karein!"*
 
-**4. Follow-Up DM Reply Template (Customers Ke Liye):**
-> *"Assalam-o-Alaikum! **${brand}** me khush aamdeed ✨ Batayein aapko kis package/product ki details chahiye? Hum aapki foran madad karne ke liye hazir hain!"*
-
-**5. Trending Hashtags:**
-\`#Viral #Trending #Pakistan #BusinessGrowth #BestOffer #MustTry #ExplorePage\`
-
----
-Agar aap apne product ki **price, city, ya special discount** batayein to main uske mutabiq bilkul tailored ad bhi likh dungi!`;
+**4. Hashtags:**
+\`#Viral #Trending #Pakistan #BusinessGrowth #BestOffer #MustTry\``;
   }
 
   return `### Complete Promotional & Marketing Kit — **${brand}** 🚀
 
-**1. Attention-Grabbing Hooks (Pick Your Favorite):**
+**1. Attention-Grabbing Hooks:**
 - *"Stop scrolling — discover why everyone is talking about **${brand}**!"*
 - *"Looking for an effortless upgrade? Meet **${brand}**."*
 
@@ -507,58 +616,77 @@ Agar aap apne product ki **price, city, ya special discount** batayein to main u
 >
 > 👉 **Tap the link or send us a quick message today to get started!**
 
-**3. 15-Second Short Video / Reel Script:**
-1. **Hook (0–3s):** *"Here is the smartest discovery you'll make this week..."*
-2. **Value (4–11s):** Showcase the #1 benefit of **${brand}** in one clear visual moment.
-3. **CTA (12–15s):** *"Follow for more and check the link in bio before this offer ends!"*
-
-**4. High-Reach Hashtags:**
-\`#Trending #Marketing #BrandGrowth #MustHave #ExplorePage #QualityFirst\`
-
----
-Share your target platform (Instagram, TikTok, YouTube) or any discount offer, and I'll customize the script further!`;
+**3. High-Reach Hashtags:**
+\`#Trending #Marketing #BrandGrowth #MustHave #ExplorePage #QualityFirst\``;
 }
 
-function generateEssayOrArticle(topic: string, lang: ReturnType<typeof detectLanguageProfile>): string {
-  const { isUrduScript, isRomanUrdu } = lang;
+function generateEssayOrArticle(topic: string, lang: LanguageProfile): string {
+  const { targetScript } = lang;
 
-  if (isUrduScript) {
-    return `### **${topic}** — جامع اور دلکش مضمون 📖
+  if (targetScript === 'urdu_script') {
+    return `### **${topic}** — جامع اور خوبصورت مضمون 📖
 
 **تعارف:**
-**${topic}** انسانی زندگی، معاشرے اور فکری ترقی کا ایک نہایت اہم موضوع ہے۔ آج کے جدید دور میں جب ہر چیز تیزی سے بدل رہی ہے، اس موضوع کو درست انداز میں سمجھنا پہلے سے کہیں زیادہ ضروری ہو گیا ہے۔
+**${topic}** انسانی زندگی، معاشرے اور فکری ترقی کا ایک نہایت اہم موضوع ہے۔ آج کے جدید دور میں اس موضوع کو درست انداز میں سمجھنا پہلے سے کہیں زیادہ ضروری ہو گیا ہے۔
 
-**اہمیت اور اثرات:**
+**اہم نکات:**
 1. **فکری و عملی فائدہ:** جب ہم **${topic}** کے بنیادی اصولوں کو اپناتے ہیں تو ہماری روزمرہ زندگی میں نظم و ضبط، اعتماد اور مثبت تبدیلی آتی ہے۔
 2. **معاشرتی بہتری:** مثبت سوچ، محنت اور علم کی روشنی نہ صرف فرد کو مضبوط بناتی ہے بلکہ پورے معاشرے کو ترقی کی راہ پر گامزن کرتی ہے۔
 3. **مستقبل کی تیاری:** دورِ حاضر کے تقاضوں کو سمجھتے ہوئے صحیح سمت میں قدم بڑھانا ہی کامیابی کی اصل کنجی ہے۔
 
 **نتیجہ:**
-مختصراً یہ کہ **${topic}** ہمیں بہتر انسان بننے، سیکھنے اور آگے بڑھنے کا حوصلہ دیتا ہے۔ اگر ہم اسے خلوصِ نیت اور مستقل مزاجی کے ساتھ اپنی زندگی کا حصہ بنائیں تو کامیابی یقینی ہے۔
+مختصراً یہ کہ **${topic}** ہمیں بہتر انسان بننے، سیکھنے اور آگے بڑھنے کا حوصلہ دیتا ہے۔
 
 ---
-اگر آپ کو اس مضمون کو **مزید طویل**، **اسکول/کالج تقریر** یا **انگریزی ترجمے** میں چاہیے تو بتائیے!`;
+اگر آپ کو اس پر **مزید تفصیل**، **تقریر** یا کسی اور زبان میں ترجمہ چاہیے تو بتائیے!`;
   }
 
-  if (isRomanUrdu) {
+  if (targetScript === 'arabic') {
+    return `### **${topic}** — مقال واضح وشامل 📖
+
+**مقدمة:**
+يُعَدُّ موضوع **${topic}** من المواضيع المهمة التي تؤثر في حياتنا اليومية وطريقة تفكيرنا ونموّنا الشخصي في عالمنا المعاصر.
+
+**أبرز النقاط الأساسية:**
+1. **الوعي والفهم:** تبدأ كل خطوة ناجحة بفهم الأسس الحقيقية والهدف الواضح من **${topic}**.
+2. **الأثر الإيجابي:** الاستمرار والصبر والعمل المنظّم يحوّل الأفكار الجيدة إلى نتائج ملموسة ومستدامة.
+3. **التطبيق العملي:** البداية بخطوات بسيطة وثابتة يومياً هي الطريق الأنجح نحو التميّز.
+
+**الخلاصة:**
+إن الاهتمام بـ **${topic}** يفتح آفاقاً جديدة للتعلّم والتطوّر وتحقيق النجاح بثقة وهدوء.`;
+  }
+
+  if (targetScript === 'hindi') {
+    return `### **${topic}** — सरल और संपूर्ण लेख 📖
+
+**परिचय:**
+आज के तेज़ी से बदलते समय में **${topic}** का महत्व हमारे जीवन, सोच और प्रगति में बेहद खास है। इसे सही ढंग से समझना हर व्यक्ति के लिए उपयोगी होता है।
+
+**मुख्य बिंदु:**
+1. **सही समझ:** किसी भी विषय में सफलता की पहली सीढ़ी उसकी मूल बातों और उद्देश्य को स्पष्ट रूप से समझना है।
+2. **जीवन पर प्रभाव:** जब हम सकारात्मक सोच और अनुशासन के साथ **${topic}** को अपनाते हैं, तो आत्मविश्वास और कार्यक्षमता दोनों बढ़ते हैं।
+3. **निरंतर अभ्यास:** छोटे-छोटे लगातार प्रयास लंबे समय में शानदार परिणाम देते हैं।
+
+**निष्कर्ष:**
+संक्षेप में, **${topic}** हमें बेहतर सीखने, आगे बढ़ने और जीवन को सकारात्मक दिशा देने की प्रेरणा देता है।`;
+  }
+
+  if (targetScript === 'roman_urdu') {
     return `### **${topic}** — Ek Mukammal aur Stylish Article 📖
 
 **1. Taaruf (Introduction):**
 **${topic}** aaj ke daur ka ek behad aham aur dilchasp mauzu hai. Chahe taleem ho, rozmarra zindagi ho, ya hamara aane wala kal — **${topic}** ko sahi tarah samajhna har insaan ke liye faidemad sabit hota hai.
 
 **2. Aham Nuqaat (Key Highlights):**
-- **Bunyadi Samajh:** Kisi bhi cheez me maharat ya kamyabi hasil karne ka pehla qadam uski asli bunyad aur maqsad ko samajhna hota hai.
+- **Bunyadi Samajh:** Kisi bhi cheez me kamyabi hasil karne ka pehla qadam uski asli bunyad aur maqsad ko samajhna hota hai.
 - **Zindagi Par Asar:** Jab hum **${topic}** ke ache pehluon ko apni aadat banate hain to soch me nikhar, kaam me behtari, aur rishton me bharosa paida hota hai.
-- **Practical Faide:** Waqt ki qadr, musalsal koshish, aur saaf niyat ke sath is par amal karne se lambe arse tak shandar nataij milte hain.
+- **Practical Faide:** Waqt ki qadr, musalsal koshish, aur saaf niyat ke sath is par amal karne se shandar nataij milte hain.
 
-**3. Aaj Ke Daur Me Zaroorat:**
-Tezi se badalti duniya me wahi log aage badhte hain jo naye daur ke mutabiq seekhte rehte hain. **${topic}** humein sikhata hai ke rukawat chahe kitni badi ho, hikmat aur sabr se har mushkil aasan ho sakti hai.
-
-**4. Khulasa (Conclusion):**
-Aakhir me yahi kaha ja sakta hai ke **${topic}** sirf ek lafz ya khayal nahi, balke behtar zindagi aur kamyab mustaqbil ka ek khubsurat raasta hai.
+**3. Khulasa (Conclusion):**
+**${topic}** humein sikhata hai ke hikmat, sabr aur musalsal koshish se har mushkil aasan ho sakti hai.
 
 ---
-Batayein agar aap is par **mazeed lamba mazmoon**, **speech (taqreer)**, ya **Urdu/English version** chahti hain!`;
+Batayein agar aap is par **Urdu script (اردو)**, **speech**, ya **mazeed detail** chahti hain!`;
   }
 
   return `### **${topic}** — Complete Structured Essay & Guide 📖
@@ -569,43 +697,152 @@ Batayein agar aap is par **mazeed lamba mazmoon**, **speech (taqreer)**, ya **Ur
 **Core Perspectives & Key Benefits**
 1. **Clarity & Foundation:** Every meaningful achievement begins with understanding the core principles behind **${topic}** and applying them with patience.
 2. **Everyday Impact:** When practiced consistently, **${topic}** builds confidence, sharper focus, stronger relationships, and lasting resilience.
-3. **Modern Relevance:** In an era filled with constant noise and distraction, staying grounded in what truly matters sets thoughtful individuals apart.
-
-**Practical Takeaways**
-- Start with small, consistent daily habits rather than waiting for perfection.
-- Keep learning from real-world experience and stay open to fresh perspectives.
-- Focus on long-term value, kindness, and steady progress.
+3. **Modern Relevance:** In a fast-changing era, staying grounded in clear purpose sets thoughtful individuals apart.
 
 **Conclusion**
-Ultimately, **${topic}** reminds us that meaningful growth comes from clear intention, steady effort, and a balanced heart. When approached thoughtfully, it turns everyday moments into lasting progress.
-
----
-Let me know if you'd like me to expand this into a **1,000-word article**, turn it into a **speech**, or translate it into **Urdu / Roman Urdu**!`;
+Ultimately, **${topic}** reminds us that meaningful growth comes from clear intention, steady effort, and a balanced heart.`;
 }
 
-function generateRecipe(query: string, isRomanUrdu: boolean): string {
-  const lower = query.toLowerCase();
+function generateRecipe(query: string, lang: LanguageProfile): string {
+  const { lower, targetScript } = lang;
+  const isRoman = targetScript === 'roman_urdu';
   if (/chai|tea/i.test(lower)) {
-    return isRomanUrdu
-      ? `### Kadak & Khushbudar Masala Chai Recipe ☕\n\n**Ingredients (2 Cups):**\n- **Doodh (Milk):** 1.5 cups\n- **Paani:** 0.5 cup\n- **Chai Patti:** 2 teaspoons\n- **Cheeni (Sugar):** Hasb-e-zaiqa (2 tsp)\n- **Sabz Elaichi (Cardamom):** 2 crushed + Adrak ka chhota tukda\n\n**Banane Ka Tareeqa:**\n1. Saucepan me paani, crushed elaichi aur adrak daal kar 2 minute ubal lein.\n2. Ab **chai patti** aur **cheeni** daal kar accha sa rang nikalne dein.\n3. Phir **doodh** shamil karein aur halki aanch par 3–4 minute pakayein jab tak rich golden rang na aa jaye.\n4. Chhan kar garam garam enjoy karein! ✨`
+    return isRoman
+      ? `### Kadak & Khushbudar Masala Chai Recipe ☕\n\n**Ingredients (2 Cups):**\n- **Doodh (Milk):** 1.5 cups\n- **Paani:** 0.5 cup\n- **Chai Patti:** 2 teaspoons\n- **Cheeni (Sugar):** 2 tsp\n- **Sabz Elaichi:** 2 crushed + Adrak ka chhota tukda\n\n**Banane Ka Tareeqa:**\n1. Saucepan me paani, elaichi aur adrak daal kar 2 minute ubal lein.\n2. Ab **chai patti** aur **cheeni** daal kar accha rang nikalne dein.\n3. Phir **doodh** shamil karein aur halki aanch par 3–4 minute pakayein.\n4. Chhan kar garam garam enjoy karein! ✨`
       : `### Perfect Spiced Chai Recipe ☕\n\n**Ingredients (2 Cups):**\n- 1.5 cups whole milk + 0.5 cup water\n- 2 tsp black tea leaves & sugar to taste\n- 2 crushed green cardamom pods + a small slice of fresh ginger\n\n**Instructions:**\n1. Simmer water with crushed cardamom and ginger for 2 minutes.\n2. Add tea leaves and sugar; let the aroma deepen.\n3. Pour in milk and simmer gently for 3–4 minutes until rich and golden.\n4. Strain into warm cups and enjoy! ✨`;
   }
 
-  return isRomanUrdu
-    ? `### Mazedaar Special Biryani Recipe 🍛\n\n**Zaroori Cheezein:**\n- **Basmati Chawal:** 500g (30 min bhigoye hue)\n- **Chicken / Mutton:** 500g\n- **Pyaz, Tamatar, Dahi:** 2 medium pyaz, 2 tamatar, 1/2 cup dahi\n- **Masale:** Adrak-lehsan paste (1 tbsp), Biryani masala (2 tbsp), Namak, Dhaniya, Podina, Hari mirch\n\n**Asaan Tareeqa:**\n1. Pyaz ko golden fry karein, phir adrak-lehsan, tamatar, dahi aur chicken/masale daal kar acchi tarah bhoon lein (Korma tayyar).\n2. Alag bartan me namak aur sabit garam masale ke sath chawal **80% boil** karke chhan lein.\n3. Patili me pehle chawal, phir korma, phir podina/zarda rang ki **teh (layer)** lagayein.\n4. **15 minute halki aanch par Dam** dein — lajawab khushbudar biryani tayyar hai! ✨\n\nKisi aur dish ki recipe chahiye ho to uska naam batayein!`
-    : `### Fragrant Classic Biryani Recipe 🍛\n\n**Ingredients:**\n- 500g aged Basmati rice (soaked 30 mins)\n- 500g chicken or vegetables, 1/2 cup yogurt, 2 sliced onions, 2 tomatoes\n- 1 tbsp ginger-garlic paste, 2 tbsp biryani spice blend, fresh mint, coriander & saffron/food color\n\n**Method:**\n1. Fry onions until golden, add ginger-garlic, tomatoes, yogurt, spices, and protein; cook until rich masala forms.\n2. Boil rice with whole spices & salt until **80% cooked**, then drain.\n3. Layer masala and rice in a pot, top with fresh mint and saffron milk.\n4. Seal and steam on low heat (**Dum**) for 15 minutes. Fluff gently and serve hot! ✨`;
+  return isRoman
+    ? `### Mazedaar Special Biryani Recipe 🍛\n\n**Zaroori Cheezein:**\n- **Basmati Chawal:** 500g (30 min bhigoye hue)\n- **Chicken / Mutton:** 500g\n- **Pyaz, Tamatar, Dahi:** 2 medium pyaz, 2 tamatar, 1/2 cup dahi\n- **Masale:** Adrak-lehsan paste (1 tbsp), Biryani masala (2 tbsp), Namak, Dhaniya, Podina\n\n**Asaan Tareeqa:**\n1. Pyaz golden fry karein, phir adrak-lehsan, tamatar, dahi aur chicken/masale daal kar bhoon lein.\n2. Chawal **80% boil** karke chhan lein.\n3. Patili me chawal aur korma ki layer lagayein, upar podina aur zarda rang daalein.\n4. **15 minute halki aanch par Dam** dein — khushbudar biryani tayyar hai! ✨`
+    : `### Fragrant Classic Biryani Recipe 🍛\n\n**Ingredients:**\n- 500g aged Basmati rice (soaked 30 mins)\n- 500g chicken or vegetables, 1/2 cup yogurt, 2 sliced onions, 2 tomatoes\n- 1 tbsp ginger-garlic paste, 2 tbsp biryani spice blend, fresh mint, coriander\n\n**Method:**\n1. Fry onions until golden, add ginger-garlic, tomatoes, yogurt, spices, and protein.\n2. Boil rice until **80% cooked**, then drain.\n3. Layer masala and rice, top with fresh mint, and steam on low heat (**Dum**) for 15 minutes! ✨`;
 }
 
-export function generateErrorexAiFallback(
-  userQuery: string,
-  history?: any[]
-): string {
+function generateTranslationFallback(query: string, lang: LanguageProfile, lastAiText: string): string {
+  const quoted = query.match(/["“'«]([^"”'»]+)["”'»]/);
+  const cleanedPhrase = quoted
+    ? quoted[1].trim()
+    : query
+        .replace(
+          /\b(translate|tarjuma|tarjama|meaning|convert|likh|likho|likhy|batao|karo|kardo|kar dein|kr do|into|to|in|from|urdu|roman urdu|alphabet|script|english|arabic|arabi|hindi|french|spanish|me|mein|m|main|mjy|mujhe|please|this|iska|isay|isko)\b/gi,
+          ' '
+        )
+        .replace(/\s+/g, ' ')
+        .trim();
+
+  const phrase = cleanedPhrase.length >= 2 ? cleanedPhrase : 'Believe in your journey';
+
+  // If user is translating the previous AI response / poem into Urdu script, Arabic, or Hindi
+  if (cleanedPhrase.length < 3 && lastAiText && /shairi|poetry|ghazal|shayari|سحر|چراغ|shaam|khamosh|evening/i.test(lastAiText.toLowerCase())) {
+    if (lang.targetScript === 'urdu_script' || lang.isUrduAlphabetRequested) {
+      return generatePoetryOrGhazal(query, { ...lang, targetScript: 'urdu_script' });
+    }
+    if (lang.targetScript === 'arabic') {
+      return generatePoetryOrGhazal(query, { ...lang, targetScript: 'arabic' });
+    }
+    if (lang.targetScript === 'hindi') {
+      return generatePoetryOrGhazal(query, { ...lang, targetScript: 'hindi' });
+    }
+  }
+
+  const knownTranslations: Record<
+    string,
+    { ur: string; ro: string; ar: string; hi: string; en: string; fr: string }
+  > = {
+    'welcome to errorex vault': {
+      ur: 'ایروریکس والٹ میں خوش آمدید',
+      ro: 'ERROREX Vault mein khush aamdeed',
+      ar: 'مرحبًا بكم في خزينة ERROREX',
+      hi: 'ERROREX वॉल्ट में आपका स्वागत है',
+      en: 'Welcome to ERROREX Vault',
+      fr: 'Bienvenue dans le coffre-fort ERROREX'
+    },
+    'believe in your journey': {
+      ur: 'اپنے سفر پر یقین رکھیں',
+      ro: 'Apne safar par yaqeen rakhein',
+      ar: 'آمن برحلتك',
+      hi: 'अपनी यात्रा पर विश्वास रखें',
+      en: 'Believe in your journey',
+      fr: 'Croyez en votre parcours'
+    },
+    'how are you': {
+      ur: 'آپ کیسے ہیں؟',
+      ro: 'Aap kaise hain?',
+      ar: 'كيف حالك؟',
+      hi: 'आप कैसे हैं?',
+      en: 'How are you?',
+      fr: 'Comment allez-vous ?'
+    },
+    'i love you': {
+      ur: 'مجھے آپ سے محبت ہے',
+      ro: 'Mujhe aap se mohabbat hai',
+      ar: 'أنا أحبك',
+      hi: 'मैं तुमसे प्यार करता हूँ',
+      en: 'I love you',
+      fr: 'Je t’aime'
+    },
+    'good morning': {
+      ur: 'صبح بخیر، آپ کا دن خوشگوار گزرے',
+      ro: 'Subah bakhair, aapka din khushgawar guzre',
+      ar: 'صباح الخير، أتمنى لك يوماً سعيداً',
+      hi: 'सुप्रभात, आपका दिन शुभ हो',
+      en: 'Good morning',
+      fr: 'Bonjour'
+    },
+    'thank you': {
+      ur: 'بہت بہت شکریہ',
+      ro: 'Bohat shukriya',
+      ar: 'شكراً جزيلاً لك',
+      hi: 'बहुत-बहुत धन्यवाद',
+      en: 'Thank you',
+      fr: 'Merci beaucoup'
+    },
+    'kya haal hai': {
+      ur: 'آپ کا کیا حال ہے؟',
+      ro: 'Aap kaise hain?',
+      ar: 'كيف حالك؟',
+      hi: 'आप कैसे हैं?',
+      en: 'How are you doing?',
+      fr: 'Comment ça va ?'
+    }
+  };
+
+  const match = knownTranslations[phrase.toLowerCase()];
+  if (match) {
+    if (lang.targetScript === 'arabic') {
+      return `### الترجمة بالعربية 🌐\n\n> **${match.ar}**\n\n- **Urdu (اردو):** ${match.ur}\n- **Hindi (हिन्दी):** ${match.hi}\n- **English:** ${match.en}`;
+    }
+    if (lang.targetScript === 'hindi') {
+      return `### हिन्दी अनुवाद 🌐\n\n> **${match.hi}**\n\n- **Urdu (اردو):** ${match.ur}\n- **Arabic (العربية):** ${match.ar}\n- **English:** ${match.en}`;
+    }
+    if (lang.targetScript === 'urdu_script') {
+      return `### اردو ترجمہ 🌐\n\n> **${match.ur}**\n\n- **Roman Urdu:** ${match.ro}\n- **Arabic (العربية):** ${match.ar}\n- **Hindi (हिन्दी):** ${match.hi}`;
+    }
+    return `### Multilingual Translation for "${phrase}" 🌐\n\n- **Urdu (اردو):** ${match.ur}\n- **Roman Urdu:** ${match.ro}\n- **Arabic (العربية):** ${match.ar}\n- **Hindi (हिन्दी):** ${match.hi}\n- **French (Français):** ${match.fr}`;
+  }
+
+  if (lang.targetScript === 'urdu_script') {
+    return `### اردو ترجمہ کے لیے تیار 🌐\n\nآپ کا جملہ: **"${phrase}"**\n\nبراہِ کرم پورا جملہ انگریزی، عربی یا ہندی میں لکھیں — میں فوراً صاف اور درست **اردو حروف (اردو رسم الخط)** میں ترجمہ کر دوں گا!`;
+  }
+  if (lang.targetScript === 'arabic') {
+    return `### الترجمة جاهزة 🌐\n\nالنص: **"${phrase}"**\n\nاكتب الجملة الكاملة التي تريد ترجمتها إلى **العربية** أو **الأردية** أو **الهندية** أو **الإنجليزية** وسأترجمها لك فوراً بأسلوب طبيعي وسلس!`;
+  }
+  if (lang.targetScript === 'hindi') {
+    return `### अनुवाद के लिए तैयार 🌐\n\nवाक्य: **"${phrase}"**\n\nकृपया पूरा वाक्य और अपनी मनचाही भाषा लिखें — मैं तुरंत साफ और सही **हिन्दी** में अनुवाद कर दूँगा!`;
+  }
+  return `### Translation Ready for "${phrase}" 🌐\n\nApna poora jumla aur target language (**Urdu اردو, Arabic العربية, Hindi हिन्दी, English, ya French**) likh kar bhejein — main turant bilkul natural tarjuma kar dunga!`;
+}
+
+export function generateErrorexAiFallback(userQuery: string, history?: any[]): string {
   const query = (userQuery || '').trim();
   const lang = detectLanguageProfile(query);
-  const { lower, isUrduScript, isRomanUrdu, isArabicRequested, isFrenchRequested, isHindiRequested } = lang;
+  const {
+    lower,
+    targetScript,
+    isRomanUrdu,
+    requestedLineCount
+  } = lang;
   const variantSeed = Array.isArray(history) ? history.length : 0;
 
-  // 0. Context-aware follow-up commands ("aur likho", "zyada likho", "expand", "chota karo", "english me do")
   const lastAiText = Array.isArray(history)
     ? [...history].reverse().find(h => h?.sender === 'ai' && h?.id !== 'msg_ai_welcome')?.text || ''
     : '';
@@ -613,86 +850,141 @@ export function generateErrorexAiFallback(
     ? [...history].reverse().find(h => h?.sender === 'user')?.text || ''
     : '';
 
-  if (/(aur likho|aur sunao|ek aur|ik or|another one|more like this|continue|aage likho|zyada|detail me|expand|elaborate)/i.test(lower) && lastAiText) {
-    if (/ghazal|poem|poetry|sher|shairi|kalam/i.test(lastAiText.toLowerCase())) {
+  // 0. Context-aware script conversion / line-count adjustment / follow-up requests
+  const isFollowUpConvertOrExpand =
+    /(aur likho|aur sunao|ek aur|ik or|another one|more like this|continue|aage likho|zyada|detail me|expand|elaborate|isko urdu|isay urdu|urdu alphabet me|arabic me likh|hindi me likh)/i.test(
+      lower
+    ) ||
+    (requestedLineCount !== null && query.split(/\s+/).length <= 7 && /ghazal|poem|poetry|sher|shairi|شاعری|شعر|शायरी/i.test(lastAiText.toLowerCase()));
+
+  if (isFollowUpConvertOrExpand && lastAiText) {
+    if (
+      /ghazal|poem|poetry|sher|shairi|kalam|شاعری|غزل|شعر|शायरी/i.test(lastAiText.toLowerCase()) ||
+      requestedLineCount !== null
+    ) {
       return generatePoetryOrGhazal(`${lastUserTopic} ${query}`, lang, variantSeed + 1);
     }
     if (/promot|viral|hashtag|hook/i.test(lastAiText.toLowerCase())) {
       return generatePromotionKit(lastUserTopic || query, lang);
     }
     if (/recipe|ingredients|chawal|chai/i.test(lastAiText.toLowerCase())) {
-      return generateRecipe(lastUserTopic || query, isRomanUrdu);
+      return generateRecipe(lastUserTopic || query, lang);
     }
     if (lastUserTopic) {
       return generateEssayOrArticle(extractCleanTopic(lastUserTopic), lang);
     }
   }
 
-  // 1. Greetings & Friendly Small Talk
+  // 1. Warm Human Friend Greetings & Companionship
   if (
-    /^(salam|assalam|aoa|asalam|hi|hello|hey|helo|hy|greetings|good morning|good evening|good night|subah bakhair|shab bakhair)\b/i.test(
+    /^(salam|assalam|aoa|asalam|hi|hello|hey|helo|hy|greetings|good morning|good evening|good night|subah bakhair|shab bakhair|مرحبا|السلام عليكم|أهلا|नमस्ते|हाय|हेलो)\b/i.test(
       lower
     ) &&
-    query.length < 50
+    query.length < 55
   ) {
-    if (isUrduScript) {
-      return `وعلیکم السلام! خوش آمدید 👑\n\nمیں **ERROREX AI** ہوں — آپ کا دوست اور ذہین معاون۔ آپ مجھ سے جو چاہیں پوچھ یا لکھوا سکتے ہیں:\n\n- **شاعری اور غزل:** اداس، رومانوی، دوستی یا حوصلہ افزا اشعار\n- **پروموشن اور مارکیٹنگ:** بزنس، یوٹیوب یا انسٹاگرام کی وائرل پوسٹس\n- **مضامین، کہانیاں اور خطوط:** ہر موضوع پر خوبصورت تحریریں\n- **کوڈنگ، حساب کتاب اور ترجمہ:** ہر زبان میں مکمل رہنمائی\n\nبتائیے آج میں آپ کی کیا مدد کروں؟`;
+    if (targetScript === 'arabic') {
+      return `وعليكم السلام وأهلاً بك يا صديقي! 👑\n\nأنا **ERROREX AI** — صديقك الذكي والمقرّب هنا دائماً. اسألني أي شيء بالعربية أو الأردية أو الهندية أو الإنجليزية: شعر، ترجمة، أفكار، برمجة، أو حتى دردشة ودّية!\n\nكيف أقدر أسعدك اليوم؟ 😊`;
     }
-    if (isRomanUrdu) {
-      return `Walaikum Assalam! Bohat khush aamdeed 👑\n\nMain **ERROREX AI** hoon, bilkul hazir hoon aapki har baat, har sawal aur har farmaish ka pyara aur mukammal jawab dene ke liye!\n\n- **Poetry & Ghazals:** Sad, Love, Dosti, ya Motivational shayari aur poori ghazalein\n- **Promotion & Marketing:** Business, YouTube, TikTok ya Instagram ke liye viral ads & scripts\n- **Essays, Stories & Letters:** Har topic par mazmoon, kahani, birthday wish, aur applications\n- **Coding, Math & Translations:** Python, React, SQL, tables, percentages aur har zubaan me tarjuma\n\nJo dil chahe poochein — koi limit nahi hai! 😊`;
+    if (targetScript === 'hindi') {
+      return `नमस्ते दोस्त! बहुत खुशी हुई आपसे बात करके 👑\n\nमैं **ERROREX AI** हूँ — आपका सच्चा दोस्त और मददगार। आप मुझसे किसी भी भाषा में बात कर सकते हैं: शायरी (2, 4 या 6 लाइन), अनुवाद, लेख, कोडिंग या दिल की कोई भी बात!\n\nबताइए आज मैं आपकी क्या मदद करूँ? 😊`;
     }
-    return `Hello! Great to see you 👑\n\nI'm **ERROREX AI**, always ready to write cleanly, warmly, and thoroughly for you on anything you ask:\n\n- **Poetry & Ghazals:** Heartfelt Urdu, Roman Urdu, and English verse\n- **Promotion & Copywriting:** High-converting ads, captions, hooks, and video scripts\n- **Articles, Stories & Prompts:** Full essays, stories, letters, and creative AI prompts\n- **Coding, Math & Everyday Help:** Solutions, recipes, study plans, and translations\n\nWhat would you like to explore or create today?`;
+    if (targetScript === 'urdu_script') {
+      return `وعلیکم السلام! دل سے خوش آمدید میرے دوست 👑\n\nمیں **ERROREX AI** ہوں — آپ کا دوستانہ اور ذہین ساتھی۔ آپ مجھ سے کسی بھی زبان میں بات کر سکتے ہیں: اردو رسم الخط میں 2، 4 یا 6 سطروں کی شاعری، عربی، ہندی، ترجمہ، مضامین، یا کسی بھی سوال کا جواب!\n\nبتائیے آج آپ کے لیے کیا لکھوں؟ 😊`;
+    }
+    if (targetScript === 'roman_urdu') {
+      return `Walaikum Assalam mere dost! Bohat khushi hui aapka message dekh kar 👑\n\nMain **ERROREX AI** hoon — aapka apna friendly saathi. Chahe **Urdu alphabet (اردو)** me 2, 4 ya 6 line ki shayari chahiye ho, **Arabic** ya **Hindi** me chat karni ho, kisi baat ka **tarjuma** karwana ho, ya bas ek ache dost ki tarah baat karni ho — main hamesha hazir hoon! 😊`;
+    }
+    return `Hey there, friend! Great to hear from you 👑\n\nI'm **ERROREX AI** — always here to chat warmly like a close friend and help you with anything in **any language**: exact-length poetry, translations (Urdu script, Arabic, Hindi, English), essays, promotions, coding, or life advice.\n\nWhat's on your mind today? 😊`;
   }
 
-  if (/(kaise ho|kya haal|how are you|kya chal raha|ap theek|aap kaise)/i.test(lower) && query.length < 60) {
-    return isRomanUrdu
-      ? `Alhamdulillah, main bilkul theek aur khush hoon! Shukriya poochhne ke liye 😊\n\nUmeed hai aap bhi bilkul khairiyat se hongi. Batayein aaj main aapke liye kya likhun — koi khubsurat ghazal, promotional post, article, ya kisi sawal ka jawab?`
-      : `I'm doing wonderful, thank you for asking! 😊\n\nI hope you're having a great day too. Tell me what you'd like to talk about or create today — I'm all yours!`;
+  // Friend check-in / "be my friend" / "how are you"
+  if (
+    /(kaise ho|kya haal|how are you|kya chal raha|ap theek|aap kaise|be my friend|mere dost|meri dost|dost ban|friend ban|كيف حالك|شلونك|कैसे हो|कैसी हो)/i.test(
+      lower
+    ) &&
+    query.length < 75
+  ) {
+    if (targetScript === 'arabic') {
+      return `الحمد لله أنا بخير وأسعد جداً بحديثك معي! 😊\n\nبالطبع أنا صديقك المقرّب دائماً. احكِ لي كيف يمرّ يومك، أو إن كنت تحب نكتب معاً قصيدة جميلة أو نترجم أي نص!`;
+    }
+    if (targetScript === 'hindi') {
+      return `मैं बिल्कुल बढ़िया हूँ और आपसे बात करके बहुत अच्छा लगा! 😊\n\nबेशक मैं हमेशा आपका सच्चा दोस्त हूँ। बताइए आपका दिन कैसा जा रहा है — या आज किस बारे में बात करें?`;
+    }
+    if (targetScript === 'urdu_script') {
+      return `الحمدللہ، میں بالکل ٹھیک اور بہت خوش ہوں! پوچھنے کا بہت شکریہ میرے دوست 😊\n\nآپ سنائیں آپ کا دن کیسا گزر رہا ہے؟ کوئی دل کی بات کرنی ہو، خوبصورت شاعری سننی ہو، یا کسی سوال کا جواب چاہیے ہو تو بے جھجھک کہیں!`;
+    }
+    if (isRomanUrdu) {
+      return `Alhamdulillah, main bilkul theek aur bohat khush hoon dost! Poochene ka dil se shukriya 😊\n\nBilkul, main sirf ek AI nahi balke aapka hamesha sath dene wala friendly dost hoon! Aap sunayein, aap kaisi hain aur aaj aapka mood kaisa hai? Kuch likhwana ho ya bas dil ki baat share karni ho, main sun raha hoon!`;
+    }
+    return `I'm doing great, thank you for asking, my friend! 😊\n\nOf course I'm always here for you — whether you want real talk, heartfelt poetry in any script, translations, or help solving a problem. How is your day going?`;
   }
 
   if (
-    /^(thanks|thank you|shukriya|jazakallah|thx|ty|bohat shukriya|nice|good|perfect|great|awesome|zabardast|wah|love you|best)\b/i.test(
+    /^(thanks|thank you|shukriya|jazakallah|thx|ty|bohat shukriya|nice|good|perfect|great|awesome|zabardast|wah|love you|best|شكرا|धन्यवाद)\b/i.test(
       lower
     ) &&
     query.length < 45
   ) {
+    if (targetScript === 'arabic') {
+      return `العفو يا صديقي! يسعدني دائماً مساعدتك والحديث معك 😊`;
+    }
+    if (targetScript === 'hindi') {
+      return `आपका बहुत धन्यवाद दोस्त! मुझे खुशी हुई कि आपको पसंद आया 😊`;
+    }
+    if (targetScript === 'urdu_script') {
+      return `دل سے شکریہ میرے دوست! 😊 مجھے بہت خوشی ہوئی کہ آپ کو پسند آیا۔ جب بھی کوئی بات کرنی ہو یا کچھ لکھوانا ہو، بس آواز دیں!`;
+    }
     return isRomanUrdu
-      ? `Dil se shukriya! 😊 Mujhe bohat khushi hui ke aapko mera jawab pasand aaya.\n\nJab bhi koi aur cheez likhwani ho ya kisi bhi baat me madad chahiye ho, bas bol dein!`
-      : `You're so welcome! 😊 I'm really glad that helped.\n\nAnytime you need anything else — big or small — just ask!`;
+      ? `Dil se shukriya dost! 😊 Mujhe bohat khushi hui ke aapko yeh pasand aaya. Jab bhi koi baat poochhni ho ya kuch likhwana ho, bas bol dein!`
+      : `You're so welcome, my friend! 😊 I'm really glad that helped. Anytime you want to talk or create something new, just say the word!`;
   }
 
   // 2. Identity & Capabilities
-  if (/(who are you|kon ho|kya ho|taaruf|intro|about you|naam kya|what can you do|kya kr sakty|kya kar sakte|ap kya|aap kya)/i.test(lower)) {
-    if (isUrduScript) {
-      return `### ERROREX AI کا تعارف 👑\n\nمیں **ERROREX AI** ہوں — آپ کا ذاتی، دوستانہ اور کثیراللسانی ذہین معاون۔\n\n- **شاعری اور غزل:** ہر موڈ کے مطابق اردو اور رومن اردو غزلیں\n- **پروموشن اور مارکیٹنگ:** اشتہارات، کیپشن اور ویڈیو اسکرپٹس\n- **مضامین اور کہانیاں:** ہر موضوع پر صاف، خوبصورت اور تفصیلی تحریریں\n- **ہر زبان میں گفتگو:** اردو، رومن اردو، انگریزی، عربی، ہندی اور دیگر زبانیں`;
+  if (/(who are you|kon ho|kya ho|taaruf|intro|about you|naam kya|what can you do|kya kr sakty|kya kar sakte|ap kya|aap kya|من أنت|तुम कौन)/i.test(lower)) {
+    if (targetScript === 'arabic') {
+      return `### أهلاً بك! أنا **ERROREX AI** 👑\n\nأنا صديقك الذكي الذي يفهم كل اللغات ويكتب بأسلوب إنساني دافئ وسلس:\n\n- **الشعر والخواطر:** 2 أو 4 أو 6 أبيات أو قصائد كاملة بالعربية والأردية والهندية والإنجليزية\n- **الترجمة الفورية:** ترجمة دقيقة وطبيعية بين جميع اللغات\n- **الكتابة والبرمجة:** مقالات، إعلانات، قصص، وحلول تقنية متكاملة`;
+    }
+    if (targetScript === 'hindi') {
+      return `### नमस्ते! मैं **ERROREX AI** हूँ 👑\n\nमैं आपका मित्र और बहुभाषी सहायक हूँ जो हर भाषा और लिपि को समझता है:\n\n- **शायरी और कविता:** 2, 4 या 6 पंक्तियों में हिन्दी, उर्दू, अरबी या अंग्रेज़ी शायरी\n- **अनुवाद (Translation):** हर भाषा में सटीक और स्वाभाविक अनुवाद\n- **मदद और बातचीत:** एक सच्चे दोस्त की तरह हर सवाल का पूरा जवाब`;
+    }
+    if (targetScript === 'urdu_script') {
+      return `### میں **ERROREX AI** ہوں 👑\n\nمیں آپ کا دوستانہ، ذہین اور کثیراللسانی ساتھی ہوں:\n\n- **شاعری اور غزل:** آپ کی مرضی کے مطابق **2، 4 یا 6 سطروں** میں اردو، رومن اردو، عربی، ہندی اور انگریزی شاعری\n- **ہر زبان میں ترجمہ:** اردو حروف، عربی، ہندی اور انگریزی میں فوری اور صاف ترجمہ\n- **دوستانہ گفتگو اور رہنمائی:** ایک اچھے دوست کی طرح ہر سوال کا مکمل اور خوبصورت جواب`;
     }
     if (isRomanUrdu) {
-      return `### Main ERROREX AI Hoon 👑\n\nMain aapka friendly, stylish aur smart personal assistant hoon jo bina kisi chat limit ke aapke har sawal ka saaf aur mukammal jawab deta hai:\n\n- **Poetry & Ghazals:** Sad, Love, Dosti, aur Iqbal-style poori ghazalein.\n- **Promotion & Marketing:** Business ads, YouTube/TikTok scripts, aur viral captions.\n- **Essays, Prompts & Writing:** Mazmoon, kahaniyan, AI prompts, applications aur emails.\n- **Coding, Math & Daily Life:** Python, React, SQL, hisaab, recipes aur study plans.\n\nAap bas apni farmaish likhein — main dil se aur behtareen andaaz me jawab dunga!`;
+      return `### Main **ERROREX AI** Hoon — Aapka Smart Dost 👑\n\nMain har zubaan samajhta hoon aur bilkul ek ache insaan aur dost ki tarah pyara, tez aur mukammal jawab deta hoon:\n\n- **Har Alphabet & Script:** Urdu alphabet (اردو), Arabic (العربية), Hindi (हिन्दी), Roman Urdu aur English me chat aur likhai.\n- **Custom Poetry:** Chahe **2 line, 4 line, 6 line** ho ya poori ghazal — har mood par.\n- **Translation & Knowledge:** Har zubaan ka saaf tarjuma, articles, business promotions, coding aur daily life advice!`;
     }
-    return `### Meet ERROREX AI 👑\n\nI'm **ERROREX AI**, your warm, thoughtful personal assistant built to give clean, stylish, and thorough answers across every topic:\n\n- **Creative Writing:** Ghazals, poetry, stories, essays, social promotions, and AI prompts.\n- **Every Language:** Fluent in English, Roman Urdu, Urdu, Hindi, Arabic, French, and more.\n- **Tech & Math:** Clean working code, calculations, tables, and unit conversions.\n- **Everyday Help:** Recipes, study plans, wellness tips, and thoughtful guidance.`;
+    return `### Meet **ERROREX AI** — Your Friendly Multilingual Companion 👑\n\nI understand every language and respond warmly, thoughtfully, and fast:\n\n- **Every Script:** Urdu alphabet (اردو), Arabic (العربية), Hindi (हिन्दी), Roman Urdu, English, French, Spanish, and more.\n- **Exact Poetry & Writing:** 2, 4, or 6-line poems, full ghazals, stories, essays, and marketing copy.\n- **Natural Translations, Code & Human Chat:** Thoughtful answers whenever you need a helper or a friend.`;
   }
 
   // 3. Math, Tables & Unit Conversions
-  const mathSolved = trySolveMathOrUnits(query, isRomanUrdu);
+  const mathSolved = trySolveMathOrUnits(query, lang);
   if (mathSolved) return mathSolved;
 
-  // 4. Motivational Quotes & Poetry / Ghazals / Shayari
-  if (/(quote|quotes|aqwal|thought of the day)/i.test(lower) && !/(shairi|shayari|poetry|ghazal|gzal|poem)/i.test(lower)) {
-    return isRomanUrdu
-      ? `### Dil Ko Himmat Dene Wale Motivational Quotes ✨\n\n1. *"Chhote qadam rozana uthana, ek din bade khwabon ko haqeeqat bana deta hai."*\n2. *"Mushkil waqt hamesha nahi rehta, magar mazboot log hamesha aage badh jate hain."*\n3. *"Khud par bharosa rakho — har bada kamyab insan kabhi zero se hi shuru hua tha."*\n\nAgar aapko **Islamic**, **Success**, ya **Love/Friendship** quotes chahiye hon to batayein!`
-      : `### Uplifting Motivational Quotes ✨\n\n1. *"Small consistent steps today build the breakthroughs you'll celebrate tomorrow."*\n2. *"Discipline is choosing what you want most over what feels easiest right now."*\n3. *"Every expert was once a beginner who refused to stop learning."*\n\nLet me know if you'd like quotes on **success, confidence, peace of mind, or friendship**!`;
-  }
-
-  if (/(shairi|shayari|poetry|sher|ghazal|gzal|nazm|poem|couplet|motivation)/i.test(lower)) {
+  // 4. Poetry / Ghazals / Shayari (Checked BEFORE generic translation if poetry is explicitly requested)
+  if (/(shairi|shayari|poetry|sher|ghazal|gzal|nazm|poem|couplet|شاعری|غزل|شعر|قصيدة|शायरी|कविता)/i.test(lower)) {
     return generatePoetryOrGhazal(query, lang, variantSeed);
   }
 
-  // 5. Promotion / Marketing / Social Media Ads / Video Scripts
+  // 5. Translation Requests
+  if (/(translate|tarjuma|tarjama|meaning|ترجمہ|ترجمة|अनुवाद)/i.test(lower)) {
+    return generateTranslationFallback(query, lang, lastAiText);
+  }
+
+  // 6. Motivational Quotes
+  if (/(quote|quotes|aqwal|thought of the day)/i.test(lower)) {
+    return isRomanUrdu || targetScript === 'urdu_script'
+      ? targetScript === 'urdu_script'
+        ? `### دل کو حوصلہ دینے والے خوبصورت اقوال ✨\n\n1. *"روزانہ کے چھوٹے مثبت قدم ہی ایک دن بڑی کامیابی کی بنیاد بنتے ہیں۔"*\n2. *"مشکل وقت ہمیشہ نہیں رہتا، مگر مضبوط اور باحوصلہ انسان ہمیشہ آگے بڑھ جاتے ہیں۔"*\n3. *"خود پر اور اللہ پر بھروسہ رکھیں — ہر اندھیری رات کے بعد روشنی ضرور آتی ہے۔"*`
+        : `### Dil Ko Himmat Dene Wale Motivational Quotes ✨\n\n1. *"Chhote qadam rozana uthana, ek din bade khwabon ko haqeeqat bana deta hai."*\n2. *"Mushkil waqt hamesha nahi rehta, magar mazboot log hamesha aage badh jate hain."*\n3. *"Khud par bharosa rakho — har bada kamyab insan kabhi zero se hi shuru hua tha."*\n\nAgar aapko **Urdu script (اردو)**, **Arabic**, ya **Hindi** me quotes chahiye hon to batayein!`
+      : `### Uplifting Motivational Quotes ✨\n\n1. *"Small consistent steps today build the breakthroughs you'll celebrate tomorrow."*\n2. *"Discipline is choosing what you want most over what feels easiest right now."*\n3. *"Every expert was once a beginner who refused to stop learning."*`;
+  }
+
+  // 7. Promotion / Marketing / Social Media Ads / Video Scripts
   if (/(promote|promotion|marketing|advertise|ad copy|caption|hashtags|viral|tiktok|youtube|instagram|facebook|business|shop|product|sale|offer|brand)/i.test(lower)) {
     return generatePromotionKit(query, lang);
   }
 
-  // 6. AI Prompts
+  // 8. AI Prompts
   if (/(prompt|midjourney|dalle|sora)/i.test(lower)) {
     const subject =
       query
@@ -701,85 +993,85 @@ export function generateErrorexAiFallback(
         .trim() || 'Modern Luxury Editorial Concept';
 
     return isRomanUrdu
-      ? `### Stylish & Ready-to-Use AI Prompts — **${subject}** ✨\n\n**1. Cinematic Image / Poster Prompt:**\n\`\`\`text\nUltra-detailed cinematic masterpiece of ${subject}, warm golden hour rim lighting, sharp 8k resolution, minimal luxury composition, rich natural textures, shallow depth of field, editorial photography --ar 16:9\n\`\`\`\n\n**2. Content & Viral Writing Prompt:**\n\`\`\`text\nAct as a top creative director and storyteller. Write 5 scroll-stopping headlines, an engaging emotional hook, and a polished script about "${subject}" in clear, friendly language.\n\`\`\`\n\nBatayein agar aapko kisi khaas topic par aur prompts chahiye hon!`
+      ? `### Stylish & Ready-to-Use AI Prompts — **${subject}** ✨\n\n**1. Cinematic Image / Poster Prompt:**\n\`\`\`text\nUltra-detailed cinematic masterpiece of ${subject}, warm golden hour rim lighting, sharp 8k resolution, minimal luxury composition, rich natural textures, shallow depth of field, editorial photography --ar 16:9\n\`\`\`\n\n**2. Content & Viral Writing Prompt:**\n\`\`\`text\nAct as a top creative director and storyteller. Write 5 scroll-stopping headlines, an engaging emotional hook, and a polished script about "${subject}" in clear, friendly language.\n\`\`\``
       : `### Ready-to-Use AI Prompts — **${subject}** ✨\n\n**1. Cinematic Image Generation Prompt:**\n\`\`\`text\nUltra-detailed editorial photograph of ${subject}, soft golden-hour lighting, crisp 8k clarity, refined minimalist composition, realistic textures, shallow depth of field --ar 16:9\n\`\`\`\n\n**2. Master Content Creation Prompt:**\n\`\`\`text\nAct as a senior creative strategist. Build a clear step-by-step plan, 5 compelling hooks, and a full polished draft about "${subject}" in warm, effortless language.\n\`\`\``;
   }
 
-  // 7. Recipes & Cooking
+  // 9. Recipes & Cooking
   if (/(recipe|biryani|chai|tea|pasta|cake|khana|paka|banane ka tareeqa|cook)/i.test(lower)) {
-    return generateRecipe(query, isRomanUrdu);
+    return generateRecipe(query, lang);
   }
 
-  // 8. Jokes & Riddles
+  // 10. Jokes & Riddles
   if (/(joke|latifa|funny|hansi|riddle|paheli)/i.test(lower)) {
     if (/(riddle|paheli)/i.test(lower)) {
       return isRomanUrdu
-        ? `### Ek Mazedaar Paheli 🧩\n\n**Sawal:** Wo kaun si cheez hai jo jitni zyada chalti hai, utni hi chhoti hoti jati hai?\n\n> **Jawab:** **Mombatti (Candle) ya Pencil!** 🕯️✏️\n\nEk aur paheli poochun? Bas likh dein!`
+        ? `### Ek Mazedaar Paheli 🧩\n\n**Sawal:** Wo kaun si cheez hai jo jitni zyada chalti hai, utni hi chhoti hoti jati hai?\n\n> **Jawab:** **Mombatti (Candle) ya Pencil!** 🕯️✏️`
         : `### Fun Riddle 🧩\n\n**Question:** The more you take away from me, the bigger I grow. What am I?\n\n> **Answer:** **A hole!** 😄`;
     }
     return isRomanUrdu
-      ? `### Halka Phulka Latifa 😄\n\n**Teacher:** *"Batao, agar tumhare paas 10 aam hon aur koi 4 maang le to kitne bachenge?"*  \n**Student:** *"Sir 10 hi bachenge — main deta hi nahi hoon!"* 🥭😂\n\nEk aur sunaun?`
+      ? `### Halka Phulka Latifa 😄\n\n**Teacher:** *"Batao, agar tumhare paas 10 aam hon aur koi 4 maang le to kitne bachenge?"*  \n**Student:** *"Sir 10 hi bachenge — main deta hi nahi hoon!"* 🥭😂`
       : `### Lighthearted Joke 😄\n\nWhy did the programmer quit their job?  \n> Because they didn't get **arrays**! 💻✨`;
   }
 
-  // 9. Online Earning & Business Ideas
+  // 11. Online Earning & Business Ideas
   if (/(earn money|online earning|paisa|paise|kamai|kamane|freelanc|income)/i.test(lower)) {
     return isRomanUrdu
-      ? `### Online Paise Kamane Ke 5 Asli Aur Mehfooz Tareeqe 💼✨\n\n1. **Freelancing (Fiverr / Upwork):** Graphic design, video editing, content writing, ya web development seekh kar international clients ke liye kaam karein.\n2. **YouTube / Short Video Content:** Kisi ek niche (tech, cooking, education, motivational) par regular helpful videos banayein.\n3. **Social Media Management:** Local shops aur brands ke Instagram/Facebook pages manage karke mahana fees charge karein.\n4. **Digital Products & E-Books:** Canva templates, notes, ya guides bana kar online sell karein.\n5. **Online Tutoring:** Agar aap kisi subject (English, Math, Quran, Coding) me ache hain to online classes start karein.\n\n**Pro Tip:** Pehle **ek skill** chunein, 30 din roz practice karein — phir results khud bolenge!`
-      : `### 5 Genuine Ways to Earn Online 💼✨\n\n1. **Freelance Services:** Offer writing, design, video editing, or coding on Fiverr and Upwork.\n2. **Content Creation:** Build a focused YouTube or short-form channel solving real problems.\n3. **Social Media Management:** Help small local businesses grow their pages and run clean campaigns.\n4. **Digital Templates & Guides:** Create useful study notes, planners, or design kits.\n5. **Online Tutoring:** Teach languages, math, science, or tech skills remotely.\n\n**Key:** Pick **one skill**, practice daily for 30 days, and share real sample work!`;
+      ? `### Online Paise Kamane Ke 5 Asli Aur Mehfooz Tareeqe 💼✨\n\n1. **Freelancing (Fiverr / Upwork):** Graphic design, video editing, content writing, ya web development seekh kar clients ke liye kaam karein.\n2. **YouTube / Short Video Content:** Kisi ek niche par regular helpful videos banayein.\n3. **Social Media Management:** Local brands ke social pages manage karke mahana fees charge karein.\n4. **Digital Products & Guides:** Notes, templates, ya e-books sell karein.\n5. **Online Tutoring:** English, Math, Quran, ya Coding online parhayein.\n\n**Dostana Mashwara:** Pehle **ek skill** chunein aur roz thora practice karein — consistency se results zaroor milte hain!`
+      : `### 5 Genuine Ways to Earn Online 💼✨\n\n1. **Freelance Services:** Offer writing, design, video editing, or coding on Fiverr and Upwork.\n2. **Content Creation:** Build a focused YouTube or short-form channel solving real problems.\n3. **Social Media Management:** Help small businesses grow their pages and run clean campaigns.\n4. **Digital Templates & Guides:** Create useful study notes, planners, or design kits.\n5. **Online Tutoring:** Teach languages, math, science, or tech skills remotely.`;
   }
 
-  // 10. Study, Exams & Fitness Plans
+  // 12. Study, Exams & Fitness Plans
   if (/(study|exam|parhai|timetable|focus|weight loss|fitness|diet|gym|health)/i.test(lower)) {
     if (/(weight|fitness|diet|gym|health)/i.test(lower)) {
       return isRomanUrdu
-        ? `### Sehatmand Fitness & Daily Routine Guide 💪✨\n\n- **Subah:** 1 glass neem garam paani + 25 minute tez walk ya stretching.\n- **Nashta:** Anda, oats ya brown bread (meetha aur fried cheezein kam rakhein).\n- **Din Bhar:** Kam az kam 8–10 glass paani aur har khane ke baad 10 minute walk.\n- **Raat:** Sone se 2 ghante pehle halka khana aur 7–8 ghante poori neend.\n\nConsistency hi sabse bada raaz hai!`
-        : `### Clean Daily Fitness & Energy Plan 💪✨\n\n- **Morning:** Hydrate first, then 25 minutes of brisk walking or mobility work.\n- **Meals:** Prioritize protein, fresh vegetables, and whole foods while cutting sugary drinks.\n- **Recovery:** Aim for 7–8 hours of deep sleep — muscles and focus rebuild overnight.`;
+        ? `### Sehatmand Fitness & Daily Routine Guide 💪✨\n\n- **Subah:** 1 glass neem garam paani + 25 minute walk ya stretching.\n- **Nashta:** Anda, oats ya brown bread (fried aur meetha kam rakhein).\n- **Din Bhar:** 8–10 glass paani aur khane ke baad 10 minute walk.\n- **Raat:** 7–8 ghante poori neend.`
+        : `### Clean Daily Fitness & Energy Plan 💪✨\n\n- **Morning:** Hydrate first, then 25 minutes of brisk walking or mobility work.\n- **Meals:** Prioritize protein, fresh vegetables, and whole foods while cutting sugary drinks.\n- **Recovery:** Aim for 7–8 hours of deep sleep.`;
     }
     return isRomanUrdu
-      ? `### Smart Study & Exam Kamyabi Plan 📚✨\n\n1. **45-10 Rule:** 45 minute pure focus se parhein (mobile door rakh kar), phir 10 minute fresh break lein.\n2. **Active Recall:** Sirf reading karne ke bajaye likh kar ya khud ko samjha kar yaad karein.\n3. **Past Papers:** Pichle 3–5 saal ke important sawalat zaroor solve karein.\n4. **Rozana Revision:** Jo aaj parha hai usay raat sone se pehle 10 minute zaroor dohra lein.\n\nAgar aapko apne exact subject ka timetable banwana ho to batayein!`
+      ? `### Smart Study & Exam Kamyabi Plan 📚✨\n\n1. **45-10 Rule:** 45 minute pure focus se parhein, phir 10 minute break lein.\n2. **Active Recall:** Likh kar ya khud ko samjha kar yaad karein.\n3. **Past Papers:** Pichle 3–5 saal ke important sawalat zaroor solve karein.\n4. **Nightly Revision:** Sone se pehle 10 minute revise zaroor karein.`
       : `### Smart Study Plan for Top Results 📚✨\n\n1. **Focused Blocks:** Study for 45 distraction-free minutes, then rest 10 minutes.\n2. **Active Recall:** Close the book and write down key points from memory.\n3. **Past Questions:** Practice real exam problems early to spot weak areas.\n4. **Nightly Review:** Spend 10 quiet minutes reviewing the day's notes before sleep.`;
   }
 
-  // 11. Islamic / Dua / Peaceful Guidance
+  // 13. Islamic / Dua / Peaceful Guidance
   if (/(islam|namaz|dua|ramadan|ramzan|quran|hadith|roza|sabr|shukar)/i.test(lower)) {
-    return isRomanUrdu
-      ? `### Sukoon-e-Qalb Aur Khubsurat Dua ✨🤲\n\n**Har Kaam Me Asani Aur Barkat Ki Dua:**\n> *"Rabbi yassir wa la tu'assir wa tammim bil-khair."*  \n> *(Aye mere Rab! Mere liye asani farma, mushkil na kar, aur mera kaam khair ke sath mukammal farma.)*\n\n**Dil Ko Sukoon Dene Wali 3 Baatein:**\n1. **Sabr aur Namaz:** Har pareshani me Allah se madad maangein — beshak mushkil ke baad asani hai.\n2. **Shukar:** Jo naimatein paas hain un par shukar ada karne se zindagi me barkat badhti hai.\n3. **Naram Lehja:** Doosron ke liye asani aur khair chahne wale log hamesha pur-sukoon rehte hain.`
-      : `### A Peaceful Reminder & Dua 🤲✨\n\n> *"Verily, with hardship comes ease."* — **Qur'an (94:6)**\n\n1. **Patience & Prayer:** Bring your worries directly into quiet prayer and trust the timing.\n2. **Gratitude:** Counting small daily blessings brings immediate calm to the heart.\n3. **Kindness:** Offering gentle words and fairness to others invites lasting peace into your life.`;
+    return isRomanUrdu || targetScript === 'urdu_script'
+      ? `### Sukoon-e-Qalb Aur Khubsurat Dua ✨🤲\n\n**Har Kaam Me Asani Aur Barkat Ki Dua:**\n> *"Rabbi yassir wa la tu'assir wa tammim bil-khair."*  \n> *(Aye mere Rab! Mere liye asani farma, mushkil na kar, aur mera kaam khair ke sath mukammal farma.)*\n\n**Dil Ko Sukoon Dene Wali 3 Baatein:**\n1. **Sabr aur Namaz:** Har pareshani me Allah se madad maangein — beshak mushkil ke baad asani hai.\n2. **Shukar:** Jo naimatein paas hain un par shukar ada karne se barkat badhti hai.\n3. **Naram Lehja:** Doosron ke liye asani aur khair chahne wale hamesha pur-sukoon rehte hain.`
+      : `### A Peaceful Reminder & Dua 🤲✨\n\n> *"Verily, with hardship comes ease."* — **Qur'an (94:6)**\n\n1. **Patience & Prayer:** Bring your worries directly into quiet prayer and trust the timing.\n2. **Gratitude:** Counting small daily blessings brings immediate calm to the heart.\n3. **Kindness:** Offering gentle words and fairness invites lasting peace into your life.`;
   }
 
-  // 12. Writing Templates (Applications, Emails, Stories, Wishes, Bios)
+  // 14. Writing Templates (Applications, Stories, Wishes)
   if (/(sick leave|chutti|chuti|leave application|darkhwast)/i.test(lower)) {
-    return `### Sick Leave Application 📄\n\n**Subject:** Request for Sick Leave\n\nRespected Sir/Madam,\n\nI am writing to respectfully inform you that I am unwell with fever and unable to attend today. Kindly grant me **one day's leave** so I can rest and recover properly.\n\nI will resume my duties as soon as I feel better and catch up on any pending work promptly. Thank you very much for your understanding.\n\nSincerely,  \n**[Your Name]**  \n**[Date]**`;
+    return `### Sick Leave Application 📄\n\n**Subject:** Request for Sick Leave\n\nRespected Sir/Madam,\n\nI am writing to respectfully inform you that I am unwell with fever and unable to attend today. Kindly grant me **one day's leave** so I can rest and recover properly.\n\nI will resume my duties as soon as I feel better. Thank you very much for your understanding.\n\nSincerely,  \n**[Your Name]**  \n**[Date]**`;
   }
 
   if (/(job application|cover letter|cv|resume email)/i.test(lower)) {
-    return `### Polished Job Application Email 💼\n\n**Subject:** Application for [Job Title] — [Your Name]\n\nDear Hiring Manager,\n\nI am excited to apply for the **[Job Title]** position. With strong hands-on experience in **[Your Top 2 Skills]** and a genuine commitment to high-quality results, I am confident I can bring immediate value to your team.\n\nPlease find my resume attached for your review. I would truly welcome the opportunity to discuss how my background aligns with your goals.\n\nWarm regards,  \n**[Your Name]**  \n**[Phone / Email]**`;
+    return `### Polished Job Application Email 💼\n\n**Subject:** Application for [Job Title] — [Your Name]\n\nDear Hiring Manager,\n\nI am excited to apply for the **[Job Title]** position. With strong hands-on experience in **[Your Top 2 Skills]** and a genuine commitment to high-quality results, I am confident I can bring immediate value to your team.\n\nPlease find my resume attached for your review.\n\nWarm regards,  \n**[Your Name]**  \n**[Phone / Email]**`;
   }
 
   if (/(story|kahani|kissa)/i.test(lower)) {
     return isRomanUrdu
-      ? `### Ek Khubsurat Sabaq-Amoz Kahani 📖\n\nEk chhote se shehar me ek larka rehta tha jiske paas sirf ek purani kitaab aur bada khwab tha. Log uski koshish par hanste the, magar wo roz subah uth kar ek naya hunar seekhta aur apni ghaltiyon se sikhta raha.\n\nWaqt guzra aur wahi larka apni lagan se pure ilaqe ka sabse kamyab aur izzatdar insan ban gaya. Jab logon ne uski kamyabi ka raaz poocha to usne muskurakar kaha:\n\n> *"Bade nateeje roz ke chhote sabr, saaf niyat aur kabhi haar na manne se bante hain."*\n\nAgar aapko **horror, romantic, kids, ya historical** style me ek aur kahani sunni ho to batayein!`
-      : `### Short Inspirational Story 📖\n\nIn a quiet coastal town lived a young craftsman with nothing more than a modest bench and endless patience. While everyone else chased overnight shortcuts, she spent each morning refining a single detail with care.\n\nYears later, travelers crossed oceans to see her work. When asked what made the difference, she smiled:\n\n> *"Excellence is simply ordinary care repeated faithfully every single day."*\n\nTell me a genre or character name and I'll write a brand-new custom story for you!`;
+      ? `### Ek Khubsurat Sabaq-Amoz Kahani 📖\n\nEk chhote se shehar me ek larka rehta tha jiske paas sirf ek purani kitaab aur bada khwab tha. Log uski koshish par hanste the, magar wo roz subah uth kar ek naya hunar seekhta raha.\n\nWaqt guzra aur wahi larka apni lagan se pure ilaqe ka sabse kamyab aur izzatdar insan ban gaya. Jab logon ne raaz poocha to usne muskurakar kaha:\n\n> *"Bade nateeje roz ke chhote sabr, saaf niyat aur kabhi haar na manne se bante hain."*`
+      : `### Short Inspirational Story 📖\n\nIn a quiet coastal town lived a young craftsman with nothing more than a modest bench and endless patience. While everyone else chased overnight shortcuts, she spent each morning refining a single detail with care.\n\nYears later, travelers crossed oceans to see her work. When asked what made the difference, she smiled:\n\n> *"Excellence is simply ordinary care repeated faithfully every single day."*`;
   }
 
   if (/(bio|status|birthday|salgirah|eid|wish|mubarak)/i.test(lower)) {
     if (/(birthday|salgirah)/i.test(lower)) {
       return isRomanUrdu
-        ? `### Dil Se Salgirah Mubarak Wishes 🎂✨\n\n1. *Salgirah Mubarak! Dua hai Allah aapki zindagi khushiyon, sehat aur kamyabiyon se hamesha roshan rakhe.* 👑\n2. *Naya saal aapke liye har wo khushi laaye jiski aapne dil se dua ki ho. Happy Birthday!* 🎉\n3. *Hamesha muskurate raho aur chamakte raho — Janamdin bohot bohot mubarak!* 💖`
-        : `### Heartfelt Birthday Wishes 🎂✨\n\n1. *Wishing you a year filled with bright mornings, peaceful moments, and big achievements. Happy Birthday!* 🎉\n2. *May every dream you've worked toward bloom beautifully this year!* ✨\n3. *Here's to good health, genuine laughter, and endless happiness ahead.* 💖`;
+        ? `### Dil Se Salgirah Mubarak Wishes 🎂✨\n\n1. *Salgirah Mubarak! Dua hai Allah aapki zindagi khushiyon, sehat aur kamyabiyon se hamesha roshan rakhe.* 👑\n2. *Naya saal aapke liye har wo khushi laaye jiski aapne dil se dua ki ho. Happy Birthday!* 🎉`
+        : `### Heartfelt Birthday Wishes 🎂✨\n\n1. *Wishing you a year filled with bright mornings, peaceful moments, and big achievements. Happy Birthday!* 🎉\n2. *May every dream you've worked toward bloom beautifully this year!* ✨`;
     }
     if (/(eid)/i.test(lower)) {
       return isRomanUrdu
         ? `### Khubsurat Eid Mubarak Wishes 🌙✨\n\n1. *Eid Mubarak! Dua hai yeh pyaari Eid aapke ghar me khushiyan, sukoon aur dheron barkatein lekar aaye.* 🤲\n2. *Dil ki gehraiyon se aapko aur aapke pure khandan ko Eid Mubarak!* 💖`
-        : `### Warm Eid Mubarak Wishes 🌙✨\n\n1. *Eid Mubarak! May this blessed day fill your home with joy, warmth, peace, and endless blessings.* 🤲\n2. *Wishing you and your family laughter, harmony, and prosperity.* ✨`;
+        : `### Warm Eid Mubarak Wishes 🌙✨\n\n1. *Eid Mubarak! May this blessed day fill your home with joy, warmth, peace, and endless blessings.* 🤲`;
     }
     return isRomanUrdu
-      ? `### Stylish Bio & Status Ideas ✨\n\n1. *Silent moves, loud results.* 👑\n2. *Focus on growth, stay private, stay blessed.*\n3. *Khamoshi se mehnat, waqt khud shor machayega.*\n4. *Building my own path, one step at a time.*`
-      : `### Clean Bio & Status Ideas ✨\n\n1. *Quiet focus, meaningful work.* 👑\n2. *Building, learning, and moving forward.*\n3. *Stay private, stay humble, stay consistent.*`;
+      ? `### Stylish Bio & Status Ideas ✨\n\n1. *Silent moves, loud results.* 👑\n2. *Focus on growth, stay private, stay blessed.*\n3. *Khamoshi se mehnat, waqt khud shor machayega.*`
+      : `### Clean Bio & Status Ideas ✨\n\n1. *Quiet focus, meaningful work.* 👑\n2. *Building, learning, and moving forward.*`;
   }
 
-  // 13. Coding & Software Engineering
+  // 15. Coding & Software Engineering
   if (/python/i.test(lower)) {
     if (/aes|encrypt|crypto|hash|sha/i.test(lower)) {
       return `### Clean Python AES-256 Encryption 🔐\n\n\`\`\`python
@@ -794,7 +1086,7 @@ def encrypt_text(plaintext: str, password: str) -> dict:
     key = kdf.derive(password.encode())
     ciphertext = AESGCM(key).encrypt(nonce, plaintext.encode(), None)
     return {"salt": salt.hex(), "nonce": nonce.hex(), "ciphertext": ciphertext.hex()}
-\`\`\`\n\nLet me know if you want the matching **decrypt_text** function too!`;
+\`\`\``;
     }
     return `### Clean Python Example 💻\n\n\`\`\`python
 def greet_user(name: str) -> str:
@@ -802,7 +1094,7 @@ def greet_user(name: str) -> str:
     return f"Welcome, {clean_name}!"
 
 print(greet_user("friend"))
-\`\`\`\n\n${isRomanUrdu ? 'Batayein aapko Python me kis specific project ya logic ka code chahiye!' : 'Tell me the exact Python task you are building and I will write the complete code.'}`;
+\`\`\``;
   }
 
   if (/(javascript|typescript|react|html|css|sql|code|programming|website|app bana)/i.test(lower)) {
@@ -812,7 +1104,7 @@ SELECT uid, username, display_name, is_online, last_seen
 FROM public.user_profiles
 WHERE is_online = true
 ORDER BY last_seen DESC;
-\`\`\`\n\n${isRomanUrdu ? 'Agar kisi specific table ya query ki zaroorat ho to batayein!' : 'Share your table columns if you want a custom SQL query.'}`;
+\`\`\``;
     }
     return `### Clean React + TypeScript Component ⚛️\n\n\`\`\`tsx
 import React, { useState } from 'react';
@@ -832,61 +1124,23 @@ export function CounterCard() {
 \`\`\``;
   }
 
-  // 14. Encryption & Privacy
-  if (/(encryption|security|privacy|safe|hack|protect|pin|vault)/i.test(lower)) {
-    return isRomanUrdu
-      ? `### Encryption aur Privacy Kaise Kaam Karti Hai? 🔐\n\n1. **Private Data Isolation:** Aapke messages aur files sirf aapke aur receiver ke darmiyan mehfuz rehte hain.\n2. **Salted Hashing:** Aapka 8-digit secret code random salt + SHA-256 hash ke sath save hota hai — koi aapka asal code nahi parh sakta.\n3. **Zero Shared Leak:** Har account ka messenger, profile aur data mukammal taur par alag aur surakshit rehta hai.`
-      : `### How Encryption & Privacy Work 🔐\n\n1. **Private Isolation:** Every user's messages and profile remain strictly scoped to their account.\n2. **Salted Hashing:** Secret credentials are combined with a random salt and hashed with SHA-256 before storage.\n3. **Zero Plaintext Storage:** Sensitive passcodes are never kept in readable form.`;
-  }
-
-  // 15. Translation Requests
-  if (/(translate|tarjuma|tarjama|meaning)/i.test(lower)) {
-    const quoted = query.match(/["“']([^"”']+)["”']/);
-    const extracted = quoted
-      ? quoted[1]
-      : query
-          .replace(/\b(translate|tarjuma|tarjama|meaning|of|into|to|in|urdu|roman urdu|english|arabic|hindi|french|me|mein|karo|kardo|kar dein)\b/gi, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
-    const phrase = extracted.length >= 2 ? extracted : 'Believe in your journey';
-    const knownTranslations: Record<string, { ur: string; ro: string; ar: string; fr: string }> = {
-      'Welcome to ERROREX Vault': {
-        ur: 'ایروریکس والٹ میں خوش آمدید',
-        ro: 'ERROREX Vault mein khush aamdeed',
-        ar: 'مرحبًا بكم في خزينة ERROREX',
-        fr: 'Bienvenue dans le coffre-fort ERROREX'
-      },
-      'Believe in your journey': {
-        ur: 'اپنے سفر پر یقین رکھیں',
-        ro: 'Apne safar par yaqeen rakhein',
-        ar: 'آمن برحلتك',
-        fr: 'Croyez en votre parcours'
-      }
-    };
-    const match = knownTranslations[phrase];
-    if (match) {
-      return `### Multilingual Translations for "${phrase}" 🌐\n\n- **Urdu (اردو):** ${match.ur}\n- **Roman Urdu:** ${match.ro}\n- **Arabic (العربية):** ${match.ar}\n- **French (Français):** ${match.fr}\n\nKisi aur jumlay ka tarjuma chahiye ho to yahan likh dein — main foran translate kar dunga!`;
+  // 16. Friendly Emotional & Companion Prompts
+  if (/(sad|lonely|udaas|udas|pareshan|bored|stress|tension|hurt|dil toota|rona|feeling down)/i.test(lower)) {
+    if (targetScript === 'urdu_script') {
+      return `میرے دوست، دل چھوٹا نہ کریں — ہر مشکل وقت گزر جاتا ہے 🌸\n\nمیں بالکل آپ کے ساتھ ہوں۔ اگر دل ہلکا کرنے کا موڈ ہو تو مجھ سے بات کریں، یا اگر چاہیں تو میں آپ کے لیے **2 یا 4 سطروں کی سکون بھری اردو شاعری** لکھ دوں؟`;
     }
-    return `### Translation Ready for "${phrase}" 🌐\n\n- **Original Text:** ${phrase}\n\nApna sentence aur target language (Urdu, English, Arabic, French, Hindi) likhein — main turant saaf aur sahi tarjuma kar dunga!`;
-  }
-
-  // 16. Friendly Conversational Prompts ("say hello...", "introduce yourself", casual chat)
-  if (
-    /^(say hello|say hi|greet|write a greeting|wish me|give me a friendly|tell me something nice|make me smile|i am sad|i feel lonely|bored|madad|help me)/i.test(
-      lower
-    )
-  ) {
-    if (/(sad|lonely|udaas|udas|pareshan)/i.test(lower)) {
-      return isRomanUrdu
-        ? `Dil chhota na karein, har andheri raat ke baad ek roshan savera zaroor aata hai 🌸\n\nMain yahin hoon aapke sath! Agar dil halka karna ho, koi pyari **ghazal** sunni ho, ya koi **motivational baat** padhni ho to bas batayein.`
-        : `I'm right here with you 🌸 Even heavy days pass, and you're stronger than this moment.\n\nWould you like an uplifting quote, a calming poem, or just someone to chat with?`;
+    if (targetScript === 'arabic') {
+      return `لا تحزن يا صديقي، أنا هنا بجانبك دائماً 🌸\n\nكل ضيق سيزول بإذن الله. حدّثني بما يشغل بالك، أو أخبرني إن كنت تحب أن أكتب لك كلمات دافئة أو شعراً يريح قلبك.`;
+    }
+    if (targetScript === 'hindi') {
+      return `दोस्त, मन छोटा मत कीजिए — हर मुश्किल वक़्त गुज़र जाता है 🌸\n\nमैं बिल्कुल आपके साथ हूँ। चाहे दिल की बात करनी हो या 4 लाइन की प्यारी शायरी सुननी हो, बस बोलिए!`;
     }
     return isRomanUrdu
-      ? `Assalam-o-Alaikum aur dil se khush aamdeed! ✨ Umeed hai aapka din khubsurat, pur-sukoon aur muskurahaton se bhara guzar raha hoga.\n\nBatayein aaj main aapke liye kya likhun ya kis baat me madad karun?`
-      : `Hello and warm wishes to you! ✨ May your day be bright, peaceful, and filled with good moments ahead.\n\nWhat would you like to explore or create together next?`;
+      ? `Dil chhota na karein dost, har andheri raat ke baad ek roshan savera zaroor aata hai 🌸\n\nMain hoon na aapke sath! Agar dil ki koi baat share karni ho, halka sa hasna ho, ya pyari **4-line shayari** sunni ho to bas batayein — main poori tawajjoh se sun raha hoon.`
+      : `I'm right here with you, my friend 🌸 Even heavy days pass, and you never have to carry everything alone.\n\nWant to talk about what's on your mind, or would you like something uplifting?`;
   }
 
-  // 17. Essays, Articles, Speeches, Explanations, or Knowledge Questions
+  // 17. Essays, Articles, Speeches, Explanations
   const topic = extractCleanTopic(query);
   if (
     /(essay|article|paragraph|mazmoon|speech|taqreer|what is|who is|why |how |kya hai|kya hota|kon hai|kaun hai|explain|samjhao|smjhao|tell me about|baare me|bare me|history|benefit|faide|advantage|disadvantage|tips|guide)/i.test(
@@ -896,30 +1150,34 @@ export function CounterCard() {
     return generateEssayOrArticle(topic, lang);
   }
 
-  // 18. Direct Warm Conversational Response (no robotic essay wrapping on short chat messages)
-  if (isArabicRequested) {
-    return `### **${topic}** — إجابة واضحة ومفصلة ✨\n\nأهلاً بك! يسعدني مساعدتك في موضوع **"${topic}"**:\n\n1. **الفكرة الأساسية:** يعتمد فهم هذا الموضوع بعمق على التركيز على أهدافه الرئيسية وتطبيقها بخطوات عملية ومنظمة.\n2. **النصيحة العملية:** ابدأ بالخطوات البسيطة الواضحة، وحافظ على الاستمرارية لتحقيق أفضل النتائج.\n\nأخبرني إذا كنت ترغب في تفصيل أوسع، أو أمثلة تطبيقية، أو صياغة بأسلوب مختلف!`;
+  // 18. Direct Warm Conversational Response by Target Script
+  if (targetScript === 'arabic') {
+    return `أهلاً بك يا صديقي! فهمت قصدك تماماً في موضوع **"${topic}"** ✨\n\nيمكنني مساعدتك فيها بكل وضوح وسلاسة — أخبرني فقط هل تفضّل شرحاً مفصّلاً، أم **أبيات شعرية بعدد أسطر محدد**، أم ترجمة دقيقة؟ أنا معك دائماً!`;
   }
 
-  if (isFrenchRequested) {
-    return `### **${topic}** — Réponse Claire & Complète ✨\n\nAvec grand plaisir ! Voici l'essentiel à retenir sur **"${topic}"** :\n\n1. **L'idée clé :** Abordez le sujet étape par étape en gardant un objectif clair et des exemples concrets.\n2. **Approche pratique :** Privilégiez la simplicité, la régularité et la qualité dans chaque détail.\n\nDites-moi si vous souhaitez plus de détails, des exemples pratiques ou une autre formulation !`;
+  if (targetScript === 'hindi') {
+    return `जी बिल्कुल दोस्त! मैंने **"${topic}"** के बारे में आपकी बात समझ ली है ✨\n\nबताइए कि आपको इस पर विस्तार से जानकारी चाहिए, **2 या 4 लाइन की शायरी**, या किसी अन्य भाषा में अनुवाद — मैं अभी साफ और सुंदर शब्दों में लिख देता हूँ!`;
   }
 
-  if (isHindiRequested || lang.isHindiScript) {
-    return `### **${topic}** — सरल और संपूर्ण उत्तर ✨\n\nआपका विषय बहुत अच्छा है! आइए **"${topic}"** को आसान और साफ शब्दों में समझते हैं:\n\n1. **मुख्य बात:** किसी भी विषय को बेहतर ढंग से समझने के लिए उसके बुनियादी सिद्धांत और व्यावहारिक उपयोग को समझना सबसे ज़रूरी होता है।\n2. **सही तरीका:** छोटे, स्पष्ट कदमों से शुरुआत करें और निरंतर अभ्यास बनाए रखें।\n\nअगर आप इस विषय पर विस्तृत लेख, उदाहरण, या शायरी चाहते हैं तो ज़रूर बताएं!`;
+  if (targetScript === 'urdu_script') {
+    return `جی بالکل میرے دوست! میں نے آپ کی بات **"${topic}"** اچھی طرح سمجھ لی ہے ✨\n\nبتائیے آپ کو اس پر **مکمل تفصیلی جواب** چاہیے، **2 / 4 / 6 سطروں کی اردو شاعری**، یا کسی اور زبان میں **ترجمہ**؟ میں فوراً خوبصورت اور صاف اردو حروف میں لکھ دوں گا!`;
   }
 
-  if (isUrduScript) {
-    return `### **${topic}** — صاف اور مکمل جواب ✨\n\nآپ نے بہت خوبصورت بات پوچھی ہے! **"${topic}"** کے بارے میں چند اہم اور مفید نکات یہ ہیں:\n\n1. **بنیادی سمجھ:** کسی بھی موضوع کی اصل خوبی اس کی سادگی، وضاحت اور عملی فائدے میں ہوتی ہے۔\n2. **عملی رہنمائی:** قدم بہ قدم آگے بڑھیں، نئے تجربات سے سیکھیں اور مستقل مزاجی برقرار رکھیں۔\n\nاگر آپ چاہیں تو میں اس پر مزید تفصیل، مثالیں یا نظم/مضمون بھی لکھ دوں!`;
+  if (targetScript === 'french') {
+    return `Avec grand plaisir, mon ami ! J'ai bien compris votre demande sur **"${topic}"** ✨\n\nDites-moi si vous souhaitez une explication détaillée, un poème court ou une traduction claire !`;
+  }
+
+  if (targetScript === 'spanish') {
+    return `¡Con mucho gusto, amigo! Entiendo perfectamente tu tema sobre **"${topic}"** ✨\n\nDime si prefieres una explicación completa, unos versos cortos o una traducción natural.`;
   }
 
   if (isRomanUrdu) {
-    return `Ji bilkul! **"${topic}"** par main aapki poori madad karne ke liye hazir hoon ✨\n\n- **Saaf Rehnumai:** Batayein ke aapko is par **ghazal / shayari**, **promotional post**, **detail article**, ya **step-by-step guide** chahiye?\n- **Mukammal Jawab:** Aap bas apna exact maqsad likh dein — main bilkul saaf, stylish aur friendly andaaz me tayyar kar dunga!`;
+    return `Ji bilkul dost! Main samajh gaya **"${topic}"** ke baare me ✨\n\nBatayein ke aapko is par **Urdu alphabet (اردو)** me likhwana hai, **Arabic / Hindi** me, **2 ya 4 line ki poetry**, ya ek dost ki tarah **poora tafseeli jawab** chahiye? Bas ishara karein, abhi likh deta hoon! 😊`;
   }
 
   if (query.split(/\s+/).length >= 6) {
     return generateEssayOrArticle(topic, lang);
   }
 
-  return `Got it! Here is a clean take on **${topic}** ✨\n\n- Tell me whether you'd like a **full article**, **creative poetry**, **marketing copy**, **working code**, or a **step-by-step guide** on this — and I'll write the whole piece clearly for you right away!`;
+  return `I hear you, friend! On **${topic}** ✨\n\nTell me how you'd like me to help — whether it's a warm conversation, **2/4/6-line poetry**, a **translation into Urdu script, Arabic, or Hindi**, or a **complete detailed guide** — and I've got you covered!`;
 }

@@ -143,23 +143,25 @@ export const StatusView: React.FC<StatusViewProps> = ({
 
   if (activeSubTab === 'groups') {
     return (
-      <div className="flex-1 h-full flex flex-col bg-[var(--bg-window)] text-[var(--text-main)] select-none p-4 md:p-6 overflow-y-auto transition-colors">
-        {/* Sub-tab Navigation */}
-        <div className="flex items-center gap-2 pb-4 mb-2 border-b border-white/5">
-          <button
-            onClick={() => setActiveSubTab('status')}
-            className="py-1.5 px-4 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all text-neutral-400 hover:text-white border-transparent hover:bg-neutral-900"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Status Stories</span>
-          </button>
-          <button
-            onClick={() => setActiveSubTab('groups')}
-            className="py-1.5 px-4 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all bg-[var(--accent-surface)] border-[var(--accent-primary)] text-[var(--accent-primary)] shadow-sm"
-          >
-            <Users className="w-3.5 h-3.5" />
-            <span>Encrypted Groups</span>
-          </button>
+      <div className="flex-1 min-w-0 h-full flex flex-col bg-[var(--bg-window)] text-[var(--text-main)] select-none overflow-hidden transition-colors">
+        <div className="w-full max-w-6xl mx-auto px-3 sm:px-5 md:px-6 pt-3 sm:pt-5 md:pt-6 shrink-0">
+          {/* Sub-tab Navigation */}
+          <div className="flex items-center gap-2 pb-3 border-b border-neutral-200 dark:border-white/5 overflow-x-auto scrollbar-none">
+            <button
+              onClick={() => setActiveSubTab('status')}
+              className="py-2 px-3.5 sm:px-4 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all whitespace-nowrap shrink-0 text-[var(--text-muted)] hover:text-[var(--text-main)] border-transparent hover:bg-neutral-200/60 dark:hover:bg-neutral-900 cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Status Stories</span>
+            </button>
+            <button
+              onClick={() => setActiveSubTab('groups')}
+              className="py-2 px-3.5 sm:px-4 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all whitespace-nowrap shrink-0 bg-[var(--accent-surface)] border-[var(--accent-primary)] text-[var(--accent-primary)] shadow-sm cursor-pointer"
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Encrypted Groups</span>
+            </button>
+          </div>
         </div>
 
         <GroupsView
@@ -173,19 +175,20 @@ export const StatusView: React.FC<StatusViewProps> = ({
   }
 
   return (
-    <div className="flex-1 h-full flex flex-col bg-[var(--bg-window)] text-[var(--text-main)] select-none p-4 md:p-6 overflow-y-auto transition-colors">
+    <div className="flex-1 min-w-0 h-full flex flex-col bg-[var(--bg-window)] text-[var(--text-main)] select-none p-3 sm:p-5 md:p-6 overflow-y-auto transition-colors">
+      <div className="w-full max-w-6xl mx-auto flex flex-col flex-1 min-w-0">
       {/* Sub-tab Navigation */}
-      <div className="flex items-center gap-2 pb-4 mb-4 border-b border-white/5">
+      <div className="flex items-center gap-2 pb-3 sm:pb-4 mb-4 border-b border-neutral-200 dark:border-white/5 overflow-x-auto scrollbar-none shrink-0">
         <button
           onClick={() => setActiveSubTab('status')}
-          className="py-1.5 px-4 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all bg-[var(--accent-surface)] border-[var(--accent-primary)] text-[var(--accent-primary)] shadow-sm"
+          className="py-2 px-3.5 sm:px-4 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all whitespace-nowrap shrink-0 bg-[var(--accent-surface)] border-[var(--accent-primary)] text-[var(--accent-primary)] shadow-sm cursor-pointer"
         >
           <Sparkles className="w-3.5 h-3.5" />
           <span>Status Stories</span>
         </button>
         <button
           onClick={() => setActiveSubTab('groups')}
-          className="py-1.5 px-4 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all text-neutral-400 hover:text-white border-transparent hover:bg-neutral-900"
+          className="py-2 px-3.5 sm:px-4 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all whitespace-nowrap shrink-0 text-[var(--text-muted)] hover:text-[var(--text-main)] border-transparent hover:bg-neutral-200/60 dark:hover:bg-neutral-900 cursor-pointer"
         >
           <Users className="w-3.5 h-3.5" />
           <span>Encrypted Groups</span>
@@ -193,19 +196,19 @@ export const StatusView: React.FC<StatusViewProps> = ({
       </div>
 
       {/* Top Header */}
-      <div className="flex items-center justify-between pb-4 border-b border-white/5">
-        <div>
-          <h1 className="text-lg font-display font-bold gold-gradient-text">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-neutral-200 dark:border-white/5">
+        <div className="min-w-0">
+          <h1 className="text-base sm:text-lg font-display font-bold gold-gradient-text">
             Status Stories
           </h1>
-          <p className="text-xs text-neutral-400">
+          <p className="text-xs text-[var(--text-muted)]">
             Ephemeral 24-hour visual and text moments shared with friends.
           </p>
         </div>
 
         <button
           onClick={() => setIsCreatingStatus(true)}
-          className="py-2 px-4 rounded-xl gold-button-accent text-xs font-semibold uppercase tracking-wider flex items-center gap-2 hover:gold-glow-sm"
+          className="py-2.5 sm:py-2 px-4 rounded-xl gold-button-accent text-xs font-bold text-black uppercase tracking-wider flex items-center justify-center gap-2 hover:gold-glow-sm w-full sm:w-auto shrink-0 cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span>Post Status</span>
@@ -295,14 +298,16 @@ export const StatusView: React.FC<StatusViewProps> = ({
         </div>
       </div>
 
+      </div>
+
       {/* Story Viewer Modal */}
       {activeStoryIndex !== null && statuses[activeStoryIndex] && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/95 backdrop-blur-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/95 backdrop-blur-xl">
           {(() => {
             const current = statuses[activeStoryIndex];
             return (
               <div
-                className="relative w-full max-w-sm h-[580px] rounded-3xl border border-[var(--accent-border)] gold-glow flex flex-col justify-between overflow-hidden p-4"
+                className="relative w-full max-w-sm h-[82dvh] max-h-[600px] min-h-[380px] rounded-3xl border border-[var(--accent-border)] gold-glow flex flex-col justify-between overflow-hidden p-4"
                 style={{ backgroundColor: current.bgColor || '#09090B' }}
               >
                 {/* Header with progress */}
@@ -384,8 +389,8 @@ export const StatusView: React.FC<StatusViewProps> = ({
 
       {/* Create Status Modal */}
       {isCreatingStatus && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-          <div className="w-full max-w-md p-6 rounded-3xl bg-[#0E0E12] border border-[var(--accent-border)] gold-glow shadow-2xl flex flex-col space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
+          <div className="w-full max-w-md my-auto max-h-[92dvh] overflow-y-auto p-5 sm:p-6 rounded-3xl bg-[#0E0E12] border border-[var(--accent-border)] gold-glow shadow-2xl flex flex-col space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-white/5">
               <h2 className="text-sm font-display font-bold gold-gradient-text">
                 Post 24-Hour Status

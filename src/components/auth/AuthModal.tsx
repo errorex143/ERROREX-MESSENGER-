@@ -3,13 +3,11 @@ import {
   auth,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  sendPasswordResetEmail,
   sendEmailVerification
 } from '../../lib/firebase';
+import { standaloneAuth } from '../../lib/standaloneApi';
 import { CrownLogo } from '../common/CrownLogo';
 import { Mail, ArrowRight, ShieldCheck, KeyRound, AlertCircle, CheckCircle2, User, Check } from 'lucide-react';
-import { isSupabaseConfigured, supabase, initSupabaseRuntime } from '../../lib/supabase';
-import { standaloneAuth } from '../../lib/standaloneApi';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -19,12 +17,16 @@ interface AuthModalProps {
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const [isRegister, setIsRegister] = useState(false);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [forgotStep, setForgotStep] = useState<'email' | 'new_password'>('email');
+  const [verifiedDisplayName, setVerifiedDisplayName] = useState('');
 
   // Load saved credentials from localStorage if user previously checked "Save password"
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
 
   const [loading, setLoading] = useState(false);
@@ -51,61 +53,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     return pass.length >= 6;
   };
 
-  const handleGoogleSignIn = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      await initSupabaseRuntime();
-      if (isSupabaseConfigured && supabase) {
-        const { error: suErr } = await supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: {
-            redirectTo: window.location.origin
-          }
-        });
-        if (suErr) {
-          const msg = suErr.message?.toLowerCase() || '';
-          if (msg.includes('provider') || msg.includes('not enabled')) {
-            throw new Error(
-              'Google Sign-In needs to be enabled in Supabase Authentication → Providers. You can sign in or create an account with your Gmail & Password below right away.'
-            );
-          }
-          throw suErr;
-        }
-        onClose();
-        return;
-      }
-
-      // Standalone Google flow when Supabase is not configured
-      const userGoogleEmail = (email.includes('@') ? email.trim() : 'google.user@gmail.com').toLowerCase();
-      const cleanName = userGoogleEmail.split('@')[0];
-      const stableGoogleUid = `google_${userGoogleEmail.replace(/[^a-z0-9]/g, '_')}`;
-      const googleUser = {
-        uid: stableGoogleUid,
-        email: userGoogleEmail,
-        displayName: cleanName.charAt(0).toUpperCase() + cleanName.slice(1),
-        photoURL: '',
-        emailVerified: true,
-        getIdToken: async () => `token_${stableGoogleUid}`
-      };
-
-      if (rememberMe) {
-        localStorage.setItem('errorex_saved_credentials', JSON.stringify({ email: userGoogleEmail, password: '', rememberMe: true }));
-      }
-
-      // Only pre-unlock if user already configured their Calculator PIN earlier
-      if (localStorage.getItem(`errorex_pin_set_${googleUser.uid}`) === 'true') {
-        localStorage.setItem(`errorex_unlocked_${googleUser.uid}`, 'true');
-      }
-      standaloneAuth.setCurrentUser(googleUser);
-      onClose();
-    } catch (err: any) {
-      setError(err?.message || 'Google authentication error. Please use Gmail & Password below.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -118,16 +65,56 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     }
 
     if (isForgotPassword) {
+      if (forgotStep === 'email') {
+        setLoading(true);
+        try {
+          const check = await standaloneAuth.checkRegisteredEmail(cleanEmail);
+          if (!check.exists) {
+            setError('This Gmail address is not registered yet. Please check your Gmail or Create Account.');
+            return;
+          }
+          setVerifiedDisplayName(check.displayName || cleanEmail.split('@')[0]);
+          setNewPassword('');
+          setConfirmNewPassword('');
+          setForgotStep('new_password');
+          setInfoMessage('Gmail verified! Enter your New Password and Confirm Password below.');
+        } catch (err: any) {
+          setError(err?.message || 'Could not verify Gmail address.');
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+
+      // forgotStep === 'new_password'
+      if (!validatePassword(newPassword)) {
+        setError('New password must be at least 6 characters.');
+        return;
+      }
+      if (!confirmNewPassword) {
+        setError('Please re-enter your new password in Confirm Password.');
+        return;
+      }
+      if (newPassword !== confirmNewPassword) {
+        setError('Both new passwords do not match. Please enter the same password twice.');
+        return;
+      }
+
       setLoading(true);
       try {
-        await sendPasswordResetEmail(auth, cleanEmail);
-        setInfoMessage('Password reset instructions have been sent to your email.');
-        setTimeout(() => {
-          setIsForgotPassword(false);
-          setInfoMessage(null);
-        }, 4000);
+        await standaloneAuth.recoverPasswordAndStartPinSetup(cleanEmail, newPassword);
+        if (rememberMe) {
+          localStorage.setItem(
+            'errorex_saved_credentials',
+            JSON.stringify({ email: cleanEmail, password: newPassword, rememberMe: true })
+          );
+        }
+        setPassword(newPassword);
+        setIsForgotPassword(false);
+        setForgotStep('email');
+        onClose();
       } catch (err: any) {
-        setError(err.message || 'Failed to send password reset email.');
+        setError(err?.message || 'Failed to update password.');
       } finally {
         setLoading(false);
       }
@@ -200,49 +187,39 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   };
 
   const passwordsMatch = Boolean(password && confirmPassword && password === confirmPassword);
+  const newPasswordsMatch = Boolean(newPassword && confirmNewPassword && newPassword === confirmNewPassword);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto">
-      <div className="relative w-full max-w-md p-6 sm:p-8 rounded-3xl bg-[#0E0E11] border border-[var(--accent-border)] gold-glow shadow-2xl my-4">
+    <div
+      className="fixed inset-0 z-50 flex flex-col items-center p-3 sm:p-5 bg-black/80 backdrop-blur-md overflow-y-auto"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-[400px] sm:max-w-md p-5 sm:p-8 rounded-3xl bg-[#0E0E12] border border-[var(--accent-border)] gold-glow shadow-2xl my-auto max-h-[94dvh] overflow-y-auto"
+        onClick={e => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="absolute right-4 top-4 w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+        >
+          ✕
+        </button>
+
         {/* Header with Crown */}
         <div className="flex flex-col items-center text-center mb-5">
           <CrownLogo size="lg" showWordmark={true} />
           <p className="mt-2 text-xs uppercase tracking-[0.2em] text-[#A3A3A3]">
             {isForgotPassword
-              ? 'Reset Account Password'
+              ? forgotStep === 'email'
+                ? 'Forgot Password • Verify Gmail'
+                : 'Step 1 of 2 • Set New Password'
               : isRegister
               ? 'Step 1 of 2 • Create Sovereign ID'
               : 'Authenticate Account'}
           </p>
         </div>
-
-        {/* Google ID Authentication Button */}
-        {!isForgotPassword && (
-          <div className="mb-4">
-            <button
-              type="button"
-              onClick={handleGoogleSignIn}
-              disabled={loading}
-              className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-neutral-100 text-neutral-900 border border-neutral-300 font-semibold text-xs flex items-center justify-center gap-3 transition-all shadow-md active:scale-[0.99] cursor-pointer"
-            >
-              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-              </svg>
-              <span>Continue with Google ID</span>
-            </button>
-
-            <div className="flex items-center gap-3 my-4">
-              <div className="flex-1 h-px bg-white/10" />
-              <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-mono">
-                or gmail & password
-              </span>
-              <div className="flex-1 h-px bg-white/10" />
-            </div>
-          </div>
-        )}
 
         {/* Tab switch: Sign In vs Create Account */}
         {!isForgotPassword && (
@@ -252,6 +229,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
               onClick={() => {
                 setIsRegister(false);
                 setError(null);
+                setInfoMessage(null);
               }}
               className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                 !isRegister
@@ -266,6 +244,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
               onClick={() => {
                 setIsRegister(true);
                 setError(null);
+                setInfoMessage(null);
               }}
               className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                 isRegister
@@ -313,22 +292,97 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             </div>
           )}
 
-          <div>
-            <label className="block text-xs font-medium text-neutral-300 mb-1.5">
-              Gmail / Email Address
-            </label>
-            <div className="relative">
-              <Mail className="w-4 h-4 absolute left-3.5 top-3 text-neutral-500" />
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="yourname@gmail.com"
-                className="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl bg-neutral-900/80 border border-neutral-700/60 focus:border-[var(--accent-primary)] focus:outline-none text-white placeholder-neutral-500 transition-colors"
-              />
+          {(!isForgotPassword || forgotStep === 'email') && (
+            <div>
+              <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                Gmail / Email Address
+              </label>
+              <div className="relative">
+                <Mail className="w-4 h-4 absolute left-3.5 top-3 text-neutral-500" />
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="yourname@gmail.com"
+                  className="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl bg-neutral-900/80 border border-neutral-700/60 focus:border-[var(--accent-primary)] focus:outline-none text-white placeholder-neutral-500 transition-colors"
+                />
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Forgot Password Step 2: New Password + Confirm Password */}
+          {isForgotPassword && forgotStep === 'new_password' && (
+            <>
+              <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-neutral-900/80 border border-[var(--accent-border)] text-xs">
+                <div className="min-w-0">
+                  <span className="text-[10px] uppercase tracking-wider text-neutral-500 block">
+                    Verified Account {verifiedDisplayName ? `(${verifiedDisplayName})` : ''}
+                  </span>
+                  <span className="font-mono text-[var(--accent-primary)] truncate block">
+                    {email.trim().toLowerCase()}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForgotStep('email');
+                    setError(null);
+                    setInfoMessage(null);
+                  }}
+                  className="text-[11px] text-neutral-400 hover:text-[var(--accent-primary)] ml-2 shrink-0 cursor-pointer"
+                >
+                  Change
+                </button>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                  New Password
+                </label>
+                <div className="relative">
+                  <KeyRound className="w-4 h-4 absolute left-3.5 top-3 text-neutral-500" />
+                  <input
+                    type="password"
+                    required
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    placeholder="Enter new password (min 6 characters)"
+                    className="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl bg-neutral-900/80 border border-neutral-700/60 focus:border-[var(--accent-primary)] focus:outline-none text-white placeholder-neutral-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-medium text-neutral-300">
+                    Confirm Password
+                  </label>
+                  {confirmNewPassword && (
+                    <span
+                      className={`text-[10px] font-mono flex items-center gap-1 ${
+                        newPasswordsMatch ? 'text-emerald-400' : 'text-rose-400'
+                      }`}
+                    >
+                      {newPasswordsMatch ? <Check className="w-3 h-3" /> : null}
+                      {newPasswordsMatch ? 'Matched' : 'Not matched'}
+                    </span>
+                  )}
+                </div>
+                <div className="relative">
+                  <ShieldCheck className="w-4 h-4 absolute left-3.5 top-3 text-neutral-500" />
+                  <input
+                    type="password"
+                    required
+                    value={confirmNewPassword}
+                    onChange={e => setConfirmNewPassword(e.target.value)}
+                    placeholder="Re-enter new password"
+                    className="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl bg-neutral-900/80 border border-neutral-700/60 focus:border-[var(--accent-primary)] focus:outline-none text-white placeholder-neutral-500 transition-colors"
+                  />
+                </div>
+              </div>
+            </>
+          )}
 
           {!isForgotPassword && (
             <>
@@ -340,7 +394,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                   {!isRegister && (
                     <button
                       type="button"
-                      onClick={() => setIsForgotPassword(true)}
+                      onClick={() => {
+                        setIsForgotPassword(true);
+                        setForgotStep('email');
+                        setError(null);
+                        setInfoMessage(null);
+                        setNewPassword('');
+                        setConfirmNewPassword('');
+                      }}
                       className="text-xs text-[var(--accent-primary)] hover:underline cursor-pointer"
                     >
                       Forgot?
@@ -413,7 +474,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
               <>
                 <span>
                   {isForgotPassword
-                    ? 'Send Reset Link'
+                    ? forgotStep === 'email'
+                      ? 'Next'
+                      : 'Confirm & Set Calculator Password'
                     : isRegister
                     ? 'Next: Set Calculator PIN'
                     : 'Sign In'}
@@ -430,7 +493,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
               type="button"
               onClick={() => {
                 setIsForgotPassword(false);
+                setForgotStep('email');
                 setError(null);
+                setInfoMessage(null);
               }}
               className="text-xs text-neutral-400 hover:text-[var(--accent-primary)] cursor-pointer"
             >
@@ -441,7 +506,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
 
         <div className="mt-5 pt-3 border-t border-neutral-800 text-center">
           <p className="text-[11px] text-neutral-500">
-            {isRegister
+            {isForgotPassword
+              ? forgotStep === 'email'
+                ? 'Step 1: Verify your registered Gmail address to continue.'
+                : 'Step 2: Confirm your new password, then select your 8-digit Calculator Password.'
+              : isRegister
               ? 'Step 1: Confirm Gmail & Password → Step 2: Set your 8-digit Calculator Unlock PIN.'
               : 'Account password and secret 8-digit Calculator PIN are two separate security layers.'}
           </p>

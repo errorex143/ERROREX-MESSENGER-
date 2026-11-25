@@ -40,6 +40,7 @@ export interface UserProfile {
   displayName: string;
   photoURL?: string;
   bio?: string;
+  privacySettings?: PrivacySettings;
   createdAt: string;
   updatedAt?: string;
   isOnline?: boolean;
@@ -79,7 +80,16 @@ export interface Friendship {
 export interface Conversation {
   id: string;
   participants: string[];
-  participantDetails?: Record<string, { displayName: string; username: string; photoURL?: string }>;
+  participantDetails?: Record<
+    string,
+    {
+      displayName: string;
+      username: string;
+      photoURL?: string;
+      bio?: string;
+      privacy?: PrivacySettings;
+    }
+  >;
   isGroup: boolean;
   groupName?: string;
   groupPhoto?: string;

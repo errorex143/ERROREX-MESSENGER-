@@ -9,7 +9,6 @@ import {
   Eye,
   User,
   KeyRound,
-  Shield,
   Sun,
   Moon,
   Laptop,
@@ -19,7 +18,6 @@ import {
   Camera,
   AlertCircle,
   Sparkles,
-  Info,
   RefreshCw
 } from 'lucide-react';
 import { updatePassword } from '../../lib/firebase';
@@ -31,7 +29,7 @@ const HERALDIC_AVATARS = [
   'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80'
 ];
 
-const WHATSAPP_STATUS_PRESETS = [
+const STATUS_PRESETS = [
   'Available',
   'Busy',
   'At work',
@@ -45,7 +43,7 @@ const WHATSAPP_STATUS_PRESETS = [
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  initialTab?: 'appearance' | 'privacy' | 'profile' | 'pin' | 'account';
+  initialTab?: 'appearance' | 'privacy' | 'profile' | 'pin';
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -65,7 +63,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     formattedCountdown
   } = useTheme();
 
-  const [activeTab, setActiveTab] = useState<'appearance' | 'privacy' | 'profile' | 'pin' | 'account'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'appearance' | 'privacy' | 'profile' | 'pin'>(initialTab);
 
   // Account Password Change State
   const [newPassword, setNewPassword] = useState('');
@@ -162,11 +160,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setTimeout(() => setProfileMessage(null), 3000);
   };
 
-  // Handle Privacy Change
+  // Handle Privacy Change & sync globally
   const updatePrivacyField = (key: keyof PrivacySettings, value: any) => {
     const updated = { ...privacy, [key]: value };
     setPrivacy(updated);
     chatStore.savePrivacySettings(updated);
+    updateUserProfile({ privacySettings: updated }).catch(() => {});
     setPrivacySavedNotice(true);
     setTimeout(() => setPrivacySavedNotice(false), 2500);
   };
@@ -216,18 +215,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md">
-      <div className="w-full max-w-2xl max-h-[92vh] flex flex-col rounded-3xl bg-[var(--bg-sidebar)] border border-[var(--accent-border)] gold-glow shadow-2xl overflow-hidden text-[var(--text-main)]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-black/80 backdrop-blur-md">
+      <div className="w-full max-w-2xl max-h-[92dvh] flex flex-col rounded-2xl sm:rounded-3xl bg-[var(--bg-sidebar)] border border-[var(--accent-border)] gold-glow shadow-2xl overflow-hidden text-[var(--text-main)]">
         {/* Modal Header */}
-        <div className="p-4 sm:p-5 border-b border-neutral-200 dark:border-white/5 flex items-center justify-between bg-[var(--bg-card)] shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-[var(--accent-surface)] border border-[var(--accent-primary)] flex items-center justify-center text-[var(--accent-primary)] shadow-sm">
-              <Sparkles className="w-5 h-5" />
+        <div className="p-3.5 sm:p-5 border-b border-neutral-200 dark:border-white/5 flex items-center justify-between gap-2 bg-[var(--bg-card)] shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-[var(--accent-surface)] border border-[var(--accent-primary)] flex items-center justify-center text-[var(--accent-primary)] shadow-sm shrink-0">
+              <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <div>
-              <h2 className="text-sm sm:text-base font-bold text-[var(--text-main)] flex items-center gap-2">
-                <span>ERROREX Settings</span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[var(--accent-surface)] text-[var(--accent-primary)] border border-[var(--accent-border)] font-semibold">
+            <div className="min-w-0">
+              <h2 className="text-sm sm:text-base font-bold text-[var(--text-main)] flex items-center gap-2 flex-wrap">
+                <span className="truncate">ERROREX Settings</span>
+                <span className="hidden sm:inline-flex text-[10px] font-mono px-2 py-0.5 rounded-full bg-[var(--accent-surface)] text-[var(--accent-primary)] border border-[var(--accent-border)] font-semibold">
                   Messenger Preferences
                 </span>
               </h2>
@@ -237,15 +236,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-neutral-200/50 dark:bg-neutral-800/50 hover:bg-neutral-300 dark:hover:bg-neutral-700 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors"
+            className="w-8 h-8 rounded-full bg-neutral-200/50 dark:bg-neutral-800/50 hover:bg-neutral-300 dark:hover:bg-neutral-700 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors shrink-0 cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Modal Navigation Tabs: All 5 Function Buttons FULLY visible */}
+        {/* Modal Navigation Tabs */}
         <div className="p-2 sm:p-2.5 border-b border-neutral-200 dark:border-white/5 bg-[var(--bg-card)] shrink-0">
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 sm:gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-2">
             <button
               type="button"
               onClick={() => setActiveTab('appearance')}
@@ -275,7 +274,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <button
               type="button"
               onClick={() => setActiveTab('profile')}
-              className={`py-2 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer col-span-2 sm:col-span-1 ${
+              className={`py-2 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                 activeTab === 'profile'
                   ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--accent-primary)] font-bold shadow-sm'
                   : 'bg-[var(--bg-sidebar)] border border-neutral-200 dark:border-white/5 text-[var(--text-muted)] hover:text-[var(--text-main)]'
@@ -297,19 +296,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <KeyRound className="w-3.5 h-3.5 shrink-0 text-[var(--accent-primary)]" />
               <span className="truncate">Secret 8 Digit</span>
             </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('account')}
-              className={`py-2 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                activeTab === 'account'
-                  ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--accent-primary)] font-bold shadow-sm'
-                  : 'bg-[var(--bg-sidebar)] border border-neutral-200 dark:border-white/5 text-[var(--text-muted)] hover:text-[var(--text-main)]'
-              }`}
-            >
-              <Shield className="w-3.5 h-3.5 shrink-0 text-[var(--accent-primary)]" />
-              <span className="truncate">Account Supabase</span>
-            </button>
           </div>
         </div>
 
@@ -327,44 +313,44 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </h3>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
                   <button
                     type="button"
                     onClick={() => setMode('dark')}
-                    className={`py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 border transition-all ${
+                    className={`py-2 px-1.5 sm:px-3 rounded-xl text-[11px] sm:text-xs font-semibold flex items-center justify-center gap-1 sm:gap-2 border transition-all cursor-pointer ${
                       mode === 'dark'
                         ? 'bg-[var(--accent-surface)] border-[var(--accent-primary)] text-[var(--text-main)] shadow-sm'
                         : 'bg-neutral-100 dark:bg-neutral-900 border-neutral-300 dark:border-neutral-800 text-[var(--text-muted)] hover:text-[var(--text-main)]'
                     }`}
                   >
-                    <Moon className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
-                    <span>Dark Mode</span>
+                    <Moon className="w-3.5 h-3.5 shrink-0 text-[var(--accent-primary)]" />
+                    <span className="truncate">Dark Mode</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setMode('light')}
-                    className={`py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 border transition-all ${
+                    className={`py-2 px-1.5 sm:px-3 rounded-xl text-[11px] sm:text-xs font-semibold flex items-center justify-center gap-1 sm:gap-2 border transition-all cursor-pointer ${
                       mode === 'light'
                         ? 'bg-[var(--accent-surface)] border-[var(--accent-primary)] text-[var(--text-main)] shadow-sm'
                         : 'bg-neutral-100 dark:bg-neutral-900 border-neutral-300 dark:border-neutral-800 text-[var(--text-muted)] hover:text-[var(--text-main)]'
                     }`}
                   >
-                    <Sun className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
-                    <span>Light Mode</span>
+                    <Sun className="w-3.5 h-3.5 shrink-0 text-[var(--accent-primary)]" />
+                    <span className="truncate">Light Mode</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setMode('system')}
-                    className={`py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 border transition-all ${
+                    className={`py-2 px-1.5 sm:px-3 rounded-xl text-[11px] sm:text-xs font-semibold flex items-center justify-center gap-1 sm:gap-2 border transition-all cursor-pointer ${
                       mode === 'system'
                         ? 'bg-[var(--accent-surface)] border-[var(--accent-primary)] text-[var(--text-main)] shadow-sm'
                         : 'bg-neutral-100 dark:bg-neutral-900 border-neutral-300 dark:border-neutral-800 text-[var(--text-muted)] hover:text-[var(--text-main)]'
                     }`}
                   >
-                    <Laptop className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
-                    <span>System Auto</span>
+                    <Laptop className="w-3.5 h-3.5 shrink-0 text-[var(--accent-primary)]" />
+                    <span className="truncate">System Auto</span>
                   </button>
                 </div>
               </div>
@@ -636,7 +622,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div className="mt-1.5 space-y-1">
                     <span className="text-[10px] text-[var(--text-muted)] block">Status Presets:</span>
                     <div className="flex flex-wrap gap-1">
-                      {WHATSAPP_STATUS_PRESETS.map((preset, idx) => (
+                      {STATUS_PRESETS.map((preset, idx) => (
                         <button
                           key={idx}
                           type="button"
@@ -853,30 +839,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </form>
               </div>
 
-              {/* Instant Lock to Calculator */}
-              <div className="p-4 rounded-2xl bg-[var(--bg-card)] border border-rose-950/50 flex items-center justify-between shadow-sm">
-                <div>
-                  <h4 className="text-xs font-bold text-rose-500">Lock Application</h4>
-                  <p className="text-[10px] text-[var(--text-muted)]">
-                    Immediately exit messenger and display the calculator.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={lockMessenger}
-                  className="py-1.5 px-3.5 rounded-xl bg-neutral-900 border border-[var(--accent-border)] hover:border-[var(--accent-primary)] text-xs text-white font-semibold flex items-center gap-1.5"
-                >
-                  <Lock className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
-                  <span>Lock Now</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 5: Account */}
-          {activeTab === 'account' && (
-            <div className="space-y-4">
-
               {/* Change Password Card */}
               <div className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--accent-border)] space-y-3 shadow-sm">
                 <div>
@@ -918,7 +880,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
 
               {/* Instant Lock to Calculator */}
-              <div className="p-4 rounded-2xl bg-[var(--bg-card)] border border-rose-950/50 flex items-center justify-between shadow-sm">
+              <div className="p-4 rounded-2xl bg-[var(--bg-card)] border border-rose-950/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
                 <div>
                   <h4 className="text-xs font-bold text-rose-500">Lock Application</h4>
                   <p className="text-[10px] text-[var(--text-muted)]">
@@ -928,7 +890,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <button
                   type="button"
                   onClick={lockMessenger}
-                  className="py-1.5 px-3.5 rounded-xl bg-neutral-900 border border-[var(--accent-border)] hover:border-[var(--accent-primary)] text-xs text-white font-semibold flex items-center gap-1.5 cursor-pointer"
+                  className="py-2 px-3.5 rounded-xl bg-neutral-900 border border-[var(--accent-border)] hover:border-[var(--accent-primary)] text-xs text-white font-semibold flex items-center justify-center gap-1.5 cursor-pointer w-full sm:w-auto shrink-0"
                 >
                   <Lock className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
                   <span>Lock Now</span>
@@ -939,14 +901,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="p-3 px-5 border-t border-neutral-200 dark:border-white/5 bg-[var(--bg-card)] flex items-center justify-between shrink-0">
-          <span className="text-[10px] font-mono text-[var(--text-muted)]">
+        <div className="p-3 px-4 sm:px-5 border-t border-neutral-200 dark:border-white/5 bg-[var(--bg-card)] flex items-center justify-between gap-2 shrink-0">
+          <span className="text-[10px] font-mono text-[var(--text-muted)] truncate">
             ERROREX Sovereign Preferences
           </span>
           <button
             type="button"
             onClick={onClose}
-            className="py-1.5 px-4 rounded-xl gold-button text-xs font-semibold text-[var(--text-main)] hover:gold-glow-sm"
+            className="py-1.5 px-4 rounded-xl gold-button text-xs font-semibold text-[var(--text-main)] hover:gold-glow-sm shrink-0 cursor-pointer"
           >
             Close Settings
           </button>

@@ -202,51 +202,48 @@ export const Calculator: React.FC<CalculatorProps> = ({ onOpenAuth }) => {
   }, [clearAll, handleBackspace, handleEquals, inputDecimal, inputDigit, setOperator]);
 
   return (
-    <div className="min-h-[100dvh] w-full flex flex-col items-center justify-start sm:justify-center py-4 sm:py-6 md:py-8 px-3 sm:px-4 pb-12 bg-marble-surface select-none relative overflow-y-auto">
+    <div className="min-h-[100dvh] w-full flex flex-col items-center justify-center py-3 sm:py-5 md:py-6 px-3 sm:px-6 pb-[max(1rem,env(safe-area-inset-bottom))] bg-marble-surface select-none relative overflow-x-hidden overflow-y-auto">
       {/* Subtle Luxury Golden Ambient Glow */}
-      <div className="absolute top-1/4 -left-32 w-96 h-96 rounded-full bg-[var(--accent-glow)] blur-[120px] opacity-20 pointer-events-none" />
-      <div className="absolute bottom-1/4 -right-32 w-96 h-96 rounded-full bg-[var(--accent-glow)] blur-[120px] opacity-20 pointer-events-none" />
+      <div className="absolute top-1/4 -left-32 w-80 sm:w-96 h-80 sm:h-96 rounded-full bg-[var(--accent-glow)] blur-[120px] opacity-20 pointer-events-none" />
+      <div className="absolute bottom-1/4 -right-32 w-80 sm:w-96 h-80 sm:h-96 rounded-full bg-[var(--accent-glow)] blur-[120px] opacity-20 pointer-events-none" />
 
-      {/* Top ERROREX Sovereign Header: ERROREX alone on top, followed cleanly by Function Name & Google ID option */}
-      <header className="w-full max-w-sm sm:max-w-md flex flex-col gap-2.5 mb-4 sm:mb-5 z-10 shrink-0">
+      {/* Top ERROREX Sovereign Header */}
+      <header className="w-full max-w-[390px] sm:max-w-[420px] lg:max-w-[440px] flex flex-col gap-2 mb-3 sm:mb-4 z-10 shrink-0">
         {/* Brand row: ERROREX wordmark alone with crown */}
-        <div className="flex items-center justify-between w-full">
-          <div className="flex items-center">
+        <div className="flex items-center justify-between w-full gap-2">
+          <div className="flex items-center min-w-0">
             <CrownLogo size="md" showWordmark={true} className="hover:scale-105 transition-transform" />
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             {/* Auto Theme Indicator if active */}
             {autoCycleEnabled && (
-              <span className="text-[10px] font-mono px-2.5 py-1 rounded-xl bg-[var(--accent-surface)] text-[var(--accent-primary)] border border-[var(--accent-border)] font-bold flex items-center gap-1.5 shadow-sm animate-pulse">
+              <span className="text-[10px] font-mono px-2 py-1 rounded-xl bg-[var(--accent-surface)] text-[var(--accent-primary)] border border-[var(--accent-border)] font-bold flex items-center gap-1 shadow-sm">
                 <span>🔄</span>
-                <span>Auto: {formattedCountdown}</span>
+                <span>{formattedCountdown}</span>
               </span>
             )}
 
-            {/* Google ID & Save Password Option on Start */}
+            {/* Account Sign In / Register Option */}
             {!user ? (
               <button
+                type="button"
                 onClick={onOpenAuth}
-                className="flex items-center gap-2 py-1.5 px-3 rounded-xl bg-white hover:bg-neutral-100 dark:bg-neutral-900/90 dark:hover:bg-neutral-800 text-xs font-semibold text-neutral-900 dark:text-neutral-100 border border-neutral-300 dark:border-neutral-700 hover:border-[var(--accent-primary)] transition-all shadow-sm active:scale-95 cursor-pointer"
-                title="Sign in with Google ID or Saved Password"
+                className="flex items-center gap-1.5 min-h-[38px] py-1.5 px-3 rounded-xl bg-white hover:bg-neutral-100 dark:bg-neutral-900/90 dark:hover:bg-neutral-800 text-xs font-semibold text-neutral-900 dark:text-neutral-100 border border-neutral-300 dark:border-neutral-700 hover:border-[var(--accent-primary)] transition-all shadow-sm active:scale-95 cursor-pointer whitespace-nowrap"
+                title="Sign in or Create Account"
               >
-                <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24">
-                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-                </svg>
-                <span className="truncate max-w-[120px] sm:max-w-none">Google ID / Pass</span>
+                <LogIn className="w-3.5 h-3.5 text-[var(--accent-primary)] shrink-0" />
+                <span>Sign In / ID</span>
               </button>
             ) : (
               <div className="flex items-center gap-1.5">
-                <span className="text-[11px] font-mono px-2.5 py-1 rounded-xl bg-[var(--accent-surface)] text-[var(--accent-primary)] border border-[var(--accent-border)] font-semibold truncate max-w-[130px]">
+                <span className="text-[11px] font-mono px-2.5 py-1.5 rounded-xl bg-[var(--accent-surface)] text-[var(--accent-primary)] border border-[var(--accent-border)] font-semibold truncate max-w-[115px] sm:max-w-[140px]">
                   {user.displayName || user.email?.split('@')[0] || 'User'}
                 </span>
                 <button
+                  type="button"
                   onClick={logout}
-                  className="p-1.5 rounded-xl border border-neutral-300 dark:border-neutral-700 text-neutral-500 hover:text-rose-400 hover:border-rose-400 text-xs transition-colors"
+                  className="p-2 rounded-xl border border-neutral-300 dark:border-neutral-700 text-neutral-500 hover:text-rose-400 hover:border-rose-400 text-xs transition-colors cursor-pointer"
                   title="Sign Out / Switch ID"
                 >
                   <LogOut className="w-3.5 h-3.5" />
@@ -257,30 +254,30 @@ export const Calculator: React.FC<CalculatorProps> = ({ onOpenAuth }) => {
         </div>
 
         {/* Function Name ALONE and clearly separated */}
-        <div className="w-full flex items-center justify-between px-3.5 py-2 rounded-2xl bg-[var(--bg-card)]/90 border border-[var(--accent-border)] backdrop-blur-md shadow-sm">
-          <span className="text-[10px] font-mono uppercase tracking-[0.22em] text-[var(--accent-primary)] font-bold flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-[var(--accent-primary)] animate-pulse" />
-            <span>FUNCTION: KING VAULT 👑</span>
+        <div className="w-full flex items-center justify-between gap-2 px-3.5 py-2 rounded-2xl bg-[var(--bg-card)]/90 border border-[var(--accent-border)] backdrop-blur-md shadow-sm">
+          <span className="text-[10px] font-mono uppercase tracking-[0.18em] sm:tracking-[0.22em] text-[var(--accent-primary)] font-bold flex items-center gap-2 truncate">
+            <span className="w-2 h-2 rounded-full bg-[var(--accent-primary)] shrink-0" />
+            <span className="truncate">FUNCTION: KING VAULT 👑</span>
           </span>
-          <span className="text-[10px] font-mono text-[var(--text-muted)]">
+          <span className="text-[10px] font-mono text-[var(--text-muted)] shrink-0 whitespace-nowrap">
             Sovereign Calculator
           </span>
         </div>
       </header>
 
       {/* Main Calculator Body */}
-      <main className="w-full max-w-sm sm:max-w-md rounded-3xl p-5 sm:p-7 bg-marble-card border border-[var(--accent-border)] gold-glow shadow-2xl relative z-10 transition-all">
+      <main className="w-full max-w-[390px] sm:max-w-[420px] lg:max-w-[440px] rounded-3xl p-4 sm:p-6 bg-marble-card border border-[var(--accent-border)] gold-glow shadow-2xl relative z-10 transition-all">
         {/* Calculator Display Screen Sub-Header */}
-        <div className="flex items-center justify-between pb-3 mb-3 border-b border-neutral-200 dark:border-white/5">
-          <span className="text-xs tracking-[0.2em] uppercase font-display font-bold gold-gradient-text">
+        <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-neutral-200 dark:border-white/5">
+          <span className="text-[11px] sm:text-xs tracking-[0.2em] uppercase font-display font-bold gold-gradient-text">
             PRECISION INTERFACE
           </span>
         </div>
 
         {/* Display Screen */}
-        <div className="w-full rounded-2xl p-4 sm:p-5 mb-5 bg-[var(--calc-display-bg)] border border-[var(--calc-btn-border)] flex flex-col justify-end min-h-[110px] text-right shadow-inner transition-colors">
+        <div className="w-full rounded-2xl p-3.5 sm:p-5 mb-4 sm:mb-5 bg-[var(--calc-display-bg)] border border-[var(--calc-btn-border)] flex flex-col justify-end min-h-[88px] sm:min-h-[106px] text-right shadow-inner transition-colors">
           {/* History Formula */}
-          <div className="h-6 text-xs sm:text-sm font-mono-calc text-neutral-500 dark:text-neutral-400 truncate mb-1">
+          <div className="h-5 sm:h-6 text-xs sm:text-sm font-mono-calc text-neutral-500 dark:text-neutral-400 truncate mb-1">
             {historyExpression || '\u00A0'}
           </div>
 
@@ -293,33 +290,33 @@ export const Calculator: React.FC<CalculatorProps> = ({ onOpenAuth }) => {
         </div>
 
         {/* Keypad Grid */}
-        <div className="grid grid-cols-4 gap-2.5 sm:gap-3">
+        <div className="grid grid-cols-4 gap-2 sm:gap-3">
           {/* Row 1 */}
           <button
             type="button"
             onClick={clearAll}
-            className="h-12 sm:h-14 md:h-15 rounded-2xl bg-neutral-200/90 dark:bg-neutral-900/90 border border-neutral-300 dark:border-neutral-800 hover:border-rose-400 text-sm font-bold text-rose-500 active:scale-95 transition-all shadow-sm"
+            className="h-12 sm:h-14 rounded-2xl bg-neutral-200/90 dark:bg-neutral-900/90 border border-neutral-300 dark:border-neutral-800 hover:border-rose-400 text-sm font-bold text-rose-500 active:scale-95 transition-all shadow-sm cursor-pointer"
           >
             AC
           </button>
           <button
             type="button"
             onClick={toggleSign}
-            className="h-12 sm:h-14 md:h-15 rounded-2xl bg-neutral-200/90 dark:bg-neutral-900/90 border border-neutral-300 dark:border-neutral-800 text-sm font-bold text-neutral-800 dark:text-neutral-300 active:scale-95 transition-all shadow-sm"
+            className="h-12 sm:h-14 rounded-2xl bg-neutral-200/90 dark:bg-neutral-900/90 border border-neutral-300 dark:border-neutral-800 text-sm font-bold text-neutral-800 dark:text-neutral-300 active:scale-95 transition-all shadow-sm cursor-pointer"
           >
             ±
           </button>
           <button
             type="button"
             onClick={inputPercent}
-            className="h-12 sm:h-14 md:h-15 rounded-2xl bg-neutral-200/90 dark:bg-neutral-900/90 border border-neutral-300 dark:border-neutral-800 text-sm font-bold text-neutral-800 dark:text-neutral-300 active:scale-95 transition-all shadow-sm"
+            className="h-12 sm:h-14 rounded-2xl bg-neutral-200/90 dark:bg-neutral-900/90 border border-neutral-300 dark:border-neutral-800 text-sm font-bold text-neutral-800 dark:text-neutral-300 active:scale-95 transition-all shadow-sm cursor-pointer"
           >
             %
           </button>
           <button
             type="button"
             onClick={() => setOperator('÷')}
-            className={`h-12 sm:h-14 md:h-15 rounded-2xl border text-base font-bold active:scale-95 transition-all shadow-sm ${
+            className={`h-12 sm:h-14 rounded-2xl border text-base font-bold active:scale-95 transition-all shadow-sm cursor-pointer ${
               operation === '÷'
                 ? 'bg-[var(--accent-primary)] text-black border-white'
                 : 'bg-[var(--accent-surface)] border-[var(--accent-border)] text-[var(--accent-primary)] hover:border-[var(--accent-primary)]'
@@ -332,28 +329,28 @@ export const Calculator: React.FC<CalculatorProps> = ({ onOpenAuth }) => {
           <button
             type="button"
             onClick={() => inputDigit('7')}
-            className="h-12 sm:h-14 md:h-15 rounded-2xl gold-button text-lg font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm"
+            className="h-12 sm:h-14 rounded-2xl gold-button text-lg font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
           >
             7
           </button>
           <button
             type="button"
             onClick={() => inputDigit('8')}
-            className="h-12 sm:h-14 md:h-15 rounded-2xl gold-button text-lg font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm"
+            className="h-12 sm:h-14 rounded-2xl gold-button text-lg font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
           >
             8
           </button>
           <button
             type="button"
             onClick={() => inputDigit('9')}
-            className="h-12 sm:h-14 md:h-15 rounded-2xl gold-button text-lg font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm"
+            className="h-12 sm:h-14 rounded-2xl gold-button text-lg font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
           >
             9
           </button>
           <button
             type="button"
             onClick={() => setOperator('×')}
-            className={`h-12 sm:h-14 md:h-15 rounded-2xl border text-base font-bold active:scale-95 transition-all shadow-sm ${
+            className={`h-12 sm:h-14 rounded-2xl border text-base font-bold active:scale-95 transition-all shadow-sm cursor-pointer ${
               operation === '×'
                 ? 'bg-[var(--accent-primary)] text-black border-white'
                 : 'bg-[var(--accent-surface)] border-[var(--accent-border)] text-[var(--accent-primary)] hover:border-[var(--accent-primary)]'
@@ -366,28 +363,28 @@ export const Calculator: React.FC<CalculatorProps> = ({ onOpenAuth }) => {
           <button
             type="button"
             onClick={() => inputDigit('4')}
-            className="h-12 sm:h-14 md:h-15 rounded-2xl gold-button text-lg font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm"
+            className="h-12 sm:h-14 rounded-2xl gold-button text-lg font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
           >
             4
           </button>
           <button
             type="button"
             onClick={() => inputDigit('5')}
-            className="h-12 sm:h-14 md:h-15 rounded-2xl gold-button text-lg font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm"
+            className="h-12 sm:h-14 rounded-2xl gold-button text-lg font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
           >
             5
           </button>
           <button
             type="button"
             onClick={() => inputDigit('6')}
-            className="h-12 sm:h-14 md:h-15 rounded-2xl gold-button text-lg font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm"
+            className="h-12 sm:h-14 rounded-2xl gold-button text-lg font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
           >
             6
           </button>
           <button
             type="button"
             onClick={() => setOperator('-')}
-            className={`h-12 sm:h-14 md:h-15 rounded-2xl border text-base font-bold active:scale-95 transition-all shadow-sm ${
+            className={`h-12 sm:h-14 rounded-2xl border text-base font-bold active:scale-95 transition-all shadow-sm cursor-pointer ${
               operation === '-'
                 ? 'bg-[var(--accent-primary)] text-black border-white'
                 : 'bg-[var(--accent-surface)] border-[var(--accent-border)] text-[var(--accent-primary)] hover:border-[var(--accent-primary)]'
@@ -400,28 +397,28 @@ export const Calculator: React.FC<CalculatorProps> = ({ onOpenAuth }) => {
           <button
             type="button"
             onClick={() => inputDigit('1')}
-            className="h-12 sm:h-14 md:h-15 rounded-2xl gold-button text-lg font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm"
+            className="h-12 sm:h-14 rounded-2xl gold-button text-lg font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
           >
             1
           </button>
           <button
             type="button"
             onClick={() => inputDigit('2')}
-            className="h-12 sm:h-14 md:h-15 rounded-2xl gold-button text-lg font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm"
+            className="h-12 sm:h-14 rounded-2xl gold-button text-lg font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
           >
             2
           </button>
           <button
             type="button"
             onClick={() => inputDigit('3')}
-            className="h-12 sm:h-14 md:h-15 rounded-2xl gold-button text-lg font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm"
+            className="h-12 sm:h-14 rounded-2xl gold-button text-lg font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
           >
             3
           </button>
           <button
             type="button"
             onClick={() => setOperator('+')}
-            className={`h-12 sm:h-14 md:h-15 rounded-2xl border text-base font-bold active:scale-95 transition-all shadow-sm ${
+            className={`h-12 sm:h-14 rounded-2xl border text-base font-bold active:scale-95 transition-all shadow-sm cursor-pointer ${
               operation === '+'
                 ? 'bg-[var(--accent-primary)] text-black border-white'
                 : 'bg-[var(--accent-surface)] border-[var(--accent-border)] text-[var(--accent-primary)] hover:border-[var(--accent-primary)]'
@@ -435,28 +432,28 @@ export const Calculator: React.FC<CalculatorProps> = ({ onOpenAuth }) => {
             type="button"
             onClick={handleBackspace}
             title="Backspace"
-            className="h-12 sm:h-14 md:h-15 rounded-2xl bg-neutral-200/90 dark:bg-neutral-900/90 border border-neutral-300 dark:border-neutral-800 hover:border-neutral-400 text-sm font-bold text-neutral-700 dark:text-neutral-400 active:scale-95 transition-all shadow-sm flex items-center justify-center"
+            className="h-12 sm:h-14 rounded-2xl bg-neutral-200/90 dark:bg-neutral-900/90 border border-neutral-300 dark:border-neutral-800 hover:border-neutral-400 text-sm font-bold text-neutral-700 dark:text-neutral-400 active:scale-95 transition-all shadow-sm flex items-center justify-center cursor-pointer"
           >
             <Delete className="w-5 h-5" />
           </button>
           <button
             type="button"
             onClick={() => inputDigit('0')}
-            className="h-12 sm:h-14 md:h-15 rounded-2xl gold-button text-lg font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm"
+            className="h-12 sm:h-14 rounded-2xl gold-button text-lg font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
           >
             0
           </button>
           <button
             type="button"
             onClick={inputDecimal}
-            className="h-12 sm:h-14 md:h-15 rounded-2xl gold-button text-lg font-mono-calc font-bold text-[var(--text-main)] active:scale-95 transition-all shadow-sm"
+            className="h-12 sm:h-14 rounded-2xl gold-button text-lg font-mono-calc font-bold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
           >
             .
           </button>
           <button
             type="button"
             onClick={handleEquals}
-            className="h-12 sm:h-14 md:h-15 rounded-2xl gold-button-accent text-lg font-bold active:scale-95 transition-all shadow-md flex items-center justify-center"
+            className="h-12 sm:h-14 rounded-2xl gold-button-accent text-lg font-bold active:scale-95 transition-all shadow-md flex items-center justify-center cursor-pointer"
           >
             {isVerifying ? (
               <span className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />

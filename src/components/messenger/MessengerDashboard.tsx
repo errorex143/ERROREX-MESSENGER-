@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { Sidebar, MessengerTab } from './Sidebar';
+import { Sidebar, MobileBottomNav, MessengerTab } from './Sidebar';
 import { ChatList } from './ChatList';
 import { ChatWindow } from './ChatWindow';
 import { ContactsView } from './ContactsView';
@@ -215,36 +215,69 @@ export const MessengerDashboard: React.FC = () => {
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
   const contacts = chatStore.getContacts();
+  const isMobileFullScreenChat = activeTab === 'chats' && Boolean(activeConversationId);
+  const unreadTotal = conversations.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-[var(--bg-page)] text-[var(--text-main)] overflow-hidden relative font-sans transition-colors">
-      {/* Front Top Sovereign Header: ERROREX alone, fully visible without Setting or Lock buttons */}
-      <header className="w-full h-13 border-b border-[var(--accent-border)] bg-[var(--bg-sidebar)] flex items-center justify-between px-4 sm:px-6 shrink-0 z-30 shadow-sm select-none">
+    <div className="h-[100dvh] w-full flex flex-col bg-[var(--bg-page)] text-[var(--text-main)] overflow-hidden relative font-sans transition-colors">
+      {/* Top Header: Hidden on mobile when inside an active full-screen chat so ChatWindow header gets maximum height */}
+      <header
+        className={`w-full h-12 sm:h-13 border-b border-[var(--accent-border)] bg-[var(--bg-sidebar)] items-center justify-between px-3.5 sm:px-6 shrink-0 z-30 shadow-sm select-none ${
+          isMobileFullScreenChat ? 'hidden md:flex' : 'flex'
+        }`}
+      >
         <div className="flex items-center gap-3 min-w-0">
           <CrownLogo size="md" showWordmark={true} />
           <span className="hidden sm:inline-flex text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-[var(--accent-surface)] text-[var(--accent-primary)] border border-[var(--accent-border)] font-bold uppercase tracking-widest">
             Sovereign Messenger
           </span>
         </div>
+
+        {/* Mobile Quick Controls (visible on < md when sidebar is at bottom) */}
+        <div className="flex md:hidden items-center gap-1.5 shrink-0">
+          <button
+            type="button"
+            onClick={() => setActiveTab('profile')}
+            className="p-2 rounded-xl bg-[var(--bg-card)] border border-[var(--accent-border)] text-[var(--accent-primary)] flex items-center justify-center cursor-pointer"
+            title="Profile"
+          >
+            {userProfile?.photoURL ? (
+              <img
+                src={userProfile.photoURL}
+                alt={userProfile.displayName}
+                className="w-4 h-4 rounded-full object-cover"
+              />
+            ) : (
+              <Users className="w-4 h-4" />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={lockMessenger}
+            className="py-1.5 px-2.5 rounded-xl bg-[var(--accent-surface)] border border-[var(--accent-border)] text-[11px] font-bold text-[var(--accent-primary)] flex items-center gap-1 cursor-pointer"
+            title="Lock to Calculator"
+          >
+            <Lock className="w-3.5 h-3.5" />
+            <span>Lock</span>
+          </button>
+        </div>
       </header>
 
       {/* Main Workspace Area (Sidebar + Active View) */}
-      <div className="flex-1 w-full flex overflow-hidden">
-        {/* Sidebar Navigation: on mobile, if an active chat is open, hide sidebar so chat gets full 100% width */}
-        <div className={activeTab === 'chats' && activeConversationId ? 'hidden md:flex h-full shrink-0' : 'flex h-full shrink-0'}>
-          <Sidebar
-            activeTab={activeTab}
-            onSelectTab={tab => {
-              setActiveTab(tab);
-            }}
-            unreadMessagesCount={conversations.reduce((acc, c) => acc + (c.unreadCount || 0), 0)}
-            pendingRequestsCount={pendingRequestsCount}
-            onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
-          />
-        </div>
+      <div className="flex-1 min-h-0 w-full flex overflow-hidden">
+        {/* Desktop & Tablet Left Navigation */}
+        <Sidebar
+          activeTab={activeTab}
+          onSelectTab={tab => {
+            setActiveTab(tab);
+          }}
+          unreadMessagesCount={unreadTotal}
+          pendingRequestsCount={pendingRequestsCount}
+          onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
+        />
 
         {/* Content Container */}
-        <div className="flex-1 h-full flex overflow-hidden">
+        <div className="flex-1 min-w-0 h-full flex overflow-hidden">
         {/* Chats Tab: Split Screen */}
         {activeTab === 'chats' && (
           <div className="w-full h-full flex overflow-hidden">
@@ -388,10 +421,29 @@ export const MessengerDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* New Chat Modal (Quick WhatsApp Contact Launcher) */}
+      {/* Mobile Bottom Navigation Bar (hidden inside active chat so keyboard & chat get 100% height) */}
+      {!isMobileFullScreenChat && (
+        <MobileBottomNav
+          activeTab={activeTab}
+          onSelectTab={tab => {
+            setActiveTab(tab);
+          }}
+          unreadMessagesCount={unreadTotal}
+          pendingRequestsCount={pendingRequestsCount}
+          onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
+        />
+      )}
+
+      {/* New Chat Modal */}
       {isNewChatModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-          <div className="w-full max-w-md p-6 rounded-3xl bg-[var(--bg-sidebar)] border border-[var(--accent-border)] gold-glow shadow-2xl flex flex-col space-y-4">
+        <div
+          className="fixed inset-0 z-50 flex flex-col items-center p-3 sm:p-4 bg-black/80 backdrop-blur-md overflow-y-auto"
+          onClick={() => setIsNewChatModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-md p-5 sm:p-6 rounded-3xl bg-[var(--bg-sidebar)] border border-[var(--accent-border)] gold-glow shadow-2xl flex flex-col space-y-4 my-auto max-h-[90dvh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between pb-2 border-b border-white/5">
               <h2 className="text-sm font-display font-bold gold-gradient-text flex items-center gap-1.5">
                 <MessageSquare className="w-4 h-4 text-[var(--accent-primary)]" />

@@ -5,6 +5,12 @@ interface MarkdownMessageProps {
   content: string;
 }
 
+const HAS_RTL_SCRIPT = /[\u0600-\u06FF]/;
+
+function rtlTextClass(text: string): string {
+  return HAS_RTL_SCRIPT.test(text) ? 'leading-[1.95] text-[14.5px] sm:text-[15.5px]' : '';
+}
+
 function renderInline(text: string): React.ReactNode[] {
   const nodes: React.ReactNode[] = [];
   // Match [label](https://url), **bold**, *italic*, `code`, or bare https:// URLs
@@ -135,7 +141,7 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content }) => 
   }
 
   return (
-    <div className="space-y-3 text-[13.5px] sm:text-[14px] leading-[1.72] text-[var(--text-main)] select-text max-w-[70ch] tracking-[0.005em]">
+    <div className="space-y-3 text-[13.5px] sm:text-[14px] leading-[1.72] text-[var(--text-main)] select-text max-w-full sm:max-w-[70ch] min-w-0 break-words tracking-[0.005em]">
       {segments.map((seg, sIdx) => {
         if (seg.type === 'code') {
           return <CodeBlock key={sIdx} language={seg.lang || 'code'} code={seg.content} />;
@@ -182,7 +188,9 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content }) => 
               className="px-4 py-3 rounded-xl bg-[var(--accent-surface)] border border-[var(--accent-border)] text-[var(--text-main)] italic space-y-1.5 my-1.5"
             >
               {quoteLines.map((ql, qi) => (
-                <p key={qi} dir="auto">{renderInline(ql)}</p>
+                <p key={qi} dir="auto" className={rtlTextClass(ql)}>
+                  {renderInline(ql)}
+                </p>
               ))}
             </blockquote>
           );
@@ -284,7 +292,7 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content }) => 
                 ? 'text-[15px] font-bold text-[var(--text-main)] pt-1.5 tracking-tight'
                 : 'text-[14px] font-semibold text-[var(--accent-primary)] pt-1';
             blocks.push(
-              <div key={`${sIdx}-${idx}-h`} dir="auto" className={sizeClass}>
+              <div key={`${sIdx}-${idx}-h`} dir="auto" className={`${sizeClass} ${rtlTextClass(text)}`}>
                 {renderInline(text)}
               </div>
             );
@@ -316,7 +324,7 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content }) => 
           // Regular paragraph line
           flushList(`${sIdx}-${idx}`);
           blocks.push(
-            <p key={`${sIdx}-${idx}-p`} dir="auto" className="break-words">
+            <p key={`${sIdx}-${idx}-p`} dir="auto" className={`break-words ${rtlTextClass(trimmed)}`}>
               {renderInline(trimmed)}
             </p>
           );

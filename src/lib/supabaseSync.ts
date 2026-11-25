@@ -1,5 +1,20 @@
 import { supabase, isSupabaseConfigured, getSupabaseCredentials } from './supabase';
-import { ChatMessage, Conversation, FriendRequest, Friendship, UserProfile, UserStatus } from '../types';
+import { ChatMessage, Conversation, FriendRequest, Friendship, PrivacySettings, UserProfile, UserStatus } from '../types';
+import { normalizePrivacySettings } from './privacyUtils';
+
+function safeParseJson<T>(val: any, fallback: T): T {
+  if (val === null || val === undefined) return fallback;
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (!trimmed) return fallback;
+    try {
+      return JSON.parse(trimmed) as T;
+    } catch {
+      return fallback;
+    }
+  }
+  return val as T;
+}
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -107,13 +122,18 @@ export function sendOfflineBeacon(uid: string): void {
 // --- Mappers ---
 export function mapRowToUserProfile(row: any): UserProfile & { email?: string } {
   const effectiveUid = row.uid || row.id;
+  const rawPrivacy = safeParseJson<Partial<PrivacySettings> | null>(
+    row.privacy_settings ?? row.privacySettings,
+    null
+  );
   return {
     uid: effectiveUid,
     username: row.username || `user_${String(effectiveUid).slice(0, 6)}`,
     displayName: row.display_name || row.displayName || row.username || 'ERROREX Member',
     email: row.email || '',
     photoURL: row.photo_url ?? row.photoURL ?? '',
-    bio: row.bio || 'Available on ERROREX',
+    bio: row.bio !== undefined && row.bio !== null ? row.bio : 'Available on ERROREX',
+    privacySettings: rawPrivacy ? normalizePrivacySettings(rawPrivacy) : undefined,
     isOnline: row.is_online !== undefined ? Boolean(row.is_online) : (row.isOnline ?? false),
     lastSeen: row.last_seen || row.lastSeen || new Date().toISOString(),
     createdAt: row.created_at || row.createdAt || new Date().toISOString(),
@@ -122,13 +142,15 @@ export function mapRowToUserProfile(row: any): UserProfile & { email?: string } 
 }
 
 function mapRowToConversation(c: any): Conversation {
+  const parsedParticipants = safeParseJson<any[]>(c.participants, []);
+  const parsedDetails = safeParseJson<Record<string, any>>(c.participant_details, {});
   return {
     id: c.id,
     isGroup: Boolean(c.is_group),
     groupName: c.group_name || undefined,
     groupPhoto: c.group_photo || undefined,
-    participants: Array.isArray(c.participants) ? c.participants : [],
-    participantDetails: c.participant_details || {},
+    participants: Array.isArray(parsedParticipants) ? parsedParticipants.map(String) : [],
+    participantDetails: parsedDetails && typeof parsedDetails === 'object' ? parsedDetails : {},
     lastMessageText: c.last_message_text || undefined,
     lastMessageSenderId: c.last_message_sender_id || undefined,
     lastMessageAt: c.last_message_at || c.updated_at,
@@ -139,6 +161,9 @@ function mapRowToConversation(c: any): Conversation {
 }
 
 function mapRowToMessage(m: any): ChatMessage {
+  const parsedReadBy = safeParseJson<string[]>(m.read_by, []);
+  const parsedReactions = safeParseJson<Record<string, string>>(m.reactions, {});
+  const parsedDeletedFor = safeParseJson<string[]>(m.deleted_for, []);
   return {
     id: m.id,
     conversationId: m.conversation_id,
@@ -149,11 +174,11 @@ function mapRowToMessage(m: any): ChatMessage {
     mediaUrl: m.media_url || undefined,
     audioDuration: m.audio_duration || undefined,
     deliveryStatus: m.delivery_status || 'sent',
-    readBy: Array.isArray(m.read_by) ? m.read_by : [],
-    reactions: m.reactions || {},
+    readBy: Array.isArray(parsedReadBy) ? parsedReadBy : [],
+    reactions: parsedReactions && typeof parsedReactions === 'object' ? parsedReactions : {},
     isEdited: Boolean(m.is_edited),
     isDeleted: Boolean(m.is_deleted),
-    deletedFor: Array.isArray(m.deleted_for) ? m.deleted_for : [],
+    deletedFor: Array.isArray(parsedDeletedFor) ? parsedDeletedFor : [],
     deletedForEveryone: Boolean(m.deleted_for_everyone),
     replyToMessageId: m.reply_to_message_id || undefined,
     replyToText: m.reply_to_text || undefined,
@@ -178,12 +203,16 @@ export async function upsertSupabaseUserProfile(
     username: baseUsername || `user_${profile.uid.slice(0, 6)}`,
     display_name: profile.displayName || baseUsername || 'ERROREX Member',
     photo_url: profile.photoURL || '',
-    bio: profile.bio || 'Available on ERROREX',
+    bio: profile.bio !== undefined ? profile.bio : 'Available on ERROREX',
     is_online: profile.isOnline !== false,
     last_seen: profile.lastSeen || new Date().toISOString(),
     created_at: profile.createdAt || new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
+
+  if (profile.privacySettings) {
+    payload.privacy_settings = normalizePrivacySettings(profile.privacySettings);
+  }
 
   if (isValidUUID(profile.uid)) {
     payload.id = profile.uid;
@@ -207,19 +236,39 @@ export async function upsertSupabaseUserProfile(
   };
 
   try {
-    let res = await attemptUpsert(payload);
+    let currentPayload = { ...payload };
+    let res = await attemptUpsert(currentPayload);
     if (res.ok) return true;
 
-    let currentPayload = { ...payload };
     let err = res.error;
 
-    // Handle missing email column on older schemas
-    if (err && (err.message?.includes('email') || err.code === '42703' || err.code === 'PGRST204')) {
-      const { email: _omitted, ...withoutEmail } = currentPayload;
-      currentPayload = withoutEmail;
-      res = await attemptUpsert(currentPayload);
-      if (res.ok) return true;
-      err = res.error;
+    // Handle missing optional columns on older Supabase schemas (privacy_settings / email)
+    for (let i = 0; i < 2 && err; i++) {
+      const msgLower = (err.message || '').toLowerCase();
+      if (msgLower.includes('privacy_settings') && 'privacy_settings' in currentPayload) {
+        const { privacy_settings: _p, ...rest } = currentPayload;
+        currentPayload = rest;
+        res = await attemptUpsert(currentPayload);
+        if (res.ok) return true;
+        err = res.error;
+        continue;
+      }
+      if ((msgLower.includes('email') || err.code === '42703' || err.code === 'PGRST204') && 'email' in currentPayload) {
+        const { email: _omitted, ...withoutEmail } = currentPayload;
+        currentPayload = withoutEmail;
+        res = await attemptUpsert(currentPayload);
+        if (res.ok) return true;
+        err = res.error;
+        continue;
+      }
+      if (err.code === '42703' || err.code === 'PGRST204') {
+        const { privacy_settings: _p, email: _e, ...minimal } = currentPayload;
+        currentPayload = minimal;
+        res = await attemptUpsert(currentPayload);
+        if (res.ok) return true;
+        err = res.error;
+      }
+      break;
     }
 
     // Handle username collision across accounts
@@ -709,16 +758,30 @@ export async function fetchSupabaseConversationById(convId: string): Promise<Con
 export async function fetchSupabaseConversations(uid: string): Promise<Conversation[]> {
   if (!isSupabaseConfigured || !supabase || !uid) return [];
   try {
+    // Pass valid JSONB literal string '["uid"]' instead of JS array (which PostgREST formats as text[] `{uid}`)
     const { data, error } = await supabase
       .from('conversations')
       .select('*')
-      .contains('participants', [uid])
+      .contains('participants', JSON.stringify([uid]))
       .order('updated_at', { ascending: false });
-    if (error || !Array.isArray(data)) {
-      if (error) console.warn('[Supabase] fetch conversations notice:', error.message);
+
+    if (!error && Array.isArray(data)) {
+      return data.map(mapRowToConversation);
+    }
+
+    // Graceful fallback if remote schema uses plain `json` or `text[]` where JSONB `@>` fails
+    const { data: fallbackRows, error: fbError } = await supabase
+      .from('conversations')
+      .select('*')
+      .order('updated_at', { ascending: false });
+
+    if (fbError || !Array.isArray(fallbackRows)) {
       return [];
     }
-    return data.map(mapRowToConversation);
+
+    return fallbackRows
+      .map(mapRowToConversation)
+      .filter(c => Array.isArray(c.participants) && c.participants.includes(uid));
   } catch {
     return [];
   }

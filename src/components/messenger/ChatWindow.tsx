@@ -1,12 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChatMessage, Conversation, PrivacySettings, ThemeName, ColorMode, UserProfile } from '../../types';
+import { ChatMessage, Conversation, Friendship, PrivacySettings, ThemeName, ColorMode, UserProfile } from '../../types';
 import { chatStore } from '../../lib/chatStore';
 import { db, collection, onSnapshot } from '../../lib/firebase';
 import { getCollectionData } from '../../lib/standaloneApi';
 import { isUserCurrentlyOnline } from '../../lib/supabaseSync';
+import {
+  canViewProfilePhoto,
+  canViewBio,
+  canViewLastSeen,
+  canExchangeReadReceipts,
+  resolveTargetPrivacy
+} from '../../lib/privacyUtils';
 import { useTheme, THEMES } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { EmojiKeyboard, LIVE_STICKERS } from '../common/EmojiKeyboard';
+import { AvatarPreviewModal, AvatarPreviewTarget } from '../common/AvatarPreviewModal';
 import {
   Send,
   Smile,
@@ -135,7 +143,7 @@ const VoiceNoteBubble: React.FC<{
   };
 
   return (
-    <div className="flex items-center gap-3 p-2 px-3 rounded-2xl bg-black/25 border border-white/10 min-w-[210px] sm:min-w-[240px]">
+    <div className="flex items-center gap-2.5 sm:gap-3 p-2 px-2.5 sm:px-3 rounded-2xl bg-black/25 border border-white/10 min-w-[185px] sm:min-w-[235px]">
       <button
         type="button"
         onClick={togglePlay}
@@ -215,6 +223,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   // Delete message modal state (Delete for everyone vs Delete for me)
   const [messageToDelete, setMessageToDelete] = useState<ChatMessage | null>(null);
+  const [dpPreviewTarget, setDpPreviewTarget] = useState<AvatarPreviewTarget | null>(null);
 
   // WhatsApp Privacy settings inside in-chat settings
   const [privacy, setPrivacy] = useState<PrivacySettings>(() => chatStore.getPrivacySettings());
@@ -261,6 +270,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     const updated = { ...privacy, [key]: value };
     setPrivacy(updated);
     chatStore.savePrivacySettings(updated);
+    updateUserProfile({ privacySettings: updated }).catch(() => {});
     setPrivacySavedNotice(true);
     setTimeout(() => setPrivacySavedNotice(false), 2500);
   };
@@ -333,7 +343,24 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       conversation.groupName ||
       'Private Contact';
 
-  const isContactOnline = !isBrowserOnline
+  const friendships = getCollectionData<Friendship>('friendships');
+  const otherDetail = otherParticipantId ? conversation.participantDetails?.[otherParticipantId] : undefined;
+
+  const allowPhoto =
+    conversation.isGroup ||
+    canViewProfilePhoto(currentUserId, otherParticipantId, chatUsername, liveProfile, otherDetail, allContacts, friendships);
+  const allowBio =
+    conversation.isGroup ||
+    canViewBio(currentUserId, otherParticipantId, chatUsername, liveProfile, otherDetail, allContacts, friendships);
+  const allowOnline =
+    conversation.isGroup ||
+    canViewLastSeen(currentUserId, otherParticipantId, chatUsername, liveProfile, otherDetail, allContacts, friendships);
+  const targetPrivacy = resolveTargetPrivacy(liveProfile, otherDetail);
+  const allowReadReceipts = conversation.isGroup
+    ? privacy.readReceipts !== false
+    : canExchangeReadReceipts(privacy, targetPrivacy);
+
+  const isContactOnlineRaw = !isBrowserOnline
     ? false
     : conversation.isGroup
     ? true
@@ -345,11 +372,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     ? contactItem.isOnline === true
     : false;
 
-  const chatAvatar = conversation.isGroup
-    ? conversation.groupPhoto
-    : contactItem?.photoURL || liveProfile?.photoURL || conversation.participantDetails?.[otherParticipantId]?.photoURL;
+  const isContactOnline = allowOnline ? isContactOnlineRaw : false;
 
-  const chatBio = liveProfile?.bio || contactItem?.bio || 'Encrypted contact • Active on ERROREX Sovereign Network';
+  const rawAvatar = conversation.isGroup
+    ? conversation.groupPhoto
+    : liveProfile?.photoURL || contactItem?.photoURL || otherDetail?.photoURL;
+  const chatAvatar = allowPhoto ? rawAvatar : undefined;
+
+  const rawBio =
+    liveProfile?.bio ||
+    otherDetail?.bio ||
+    contactItem?.bio ||
+    'Encrypted contact • Active on ERROREX Sovereign Network';
+  const visibleBio = allowBio ? rawBio : null;
+  const chatBio = allowBio ? rawBio : 'Bio hidden by privacy settings';
 
   // Subscribe to real-time chat updates & mark conversation as seen/read
   useEffect(() => {
@@ -518,9 +554,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   };
 
   return (
-    <div className="flex-1 h-full flex flex-col bg-[var(--bg-window)] text-[var(--text-main)] relative select-none transition-colors">
+    <div className="flex-1 min-w-0 h-full flex flex-col bg-[var(--bg-window)] text-[var(--text-main)] relative select-none transition-colors">
       {/* Top Header: Contact Details, Live Net Status, and Encrypted Badge */}
-      <div className="p-3 px-4 bg-[var(--bg-sidebar)] border-b border-[var(--accent-border)] flex items-center justify-between z-10 shrink-0 shadow-sm">
+      <div className="p-2.5 sm:p-3 px-3 sm:px-4 bg-[var(--bg-sidebar)] border-b border-[var(--accent-border)] flex items-center justify-between gap-2 z-10 shrink-0 shadow-sm">
         <div
           onClick={() => setIsContactInfoOpen(true)}
           className="flex items-center gap-3 cursor-pointer group flex-1 min-w-0"
@@ -539,15 +575,32 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             </button>
           )}
 
-          <div className="w-10 h-10 rounded-full bg-neutral-200 dark:bg-neutral-900 border border-[var(--accent-border)] flex items-center justify-center text-[var(--accent-primary)] font-bold text-sm shrink-0 overflow-hidden shadow-sm group-hover:scale-105 transition-transform">
+          <button
+            type="button"
+            onClick={e => {
+              e.stopPropagation();
+              setDpPreviewTarget({
+                displayName: chatTitle,
+                username: chatUsername,
+                photoURL: chatAvatar || null,
+                bio: visibleBio,
+                isOnline: isContactOnline,
+                showOnlineStatus: allowOnline,
+                photoHiddenByPrivacy: !allowPhoto,
+                bioHiddenByPrivacy: !allowBio
+              });
+            }}
+            className="w-10 h-10 rounded-full bg-neutral-200 dark:bg-neutral-900 border border-[var(--accent-border)] flex items-center justify-center text-[var(--accent-primary)] font-bold text-sm shrink-0 overflow-hidden shadow-sm hover:scale-105 hover:border-[var(--accent-primary)] transition-all cursor-pointer"
+            title="View Profile Photo & Bio"
+          >
             {chatAvatar ? (
               <img src={chatAvatar} alt={chatTitle} className="w-full h-full object-cover" />
             ) : (
               chatTitle.slice(0, 1).toUpperCase()
             )}
-          </div>
+          </button>
 
-          <div className="flex flex-col text-left min-w-0">
+          <div className="flex flex-col text-left min-w-0 flex-1">
             <div className="flex items-center gap-1.5 min-w-0">
               <h2 className="text-sm font-bold text-[var(--text-main)] tracking-wide truncate max-w-[150px] sm:max-w-xs group-hover:text-[var(--accent-primary)] transition-colors">
                 {chatTitle}
@@ -561,12 +614,22 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 </span>
               )}
             </div>
-            {/* Live Online / Offline status */}
-            <div className="flex items-center gap-1.5 text-[10px] font-mono">
-              <span className={`w-2 h-2 rounded-full ${isContactOnline ? 'bg-emerald-500' : 'bg-neutral-500'}`} />
-              <span className={isContactOnline ? 'text-emerald-500 dark:text-emerald-400 font-semibold' : 'text-neutral-500 font-medium'}>
-                {isContactOnline ? 'Online' : 'Offline'}
-              </span>
+            {/* Live Online / Offline status & Bio snippet */}
+            <div className="flex items-center gap-1.5 text-[10px] min-w-0">
+              {allowOnline && (
+                <span className="flex items-center gap-1 font-mono shrink-0">
+                  <span className={`w-2 h-2 rounded-full ${isContactOnline ? 'bg-emerald-500' : 'bg-neutral-500'}`} />
+                  <span className={isContactOnline ? 'text-emerald-500 dark:text-emerald-400 font-semibold' : 'text-neutral-500 font-medium'}>
+                    {isContactOnline ? 'Online' : 'Offline'}
+                  </span>
+                </span>
+              )}
+              {allowOnline && visibleBio && <span className="text-neutral-500 shrink-0">·</span>}
+              {visibleBio ? (
+                <span className="text-[var(--text-muted)] truncate">{visibleBio}</span>
+              ) : !allowOnline ? (
+                <span className="text-neutral-500 font-mono truncate">Privacy active</span>
+              ) : null}
             </div>
           </div>
         </div>
@@ -627,7 +690,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
                 {/* Message Bubble with Sender @username and DP identification */}
                 <div
-                  className={`relative max-w-xs sm:max-w-md p-3 rounded-2xl text-xs leading-relaxed shadow-md ${
+                  className={`relative max-w-[86%] sm:max-w-md lg:max-w-lg xl:max-w-xl p-3 rounded-2xl text-xs sm:text-[13px] leading-relaxed shadow-md ${
                     isMsgDeleted
                       ? 'bg-neutral-900/60 border border-neutral-800 text-neutral-400 italic rounded-2xl'
                       : isOwn
@@ -710,10 +773,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   </span>
                   {isOwn && (() => {
                     const isSeen =
-                      msg.deliveryStatus === 'read' ||
-                      Boolean(msg.readBy && msg.readBy.some(id => id !== currentUserId));
+                      allowReadReceipts &&
+                      (msg.deliveryStatus === 'read' ||
+                        Boolean(msg.readBy && msg.readBy.some(id => id !== currentUserId)));
                     const isDelivered =
-                      msg.deliveryStatus === 'delivered' || (!msg.deliveryStatus && isContactOnline);
+                      !isSeen &&
+                      (msg.deliveryStatus === 'delivered' ||
+                        msg.deliveryStatus === 'read' ||
+                        (!msg.deliveryStatus && isContactOnline));
 
                     if (isSeen) {
                       return (
@@ -724,7 +791,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     }
                     if (isDelivered) {
                       return (
-                        <span title="Delivered, not seen yet (Double Black/Grey Tick)" className="flex items-center ml-0.5">
+                        <span title="Delivered, not seen yet (Double Grey Tick)" className="flex items-center ml-0.5">
                           <CheckCheck className="w-3.5 h-3.5 text-neutral-800 dark:text-neutral-400 stroke-[2.2]" />
                         </span>
                       );
@@ -750,8 +817,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 )}
               </div>
 
-              {/* Hover Actions: Emoji Reactions & Reply / Edit / Delete with clear button design */}
-              <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 mt-1 transition-opacity">
+              {/* Message Actions: Always accessible on touchscreens, hover-reveal on desktop */}
+              <div className="opacity-85 md:opacity-0 md:group-hover:opacity-100 flex items-center gap-1 mt-1 transition-opacity">
                 {!isMsgDeleted && (
                   <>
                     <button
@@ -880,7 +947,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       ) : (
         <form
           onSubmit={handleSendMessage}
-          className="p-3 bg-[var(--bg-sidebar)] border-t border-[var(--accent-border)] flex items-center gap-2 shrink-0 shadow-lg"
+          className="px-2.5 sm:px-3 pt-2.5 pb-[max(0.65rem,env(safe-area-inset-bottom))] bg-[var(--bg-sidebar)] border-t border-[var(--accent-border)] flex items-center gap-1.5 sm:gap-2 shrink-0 shadow-lg"
         >
           {/* Hidden File Input */}
           <input
@@ -895,7 +962,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="p-2.5 rounded-xl bg-[var(--bg-card)] border border-[var(--accent-border)] text-[var(--accent-primary)] hover:border-[var(--accent-primary)] hover:gold-glow-sm shadow-sm transition-all flex items-center justify-center shrink-0"
+            className="p-2 sm:p-2.5 rounded-xl bg-[var(--bg-card)] border border-[var(--accent-border)] text-[var(--accent-primary)] hover:border-[var(--accent-primary)] hover:gold-glow-sm shadow-sm transition-all flex items-center justify-center shrink-0 cursor-pointer"
             title="Send Photo / File"
           >
             <Paperclip className="w-4 h-4 stroke-[2]" />
@@ -905,7 +972,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           <button
             type="button"
             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-            className="p-2.5 rounded-xl bg-[var(--bg-card)] border border-[var(--accent-border)] text-[var(--accent-primary)] hover:border-[var(--accent-primary)] hover:gold-glow-sm shadow-sm transition-all flex items-center justify-center shrink-0"
+            className="p-2 sm:p-2.5 rounded-xl bg-[var(--bg-card)] border border-[var(--accent-border)] text-[var(--accent-primary)] hover:border-[var(--accent-primary)] hover:gold-glow-sm shadow-sm transition-all flex items-center justify-center shrink-0 cursor-pointer"
             title="1000 Live Animated Stickers & Emojis"
           >
             <Smile className="w-4 h-4 stroke-[2]" />
@@ -913,27 +980,27 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
           {/* Voice Note Recording Bar or Text Input */}
           {isRecording ? (
-            <div className="flex-1 flex items-center justify-between px-4 py-2 rounded-xl bg-amber-950/40 border border-amber-500/50 text-amber-300">
-              <div className="flex items-center gap-2.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
-                <span className="text-xs font-mono font-semibold">
-                  Recording Voice Note: {Math.floor(recordingSeconds / 60)}:
+            <div className="flex-1 min-w-0 flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl bg-amber-950/40 border border-amber-500/50 text-amber-300">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping shrink-0" />
+                <span className="text-xs font-mono font-semibold truncate">
+                  {Math.floor(recordingSeconds / 60)}:
                   {(recordingSeconds % 60).toString().padStart(2, '0')}
                 </span>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   type="button"
                   onClick={cancelRecording}
-                  className="text-xs font-semibold text-neutral-300 hover:text-white px-3 py-1.5 rounded-xl border border-neutral-700 bg-neutral-900/60 hover:border-neutral-500 transition-colors shadow-sm"
+                  className="text-xs font-semibold text-neutral-300 hover:text-white px-2.5 py-1 rounded-xl border border-neutral-700 bg-neutral-900/60 hover:border-neutral-500 transition-colors shadow-sm cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={stopRecording}
-                  className="text-xs font-bold text-black bg-[var(--accent-primary)] px-4 py-1.5 rounded-xl hover:gold-glow-sm transition-all shadow-md"
+                  className="text-xs font-bold text-black bg-[var(--accent-primary)] px-3 py-1 rounded-xl hover:gold-glow-sm transition-all shadow-md cursor-pointer"
                 >
                   Send Voice
                 </button>
@@ -944,8 +1011,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               type="text"
               value={inputText}
               onChange={e => setInputText(e.target.value)}
-              placeholder="Type encrypted message (press Enter to send)..."
-              className="flex-1 px-4 py-2.5 text-xs rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] placeholder-neutral-500 focus:outline-none transition-colors shadow-inner"
+              placeholder="Type encrypted message..."
+              className="flex-1 min-w-0 px-3 sm:px-4 py-2 sm:py-2.5 text-base sm:text-xs rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] placeholder-neutral-500 focus:outline-none transition-colors shadow-inner"
             />
           )}
 
@@ -953,17 +1020,17 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           {inputText.trim() ? (
             <button
               type="submit"
-              className="px-4 py-2.5 rounded-xl gold-button-accent text-black font-bold hover:gold-glow-sm transition-all shadow-md flex items-center gap-1.5 text-xs uppercase tracking-wider shrink-0"
+              className="px-3 sm:px-4 py-2.5 rounded-xl gold-button-accent text-black font-bold hover:gold-glow-sm transition-all shadow-md flex items-center gap-1.5 text-xs uppercase tracking-wider shrink-0 cursor-pointer"
               title="Send Message"
             >
               <Send className="w-4 h-4 stroke-[2.5]" />
-              <span>Send</span>
+              <span className="hidden sm:inline">Send</span>
             </button>
           ) : (
             <button
               type="button"
               onClick={isRecording ? stopRecording : startRecording}
-              className={`px-3.5 py-2.5 rounded-xl transition-all shadow-md flex items-center gap-1.5 shrink-0 text-xs font-semibold ${
+              className={`px-3 sm:px-3.5 py-2.5 rounded-xl transition-all shadow-md flex items-center gap-1.5 shrink-0 text-xs font-semibold cursor-pointer ${
                 isRecording
                   ? 'bg-rose-600 text-white animate-pulse'
                   : 'gold-button border border-[var(--accent-border)] hover:border-[var(--accent-primary)] text-[var(--accent-primary)] hover:gold-glow-sm'
@@ -979,8 +1046,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
       {/* WhatsApp-Style Contact Info Modal: DP, Username, Bio, Privacy */}
       {isContactInfoOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-          <div className="w-full max-w-sm p-6 rounded-3xl bg-[var(--bg-sidebar)] border border-[var(--accent-border)] gold-glow shadow-2xl flex flex-col items-center text-center space-y-4">
+        <div
+          className="fixed inset-0 z-50 flex flex-col items-center p-3 sm:p-4 bg-black/80 backdrop-blur-md overflow-y-auto"
+          onClick={() => setIsContactInfoOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm p-5 sm:p-6 rounded-3xl bg-[var(--bg-sidebar)] border border-[var(--accent-border)] gold-glow shadow-2xl flex flex-col items-center text-center space-y-4 my-auto max-h-[90dvh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}
+          >
             <div className="w-full flex items-center justify-between pb-2 border-b border-white/5">
               <span className="text-xs font-semibold text-[var(--text-muted)]">Contact Info</span>
               <button
@@ -991,14 +1064,30 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               </button>
             </div>
 
-            {/* Large DP */}
-            <div className="w-24 h-24 rounded-full bg-neutral-200 dark:bg-neutral-900 border-2 border-[var(--accent-border)] gold-glow flex items-center justify-center text-[var(--accent-primary)] font-bold text-3xl overflow-hidden shadow-lg">
+            {/* Large Clickable DP */}
+            <button
+              type="button"
+              onClick={() =>
+                setDpPreviewTarget({
+                  displayName: chatTitle,
+                  username: chatUsername,
+                  photoURL: chatAvatar || null,
+                  bio: visibleBio,
+                  isOnline: isContactOnline,
+                  showOnlineStatus: allowOnline,
+                  photoHiddenByPrivacy: !allowPhoto,
+                  bioHiddenByPrivacy: !allowBio
+                })
+              }
+              className="w-24 h-24 rounded-full bg-neutral-200 dark:bg-neutral-900 border-2 border-[var(--accent-border)] hover:border-[var(--accent-primary)] gold-glow flex items-center justify-center text-[var(--accent-primary)] font-bold text-3xl overflow-hidden shadow-lg hover:scale-105 transition-transform cursor-pointer"
+              title="Tap to view full-size DP"
+            >
               {chatAvatar ? (
                 <img src={chatAvatar} alt={chatTitle} className="w-full h-full object-cover" />
               ) : (
                 chatTitle.slice(0, 1).toUpperCase()
               )}
-            </div>
+            </button>
 
             {/* Display Name & Username */}
             <div>
@@ -1013,7 +1102,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] tracking-wider">
                 About / Bio
               </span>
-              <p className="text-xs text-[var(--text-main)] font-medium leading-relaxed">
+              <p className={`text-xs font-medium leading-relaxed ${allowBio ? 'text-[var(--text-main)]' : 'text-[var(--text-muted)] italic'}`}>
                 {chatBio}
               </p>
             </div>
@@ -1039,10 +1128,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           </div>
         </div>
       )}
-      {/* In-Chat Settings Modal (Profile DP/Name/Bio, WhatsApp Privacy, 3 Modes & 8 Colors, Chat Tools) */}
+      {/* In-Chat Settings Modal */}
       {isChatSettingsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md">
-          <div className="w-full max-w-xl max-h-[90vh] flex flex-col rounded-3xl bg-[var(--bg-sidebar)] border border-[var(--accent-border)] gold-glow shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-black/80 backdrop-blur-md">
+          <div className="w-full max-w-xl max-h-[92dvh] flex flex-col rounded-3xl bg-[var(--bg-sidebar)] border border-[var(--accent-border)] gold-glow shadow-2xl overflow-hidden">
             {/* Modal Header */}
             <div className="p-4 sm:p-5 border-b border-neutral-200 dark:border-white/5 flex items-center justify-between bg-[var(--bg-card)] shrink-0">
               <div className="flex items-center gap-2.5">
@@ -1607,13 +1696,29 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       Chat Security Handshake
                     </span>
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-neutral-200 dark:bg-neutral-900 border border-[var(--accent-border)] flex items-center justify-center text-[var(--accent-primary)] font-bold text-sm shrink-0 overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDpPreviewTarget({
+                            displayName: chatTitle,
+                            username: chatUsername,
+                            photoURL: chatAvatar || null,
+                            bio: visibleBio,
+                            isOnline: isContactOnline,
+                            showOnlineStatus: allowOnline,
+                            photoHiddenByPrivacy: !allowPhoto,
+                            bioHiddenByPrivacy: !allowBio
+                          })
+                        }
+                        className="w-10 h-10 rounded-full bg-neutral-200 dark:bg-neutral-900 border border-[var(--accent-border)] hover:border-[var(--accent-primary)] flex items-center justify-center text-[var(--accent-primary)] font-bold text-sm shrink-0 overflow-hidden cursor-pointer"
+                        title="View full-size DP"
+                      >
                         {chatAvatar ? (
                           <img src={chatAvatar} alt={chatTitle} className="w-full h-full object-cover" />
                         ) : (
                           chatTitle.slice(0, 1).toUpperCase()
                         )}
-                      </div>
+                      </button>
                       <div className="min-w-0">
                         <p className="text-xs font-bold text-[var(--text-main)] truncate">{chatTitle}</p>
                         <p className="text-[10px] font-mono text-[var(--accent-primary)]">@{chatUsername}</p>
@@ -1710,6 +1815,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           </div>
         </div>
       )}
+      <AvatarPreviewModal target={dpPreviewTarget} onClose={() => setDpPreviewTarget(null)} />
     </div>
   );
 };

@@ -17,6 +17,7 @@ const MESSAGES_STORAGE_KEY_PREFIX = 'errorex_messages_v5_';
 const CONTACTS_STORAGE_KEY = 'errorex_contacts_v5';
 const PRIVACY_STORAGE_KEY = 'errorex_privacy_v5';
 const PROFILE_STORAGE_KEY = 'errorex_profile_v5';
+const LOCAL_READ_AT_STORAGE_KEY = 'errorex_local_read_at_v5';
 
 // Purge legacy mock data / test users on startup for a 100% fresh app
 try {
@@ -53,16 +54,37 @@ let chatRealtimeUid: string | null = null;
 let chatPollTimer: any = null;
 let activeHydratePromise: Promise<void> | null = null;
 
-function computeUnreadCountForUser(messages: ChatMessage[], uid: string): number {
+function getLocalReadAtMap(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(LOCAL_READ_AT_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function setLocalReadAt(conversationId: string, iso: string) {
+  try {
+    const map = getLocalReadAtMap();
+    map[conversationId] = iso;
+    localStorage.setItem(LOCAL_READ_AT_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    // quiet
+  }
+}
+
+function computeUnreadCountForUser(messages: ChatMessage[], uid: string, conversationId?: string): number {
   if (!uid) return 0;
-  return messages.filter(
-    m =>
-      m.senderId !== uid &&
-      m.senderId !== 'system' &&
-      !m.isDeleted &&
-      !m.deletedFor?.includes(uid) &&
-      !(Array.isArray(m.readBy) && m.readBy.includes(uid))
-  ).length;
+  const readAtIso = conversationId ? getLocalReadAtMap()[conversationId] : undefined;
+  const readAtMs = readAtIso ? new Date(readAtIso).getTime() : 0;
+
+  return messages.filter(m => {
+    if (m.senderId === uid || m.senderId === 'system') return false;
+    if (m.isDeleted || m.deletedFor?.includes(uid)) return false;
+    if (Array.isArray(m.readBy) && m.readBy.includes(uid)) return false;
+    if (readAtMs && new Date(m.createdAt).getTime() <= readAtMs) return false;
+    return true;
+  }).length;
 }
 
 export const chatStore = {
@@ -152,7 +174,7 @@ export const chatStore = {
         conv.lastMessageText = preview;
         conv.lastMessageSenderId = last.senderId;
         conv.lastMessageAt = last.createdAt;
-        conv.unreadCount = conv.isBlocked ? 0 : computeUnreadCountForUser(sorted, currentUid);
+        conv.unreadCount = conv.isBlocked ? 0 : computeUnreadCountForUser(sorted, currentUid, conversationId);
         allConvs[idx] = conv;
         this.saveConversations(allConvs);
       }
@@ -173,11 +195,18 @@ export const chatStore = {
     remoteConvs.forEach(rc => {
       const prev = convMap.get(rc.id);
       const localMsgs = this.getMessages(rc.id);
+      const localReadAtIso = getLocalReadAtMap()[rc.id];
+      const localReadAtMs = localReadAtIso ? new Date(localReadAtIso).getTime() : 0;
+      const lastMsgMs = rc.lastMessageAt ? new Date(rc.lastMessageAt).getTime() : 0;
+
       const computedUnread = prev?.isBlocked
         ? 0
         : localMsgs.length > 0
-        ? computeUnreadCountForUser(localMsgs, currentUid)
-        : rc.lastMessageSenderId && rc.lastMessageSenderId !== currentUid && rc.lastMessageSenderId !== 'system'
+        ? computeUnreadCountForUser(localMsgs, currentUid, rc.id)
+        : rc.lastMessageSenderId &&
+          rc.lastMessageSenderId !== currentUid &&
+          rc.lastMessageSenderId !== 'system' &&
+          (!localReadAtMs || lastMsgMs > localReadAtMs)
         ? Math.max(prev?.unreadCount || 0, 1)
         : 0;
 
@@ -460,6 +489,24 @@ export const chatStore = {
       targetConv.lastMessageAt = nowIso;
       targetConv.updatedAt = nowIso;
       targetConv.unreadCount = 0;
+
+      // Mirror sender's current display profile, bio & privacy settings inside participantDetails
+      if (senderId !== 'system') {
+        const myProfile = this.getUserProfile();
+        const myPrivacy = this.getPrivacySettings();
+        targetConv.participantDetails = {
+          ...(targetConv.participantDetails || {}),
+          [senderId]: {
+            ...(targetConv.participantDetails?.[senderId] || {}),
+            displayName: myProfile.displayName || senderName,
+            username: myProfile.username || targetConv.participantDetails?.[senderId]?.username || 'user',
+            photoURL: myProfile.photoURL ?? targetConv.participantDetails?.[senderId]?.photoURL ?? '',
+            bio: myProfile.bio ?? targetConv.participantDetails?.[senderId]?.bio ?? 'Available on ERROREX',
+            privacy: myPrivacy
+          }
+        };
+      }
+
       this.saveConversations([...convs]);
 
       if (browserOnline) {
@@ -523,35 +570,55 @@ export const chatStore = {
     const sendReadReceipt = privacy.readReceipts !== false;
 
     const messages = this.getMessages(conversationId);
+    const latestIncoming = [...messages]
+      .reverse()
+      .find(m => m.senderId !== userId && m.senderId !== 'system');
+    setLocalReadAt(conversationId, latestIncoming?.createdAt || new Date().toISOString());
+
     if (userId) {
       let msgsChanged = false;
       const toSync: ChatMessage[] = [];
       messages.forEach(m => {
         if (!m.readBy) m.readBy = [];
-        const needsReadBy = !m.readBy.includes(userId);
-        const needsReadStatus =
-          sendReadReceipt &&
-          m.senderId !== userId &&
-          m.senderId !== 'system' &&
-          m.deliveryStatus !== 'read';
 
-        if (needsReadBy) {
-          m.readBy.push(userId);
-          msgsChanged = true;
-        }
-        if (needsReadStatus) {
-          m.deliveryStatus = 'read';
-          msgsChanged = true;
-        }
-        if ((needsReadBy || needsReadStatus) && m.senderId !== userId && m.senderId !== 'system') {
-          toSync.push(m);
+        if (sendReadReceipt) {
+          const needsReadBy = !m.readBy.includes(userId);
+          const needsReadStatus =
+            m.senderId !== userId &&
+            m.senderId !== 'system' &&
+            m.deliveryStatus !== 'read';
+
+          if (needsReadBy) {
+            m.readBy.push(userId);
+            msgsChanged = true;
+          }
+          if (needsReadStatus) {
+            m.deliveryStatus = 'read';
+            msgsChanged = true;
+          }
+          if ((needsReadBy || needsReadStatus) && m.senderId !== userId && m.senderId !== 'system') {
+            toSync.push(m);
+          }
+        } else {
+          // Read receipts OFF: never send 'read' or push viewer into readBy; only confirm 'delivered' if online
+          const browserOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+          if (
+            browserOnline &&
+            m.senderId !== userId &&
+            m.senderId !== 'system' &&
+            m.deliveryStatus === 'sent'
+          ) {
+            m.deliveryStatus = 'delivered';
+            msgsChanged = true;
+            toSync.push(m);
+          }
         }
       });
 
       if (msgsChanged) {
         this.saveMessages(conversationId, messages);
       }
-      if (toSync.length > 0) {
+      if (toSync.length > 0 && (typeof navigator === 'undefined' || navigator.onLine)) {
         toSync.forEach(m => {
           upsertSupabaseMessage(m, conv).catch(() => {});
         });
@@ -675,10 +742,12 @@ export const chatStore = {
     const contactUid = resolvedTargetUid || `user_${Date.now()}`;
 
     const myProfile = this.getUserProfile();
+    const myPrivacy = this.getPrivacySettings();
     const myId = creatorId || myProfile.uid || 'current_user';
     const myDisplayName = creatorDetails?.displayName || myProfile.displayName || 'You';
     const myUsername = creatorDetails?.username || myProfile.username || 'user';
     const myPhoto = creatorDetails?.photoURL || myProfile.photoURL || '';
+    const myBio = myProfile.bio || 'Available on ERROREX';
 
     const newConv: Conversation = {
       id,
@@ -687,12 +756,15 @@ export const chatStore = {
         [contactUid]: {
           displayName: name,
           username: uName,
-          photoURL: customPhoto || ''
+          photoURL: customPhoto || '',
+          bio: customBio || 'Available on ERROREX'
         },
         [myId]: {
           displayName: myDisplayName,
           username: myUsername,
-          photoURL: myPhoto
+          photoURL: myPhoto,
+          bio: myBio,
+          privacy: myPrivacy
         }
       },
       isGroup,
@@ -855,6 +927,40 @@ export const chatStore = {
 
   savePrivacySettings(settings: PrivacySettings) {
     localStorage.setItem(PRIVACY_STORAGE_KEY, JSON.stringify(settings));
+    const currentProfile = this.getUserProfile();
+    if (currentProfile.uid) {
+      const updatedProfile: UserProfile = {
+        ...currentProfile,
+        privacySettings: settings,
+        updatedAt: new Date().toISOString()
+      };
+      localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(updatedProfile));
+
+      // Mirror privacy into conversation participantDetails so peers reflect changes immediately
+      const allConvs = this.getAllConversations();
+      let convsDirty = false;
+      allConvs.forEach(c => {
+        if (c.participants.includes(currentProfile.uid)) {
+          c.participantDetails = {
+            ...(c.participantDetails || {}),
+            [currentProfile.uid]: {
+              ...(c.participantDetails?.[currentProfile.uid] || {
+                displayName: currentProfile.displayName,
+                username: currentProfile.username
+              }),
+              privacy: settings
+            }
+          };
+          convsDirty = true;
+          if (typeof navigator === 'undefined' || navigator.onLine) {
+            upsertSupabaseConversation(c).catch(() => {});
+          }
+        }
+      });
+      if (convsDirty) {
+        localStorage.setItem(CONVERSATIONS_STORAGE_KEY, JSON.stringify(allConvs));
+      }
+    }
     notifyListeners();
   },
 
@@ -894,9 +1000,36 @@ export const chatStore = {
       bio: profileUpdates.bio !== undefined ? profileUpdates.bio : current.bio,
       photoURL: profileUpdates.photoURL !== undefined ? profileUpdates.photoURL : current.photoURL,
       username: profileUpdates.username !== undefined ? profileUpdates.username : current.username,
+      privacySettings:
+        profileUpdates.privacySettings !== undefined ? profileUpdates.privacySettings : current.privacySettings,
       updatedAt: new Date().toISOString()
     };
     localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(updated));
+
+    if (updated.uid) {
+      const allConvs = this.getAllConversations();
+      let convsDirty = false;
+      allConvs.forEach(c => {
+        if (c.participants.includes(updated.uid)) {
+          c.participantDetails = {
+            ...(c.participantDetails || {}),
+            [updated.uid]: {
+              ...(c.participantDetails?.[updated.uid] || {}),
+              displayName: updated.displayName,
+              username: updated.username,
+              photoURL: updated.photoURL || '',
+              bio: updated.bio || '',
+              privacy: updated.privacySettings || this.getPrivacySettings()
+            }
+          };
+          convsDirty = true;
+        }
+      });
+      if (convsDirty) {
+        localStorage.setItem(CONVERSATIONS_STORAGE_KEY, JSON.stringify(allConvs));
+      }
+    }
+
     notifyListeners();
     return updated;
   }

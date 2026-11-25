@@ -6,7 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { generateErrorexAiFallback } from './src/lib/errorexAiEngine';
-import { generateServerAiReply } from './src/lib/serverAiRunner';
+import { generateServerAiReply, generateServerAiStream } from './src/lib/serverAiRunner';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -372,12 +372,32 @@ app.post('/api/users/sync', (req: Request, res: Response) => {
 });
 
 
-// ERROREX AI Multilingual Chat Endpoint
+// ERROREX AI Multilingual Chat Endpoint (supports fast SSE streaming + JSON)
 app.post('/api/ai/chat', async (req: Request, res: Response) => {
   try {
-    const { message, history } = req.body;
+    const { message, history, stream } = req.body;
     if (!message || typeof message !== 'string') {
       return res.status(400).json({ error: 'Message is required' });
+    }
+
+    if (stream === true || (req.headers.accept || '').includes('text/event-stream')) {
+      res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      res.flushHeaders?.();
+
+      const result = await generateServerAiStream(message, history, chunk => {
+        if (!res.writableEnded) {
+          res.write(`data: ${JSON.stringify({ chunk })}\n\n`);
+        }
+      });
+
+      if (!res.writableEnded) {
+        res.write(`data: ${JSON.stringify({ done: true, engine: result.engine })}\n\n`);
+        res.end();
+      }
+      return;
     }
 
     const result = await generateServerAiReply(message, history);
@@ -385,7 +405,12 @@ app.post('/api/ai/chat', async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Error in /api/ai/chat:', error);
     const fallback = generateErrorexAiFallback(req.body?.message || 'help', req.body?.history);
-    res.json({ reply: fallback, engine: 'fallback' });
+    if (!res.headersSent) {
+      res.json({ reply: fallback, engine: 'fallback' });
+    } else if (!res.writableEnded) {
+      res.write(`data: ${JSON.stringify({ chunk: fallback, done: true, engine: 'fallback' })}\n\n`);
+      res.end();
+    }
   }
 });
 

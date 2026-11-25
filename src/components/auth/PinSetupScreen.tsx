@@ -94,52 +94,52 @@ export const PinSetupScreen: React.FC = () => {
   const currentInput = step === 1 ? pin : confirmPin;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#050507] overflow-y-auto">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(212,175,55,0.08)_0%,transparent_60%)] pointer-events-none" />
+    <div className="fixed inset-0 z-50 flex flex-col items-center p-3 sm:p-5 bg-[#050507] overflow-y-auto">
+      <div className="fixed inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(212,175,55,0.08)_0%,transparent_60%)] pointer-events-none" />
 
-      <div className="relative w-full max-w-md p-6 sm:p-8 rounded-3xl bg-[#0E0E12] border border-[var(--accent-border)] gold-glow shadow-2xl flex flex-col items-center text-center my-4">
-        <CrownLogo size="lg" showWordmark={true} className="mb-4" />
+      <div className="relative w-full max-w-[400px] sm:max-w-md p-5 sm:p-7 rounded-3xl bg-[#0E0E12] border border-[var(--accent-border)] gold-glow shadow-2xl flex flex-col items-center text-center my-auto">
+        <CrownLogo size="md" showWordmark={true} className="mb-3 sm:mb-4" />
 
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--accent-surface)] border border-[var(--accent-border)] mb-3">
-          <Shield className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
-          <span className="text-[11px] font-semibold uppercase tracking-widest text-[var(--accent-primary)]">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--accent-surface)] border border-[var(--accent-border)] mb-2.5 sm:mb-3">
+          <Shield className="w-3.5 h-3.5 text-[var(--accent-primary)] shrink-0" />
+          <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-widest text-[var(--accent-primary)]">
             Step 2 of 2 • Calculator Password
           </span>
         </div>
 
-        <h1 className="text-xl sm:text-2xl font-display font-bold gold-gradient-text">
+        <h1 className="text-lg sm:text-2xl font-display font-bold gold-gradient-text">
           {step === 1 ? 'SET CALCULATOR PASSWORD' : 'CONFIRM CALCULATOR PASSWORD'}
         </h1>
 
-        <p className="mt-2 text-xs text-neutral-400 max-w-xs leading-relaxed">
+        <p className="mt-1.5 text-xs text-neutral-400 max-w-xs leading-relaxed">
           {step === 1
             ? 'Set your private 8-digit numeric code. Typing this 8-digit password inside the Calculator and pressing = will open your ERROREX Messenger.'
             : 'Re-enter the same 8-digit Calculator Password to confirm. Once saved, it will not ask again unless you change it in Settings.'}
         </p>
 
         {error && (
-          <div className="mt-4 w-full flex items-center gap-2 p-3 text-xs rounded-xl bg-rose-950/40 border border-rose-500/40 text-rose-300">
+          <div className="mt-3 w-full flex items-center gap-2 p-2.5 text-xs rounded-xl bg-rose-950/40 border border-rose-500/40 text-rose-300 text-left">
             <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
             <span>{error}</span>
           </div>
         )}
 
         {success && (
-          <div className="mt-4 w-full flex items-center gap-2 p-3 text-xs rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-300">
+          <div className="mt-3 w-full flex items-center gap-2 p-2.5 text-xs rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 text-left">
             <CheckCircle className="w-4 h-4 shrink-0 text-emerald-400" />
             <span>Calculator password saved! Opening ERROREX Messenger...</span>
           </div>
         )}
 
-        {/* 8-Digit Slot Indicators */}
-        <div className="my-6 flex items-center justify-center gap-2 sm:gap-2.5">
+        {/* 8-Digit Slot Indicators - scaled to fit 320px+ phones and desktop */}
+        <div className="my-4 sm:my-5 flex items-center justify-center gap-1.5 sm:gap-2 w-full">
           {Array.from({ length: 8 }).map((_, index) => {
             const isFilled = index < currentInput.length;
             const isCurrent = index === currentInput.length;
             return (
               <div
                 key={index}
-                className={`w-9 h-11 sm:w-10 sm:h-12 rounded-xl flex items-center justify-center transition-all ${
+                className={`w-8 h-10 sm:w-10 sm:h-12 rounded-xl flex items-center justify-center transition-all shrink-0 ${
                   isFilled
                     ? 'bg-[var(--accent-surface)] border-2 border-[var(--accent-primary)] gold-glow-sm shadow-md'
                     : isCurrent
@@ -148,7 +148,7 @@ export const PinSetupScreen: React.FC = () => {
                 }`}
               >
                 {isFilled ? (
-                  <div className="w-3 h-3 rounded-full bg-[var(--accent-primary)] shadow-sm" />
+                  <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-[var(--accent-primary)] shadow-sm" />
                 ) : (
                   <span className="text-[10px] text-neutral-600 font-mono">
                     {index + 1}
@@ -160,13 +160,13 @@ export const PinSetupScreen: React.FC = () => {
         </div>
 
         {/* Number Pad */}
-        <div className="w-full grid grid-cols-3 gap-2.5 max-w-[280px] mb-5">
+        <div className="w-full grid grid-cols-3 gap-2 sm:gap-2.5 max-w-[270px] sm:max-w-[290px] mb-4 sm:mb-5">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
             <button
               key={num}
               type="button"
               onClick={() => handleDigit(String(num))}
-              className="h-12 rounded-xl gold-button flex items-center justify-center text-lg font-mono font-medium text-white hover:text-[var(--accent-primary)] active:scale-95 transition-all cursor-pointer"
+              className="h-11 sm:h-12 rounded-xl gold-button flex items-center justify-center text-lg font-mono font-medium text-white hover:text-[var(--accent-primary)] active:scale-95 transition-all cursor-pointer"
             >
               {num}
             </button>
@@ -174,28 +174,28 @@ export const PinSetupScreen: React.FC = () => {
           <button
             type="button"
             onClick={handleClear}
-            className="h-12 rounded-xl bg-neutral-900/60 border border-neutral-800 hover:border-neutral-700 text-xs font-semibold text-neutral-400 active:scale-95 transition-all cursor-pointer"
+            className="h-11 sm:h-12 rounded-xl bg-neutral-900/60 border border-neutral-800 hover:border-neutral-700 text-xs font-semibold text-neutral-400 active:scale-95 transition-all cursor-pointer"
           >
             Clear
           </button>
           <button
             type="button"
             onClick={() => handleDigit('0')}
-            className="h-12 rounded-xl gold-button flex items-center justify-center text-lg font-mono font-medium text-white hover:text-[var(--accent-primary)] active:scale-95 transition-all cursor-pointer"
+            className="h-11 sm:h-12 rounded-xl gold-button flex items-center justify-center text-lg font-mono font-medium text-white hover:text-[var(--accent-primary)] active:scale-95 transition-all cursor-pointer"
           >
             0
           </button>
           <button
             type="button"
             onClick={handleBackspace}
-            className="h-12 rounded-xl bg-neutral-900/60 border border-neutral-800 hover:border-neutral-700 text-xs font-semibold text-neutral-400 active:scale-95 transition-all cursor-pointer"
+            className="h-11 sm:h-12 rounded-xl bg-neutral-900/60 border border-neutral-800 hover:border-neutral-700 text-xs font-semibold text-neutral-400 active:scale-95 transition-all cursor-pointer"
           >
             ⌫
           </button>
         </div>
 
         {/* Action Button */}
-        <div className="w-full max-w-[280px]">
+        <div className="w-full max-w-[270px] sm:max-w-[290px]">
           {step === 1 ? (
             <button
               type="button"
@@ -238,8 +238,8 @@ export const PinSetupScreen: React.FC = () => {
           )}
         </div>
 
-        <p className="mt-4 text-[10px] text-neutral-500 max-w-xs">
-          Secured for account: {user?.email || 'Member'} • Saved to Cloud & Device
+        <p className="mt-3.5 text-[10px] text-neutral-500 max-w-xs truncate">
+          Secured for: {user?.email || 'Member'} • Cloud & Device
         </p>
       </div>
     </div>

@@ -132,21 +132,22 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
   };
 
   return (
-    <div className="flex-1 h-full flex flex-col bg-[var(--bg-window)] text-[var(--text-main)] select-none p-4 md:p-6 overflow-y-auto transition-colors">
+    <div className="flex-1 min-w-0 h-full flex flex-col bg-[var(--bg-window)] text-[var(--text-main)] select-none p-3 sm:p-5 md:p-6 overflow-y-auto transition-colors">
+      <div className="w-full max-w-6xl mx-auto flex flex-col flex-1 min-w-0">
       {/* Top Header */}
-      <div className="flex items-center justify-between pb-4 border-b border-white/5">
-        <div>
-          <h1 className="text-lg font-display font-bold gold-gradient-text">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-neutral-200 dark:border-white/5">
+        <div className="min-w-0">
+          <h1 className="text-base sm:text-lg font-display font-bold gold-gradient-text">
             Group Communities
           </h1>
-          <p className="text-xs text-neutral-400">
+          <p className="text-xs text-[var(--text-muted)]">
             Private, multi-participant encrypted circles and council rooms.
           </p>
         </div>
 
         <button
           onClick={() => setIsCreatingGroup(true)}
-          className="py-2 px-4 rounded-xl gold-button-accent text-xs font-semibold uppercase tracking-wider flex items-center gap-2 hover:gold-glow-sm"
+          className="py-2.5 sm:py-2 px-4 rounded-xl gold-button-accent text-xs font-bold text-black uppercase tracking-wider flex items-center justify-center gap-2 hover:gold-glow-sm w-full sm:w-auto shrink-0 cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span>New Group</span>
@@ -154,7 +155,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
       </div>
 
       {/* Groups List */}
-      <div className="mt-6">
+      <div className="mt-5 sm:mt-6">
         {groups.length === 0 ? (
           <div className="text-center py-16 text-neutral-500">
             <Layers className="w-10 h-10 mx-auto mb-2 opacity-30 text-[var(--accent-primary)]" />
@@ -171,29 +172,29 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
             {groups.map(grp => (
               <div
                 key={grp.id}
-                className="p-4 rounded-2xl bg-neutral-900/60 border border-[var(--accent-border)] hover:border-[var(--accent-primary)] transition-all flex flex-col justify-between"
+                className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--accent-border)] hover:border-[var(--accent-primary)] transition-all flex flex-col justify-between shadow-sm min-w-0"
               >
-                <div className="flex items-start gap-3">
+                <div className="flex items-start gap-3 min-w-0">
                   <div className="w-12 h-12 rounded-2xl bg-[var(--accent-surface)] border border-[var(--accent-border)] flex items-center justify-center text-[var(--accent-primary)] font-bold text-sm shrink-0">
                     <Users className="w-5 h-5" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h2 className="text-sm font-bold text-white truncate">
+                    <h2 className="text-sm font-bold text-[var(--text-main)] truncate">
                       {grp.groupName}
                     </h2>
-                    <p className="text-[10px] text-neutral-400 font-mono mt-0.5">
+                    <p className="text-[10px] text-[var(--text-muted)] font-mono mt-0.5">
                       {grp.participants.length} members
                     </p>
-                    <p className="text-xs text-neutral-300 truncate mt-1">
+                    <p className="text-xs text-[var(--text-muted)] truncate mt-1">
                       {grp.lastMessageText || 'No recent activity'}
                     </p>
                   </div>
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-end">
+                <div className="mt-4 pt-3 border-t border-neutral-200 dark:border-white/5 flex items-center justify-end">
                   <button
                     onClick={() => onOpenGroupChat(grp.id)}
-                    className="py-1.5 px-3 rounded-lg gold-button text-xs font-semibold text-[var(--accent-primary)] flex items-center gap-1.5 hover:gold-glow-sm"
+                    className="py-1.5 px-3 rounded-lg gold-button text-xs font-semibold text-[var(--accent-primary)] flex items-center gap-1.5 hover:gold-glow-sm cursor-pointer"
                   >
                     <MessageSquare className="w-3.5 h-3.5" />
                     <span>Open Council</span>
@@ -204,13 +205,14 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
           </div>
         )}
       </div>
+      </div>
 
       {/* Create Group Modal */}
       {isCreatingGroup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
           <form
             onSubmit={handleCreateGroup}
-            className="w-full max-w-md p-6 rounded-3xl bg-[#0E0E12] border border-[var(--accent-border)] gold-glow shadow-2xl flex flex-col space-y-4"
+            className="w-full max-w-md my-auto max-h-[92dvh] overflow-y-auto p-5 sm:p-6 rounded-3xl bg-[#0E0E12] border border-[var(--accent-border)] gold-glow shadow-2xl flex flex-col space-y-4"
           >
             <div className="flex items-center justify-between pb-2 border-b border-white/5">
               <h2 className="text-sm font-display font-bold gold-gradient-text">
@@ -235,7 +237,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
                 value={groupName}
                 onChange={e => setGroupName(e.target.value)}
                 placeholder="e.g. Sovereign Syndicate"
-                className="w-full px-4 py-2.5 text-xs rounded-xl bg-neutral-900 border border-neutral-800 focus:border-[var(--accent-primary)] text-white focus:outline-none"
+                className="w-full px-4 py-2.5 text-base sm:text-xs rounded-xl bg-neutral-900 border border-neutral-800 focus:border-[var(--accent-primary)] text-white focus:outline-none"
               />
             </div>
 

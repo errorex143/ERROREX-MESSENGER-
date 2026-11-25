@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
   email TEXT DEFAULT '',
   photo_url TEXT DEFAULT '',
   bio TEXT DEFAULT 'Available on ERROREX',
+  privacy_settings JSONB DEFAULT '{"profilePhoto":"everyone","bio":"everyone","lastSeen":"contacts","readReceipts":true}'::jsonb,
   is_online BOOLEAN DEFAULT true,
   last_seen TIMESTAMPTZ DEFAULT NOW(),
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -69,6 +70,7 @@ ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS uid TEXT;
 ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS email TEXT DEFAULT '';
 ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS photo_url TEXT DEFAULT '';
 ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT 'Available on ERROREX';
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS privacy_settings JSONB DEFAULT '{"profilePhoto":"everyone","bio":"everyone","lastSeen":"contacts","readReceipts":true}'::jsonb;
 ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS is_online BOOLEAN DEFAULT true;
 ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS last_seen TIMESTAMPTZ DEFAULT NOW();
 ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
