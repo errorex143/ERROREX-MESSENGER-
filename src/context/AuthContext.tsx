@@ -191,6 +191,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     let suSubscription: { unsubscribe: () => void } | null = null;
     let isMounted = true;
+    const isOAuthCallbackUrl =
+      typeof window !== 'undefined' &&
+      (window.location.search.includes('code=') ||
+        window.location.hash.includes('access_token=') ||
+        window.location.hash.includes('refresh_token='));
 
     const unsubscribe = auth.onAuthStateChanged(async (currentUser: StandaloneUser | null) => {
       if (!isMounted) return;
@@ -200,6 +205,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!isMounted) return;
         const isSessionUnlocked = localStorage.getItem(`errorex_unlocked_${currentUser.uid}`);
         setIsUnlocked(isSessionUnlocked === 'true');
+        if (isMounted) setLoading(false);
       } else {
         const savedStandalone = localStorage.getItem('errorex_standalone_user');
         if (savedStandalone) {
@@ -228,37 +234,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUserProfile(null);
         setHasPin(null);
         setIsUnlocked(false);
+        // If returning from OAuth redirect, allow Supabase session check below to finish first
+        if (!isOAuthCallbackUrl && isMounted) {
+          setLoading(false);
+        }
       }
-      if (isMounted) setLoading(false);
     });
 
     // Initialize runtime Supabase config & attach Google OAuth / session listener
-    initSupabaseRuntime().then(() => {
-      if (!isMounted || !isSupabaseConfigured || !supabase) return;
-
-      supabase.auth.getSession().then(({ data }) => {
-        const suUser = data?.session?.user;
-        if (suUser && !standaloneAuth.currentUser) {
-          const mapped: StandaloneUser = {
-            uid: suUser.id,
-            email: suUser.email || null,
-            displayName:
-              suUser.user_metadata?.full_name ||
-              suUser.user_metadata?.display_name ||
-              suUser.email?.split('@')[0] ||
-              'Member',
-            photoURL: suUser.user_metadata?.avatar_url || '',
-            emailVerified: Boolean(suUser.email_confirmed_at),
-            getIdToken: async () => data.session?.access_token || `token_${suUser.id}`
-          };
-          standaloneAuth.setCurrentUser(mapped);
+    initSupabaseRuntime()
+      .then(async () => {
+        if (!isMounted) return;
+        if (!isSupabaseConfigured || !supabase) {
+          if (isMounted) setLoading(false);
+          return;
         }
-      });
 
-      const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-        if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user) {
-          const suUser = session.user;
-          if (standaloneAuth.currentUser?.uid !== suUser.id) {
+        try {
+          if (typeof window !== 'undefined' && window.location.search.includes('code=')) {
+            await supabase.auth.exchangeCodeForSession(window.location.href).catch(() => {});
+          }
+          const { data } = await supabase.auth.getSession();
+          const suUser = data?.session?.user;
+          if (suUser && !standaloneAuth.currentUser) {
             const mapped: StandaloneUser = {
               uid: suUser.id,
               email: suUser.email || null,
@@ -269,14 +267,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 'Member',
               photoURL: suUser.user_metadata?.avatar_url || '',
               emailVerified: Boolean(suUser.email_confirmed_at),
-              getIdToken: async () => session.access_token || `token_${suUser.id}`
+              getIdToken: async () => data.session?.access_token || `token_${suUser.id}`
             };
             standaloneAuth.setCurrentUser(mapped);
+            if (isOAuthCallbackUrl && typeof window !== 'undefined') {
+              window.history.replaceState({}, document.title, window.location.pathname);
+            }
           }
+        } finally {
+          if (isMounted) setLoading(false);
         }
+
+        const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+          if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user) {
+            const suUser = session.user;
+            if (standaloneAuth.currentUser?.uid !== suUser.id) {
+              const mapped: StandaloneUser = {
+                uid: suUser.id,
+                email: suUser.email || null,
+                displayName:
+                  suUser.user_metadata?.full_name ||
+                  suUser.user_metadata?.display_name ||
+                  suUser.email?.split('@')[0] ||
+                  'Member',
+                photoURL: suUser.user_metadata?.avatar_url || '',
+                emailVerified: Boolean(suUser.email_confirmed_at),
+                getIdToken: async () => session.access_token || `token_${suUser.id}`
+              };
+              standaloneAuth.setCurrentUser(mapped);
+            }
+          }
+        });
+        suSubscription = authListener.subscription;
+      })
+      .catch(() => {
+        if (isMounted) setLoading(false);
       });
-      suSubscription = authListener.subscription;
-    });
 
     return () => {
       isMounted = false;

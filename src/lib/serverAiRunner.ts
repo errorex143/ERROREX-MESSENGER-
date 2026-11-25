@@ -64,7 +64,11 @@ export async function generateServerAiReply(
   message: string,
   history?: any[]
 ): Promise<{ reply: string; engine: 'gemini' | 'knowledge' | 'fallback' }> {
-  const apiKey = process.env.GEMINI_API_KEY?.trim();
+  const netlifyEnvKey =
+    typeof (globalThis as any).Netlify?.env?.get === 'function'
+      ? (globalThis as any).Netlify.env.get('GEMINI_API_KEY')
+      : '';
+  const apiKey = String(process.env.GEMINI_API_KEY || netlifyEnvKey || '').trim();
 
   if (apiKey) {
     const ai = new GoogleGenAI({

@@ -998,7 +998,8 @@ export function CounterCard() {
   }
   if (/(translate|tarjuma|tarjama|meaning)/i.test(lower)) {
     const quoted = query.match(/["“']([^"”']+)["”']/);
-    const phrase = quoted ? quoted[1] : "Believe in your journey";
+    const extracted = quoted ? quoted[1] : query.replace(/\b(translate|tarjuma|tarjama|meaning|of|into|to|in|urdu|roman urdu|english|arabic|hindi|french|me|mein|karo|kardo|kar dein)\b/gi, " ").replace(/\s+/g, " ").trim();
+    const phrase = extracted.length >= 2 ? extracted : "Believe in your journey";
     const knownTranslations = {
       "Welcome to ERROREX Vault": {
         ur: "\u0627\u06CC\u0631\u0648\u0631\u06CC\u06A9\u0633 \u0648\u0627\u0644\u0679 \u0645\u06CC\u06BA \u062E\u0648\u0634 \u0622\u0645\u062F\u06CC\u062F",
@@ -1030,10 +1031,26 @@ Kisi aur jumlay ka tarjuma chahiye ho to yahan likh dein \u2014 main foran trans
 
 Apna sentence aur target language (Urdu, English, Arabic, French, Hindi) likhein \u2014 main turant saaf aur sahi tarjuma kar dunga!`;
   }
+  if (/^(say hello|say hi|greet|write a greeting|wish me|give me a friendly|tell me something nice|make me smile|i am sad|i feel lonely|bored|madad|help me)/i.test(
+    lower
+  )) {
+    if (/(sad|lonely|udaas|udas|pareshan)/i.test(lower)) {
+      return isRomanUrdu ? `Dil chhota na karein, har andheri raat ke baad ek roshan savera zaroor aata hai \u{1F338}
+
+Main yahin hoon aapke sath! Agar dil halka karna ho, koi pyari **ghazal** sunni ho, ya koi **motivational baat** padhni ho to bas batayein.` : `I'm right here with you \u{1F338} Even heavy days pass, and you're stronger than this moment.
+
+Would you like an uplifting quote, a calming poem, or just someone to chat with?`;
+    }
+    return isRomanUrdu ? `Assalam-o-Alaikum aur dil se khush aamdeed! \u2728 Umeed hai aapka din khubsurat, pur-sukoon aur muskurahaton se bhara guzar raha hoga.
+
+Batayein aaj main aapke liye kya likhun ya kis baat me madad karun?` : `Hello and warm wishes to you! \u2728 May your day be bright, peaceful, and filled with good moments ahead.
+
+What would you like to explore or create together next?`;
+  }
   const topic = extractCleanTopic(query);
   if (/(essay|article|paragraph|mazmoon|speech|taqreer|what is|who is|why |how |kya hai|kya hota|kon hai|kaun hai|explain|samjhao|smjhao|tell me about|baare me|bare me|history|benefit|faide|advantage|disadvantage|tips|guide)/i.test(
     lower
-  ) || query.split(/\s+/).length >= 3) {
+  )) {
     return generateEssayOrArticle(topic, lang);
   }
   if (isArabicRequested) {
@@ -1077,9 +1094,17 @@ Dites-moi si vous souhaitez plus de d\xE9tails, des exemples pratiques ou une au
 \u0627\u06AF\u0631 \u0622\u067E \u0686\u0627\u06C1\u06CC\u06BA \u062A\u0648 \u0645\u06CC\u06BA \u0627\u0633 \u067E\u0631 \u0645\u0632\u06CC\u062F \u062A\u0641\u0635\u06CC\u0644\u060C \u0645\u062B\u0627\u0644\u06CC\u06BA \u06CC\u0627 \u0646\u0638\u0645/\u0645\u0636\u0645\u0648\u0646 \u0628\u06BE\u06CC \u0644\u06A9\u06BE \u062F\u0648\u06BA!`;
   }
   if (isRomanUrdu) {
+    return `Ji bilkul! **"${topic}"** par main aapki poori madad karne ke liye hazir hoon \u2728
+
+- **Saaf Rehnumai:** Batayein ke aapko is par **ghazal / shayari**, **promotional post**, **detail article**, ya **step-by-step guide** chahiye?
+- **Mukammal Jawab:** Aap bas apna exact maqsad likh dein \u2014 main bilkul saaf, stylish aur friendly andaaz me tayyar kar dunga!`;
+  }
+  if (query.split(/\s+/).length >= 6) {
     return generateEssayOrArticle(topic, lang);
   }
-  return generateEssayOrArticle(topic, lang);
+  return `Got it! Here is a clean take on **${topic}** \u2728
+
+- Tell me whether you'd like a **full article**, **creative poetry**, **marketing copy**, **working code**, or a **step-by-step guide** on this \u2014 and I'll write the whole piece clearly for you right away!`;
 }
 
 // src/lib/serverAiRunner.ts
@@ -1125,7 +1150,8 @@ async function fetchWikipediaSummary(query) {
   }
 }
 async function generateServerAiReply(message, history) {
-  const apiKey = process.env.GEMINI_API_KEY?.trim();
+  const netlifyEnvKey = typeof globalThis.Netlify?.env?.get === "function" ? globalThis.Netlify.env.get("GEMINI_API_KEY") : "";
+  const apiKey = String(process.env.GEMINI_API_KEY || netlifyEnvKey || "").trim();
   if (apiKey) {
     const ai = new GoogleGenAI({
       apiKey,

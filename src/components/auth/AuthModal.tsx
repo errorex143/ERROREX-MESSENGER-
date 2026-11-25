@@ -63,12 +63,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             redirectTo: window.location.origin
           }
         });
-        if (suErr) throw suErr;
+        if (suErr) {
+          const msg = suErr.message?.toLowerCase() || '';
+          if (msg.includes('provider') || msg.includes('not enabled')) {
+            throw new Error(
+              'Google Sign-In needs to be enabled in Supabase Authentication → Providers. You can sign in or create an account with your Gmail & Password below right away.'
+            );
+          }
+          throw suErr;
+        }
         onClose();
         return;
       }
 
-      // Standalone Google flow
+      // Standalone Google flow when Supabase is not configured
       const userGoogleEmail = (email.includes('@') ? email.trim() : 'google.user@gmail.com').toLowerCase();
       const cleanName = userGoogleEmail.split('@')[0];
       const stableGoogleUid = `google_${userGoogleEmail.replace(/[^a-z0-9]/g, '_')}`;
@@ -92,7 +100,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
       standaloneAuth.setCurrentUser(googleUser);
       onClose();
     } catch (err: any) {
-      setError(err?.message || 'Google authentication error. Please try again.');
+      setError(err?.message || 'Google authentication error. Please use Gmail & Password below.');
     } finally {
       setLoading(false);
     }

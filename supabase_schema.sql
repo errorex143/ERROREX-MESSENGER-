@@ -8,29 +8,47 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- 2. Drop any legacy foreign keys linking public tables to auth.users
--- (Allows seamless profile registration even when email confirmation or custom auth flows are used)
+-- (Allows seamless registration, system messages, PIN credentials, and statuses across all auth flows)
 DO $$
 DECLARE r RECORD;
 BEGIN
   FOR r IN
-    SELECT conrelid::regclass AS tbl, conname
-    FROM pg_constraint
-    WHERE contype = 'f'
-      AND conrelid::regclass::text IN (
-        'user_profiles', 'public.user_profiles',
-        'user_credentials', 'public.user_credentials',
-        'friendships', 'public.friendships',
-        'friend_requests', 'public.friend_requests',
-        'conversations', 'public.conversations',
-        'messages', 'public.messages',
-        'statuses', 'public.statuses'
+    SELECT n.nspname AS schema_name, c.relname AS table_name, con.conname AS constraint_name
+    FROM pg_constraint con
+    JOIN pg_class c ON c.oid = con.conrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    LEFT JOIN pg_class ref_c ON ref_c.oid = con.confrelid
+    LEFT JOIN pg_namespace ref_n ON ref_n.oid = ref_c.relnamespace
+    WHERE con.contype = 'f'
+      AND n.nspname = 'public'
+      AND c.relname IN (
+        'user_profiles',
+        'user_credentials',
+        'friendships',
+        'friend_requests',
+        'conversations',
+        'messages',
+        'statuses'
       )
-      AND confrelid = 'auth.users'::regclass
+      AND (ref_n.nspname = 'auth' OR ref_c.relname = 'users')
   LOOP
-    EXECUTE format('ALTER TABLE %s DROP CONSTRAINT IF EXISTS %I', r.tbl, r.conname);
+    EXECUTE format('ALTER TABLE %I.%I DROP CONSTRAINT IF EXISTS %I', r.schema_name, r.table_name, r.constraint_name);
   END LOOP;
 EXCEPTION WHEN OTHERS THEN NULL;
 END $$;
+
+-- Explicit safety drops for common Supabase starter foreign key names
+ALTER TABLE IF EXISTS public.user_profiles DROP CONSTRAINT IF EXISTS user_profiles_id_fkey;
+ALTER TABLE IF EXISTS public.user_profiles DROP CONSTRAINT IF EXISTS user_profiles_uid_fkey;
+ALTER TABLE IF EXISTS public.user_credentials DROP CONSTRAINT IF EXISTS user_credentials_user_id_fkey;
+ALTER TABLE IF EXISTS public.user_credentials DROP CONSTRAINT IF EXISTS user_credentials_uid_fkey;
+ALTER TABLE IF EXISTS public.friend_requests DROP CONSTRAINT IF EXISTS friend_requests_sender_id_fkey;
+ALTER TABLE IF EXISTS public.friend_requests DROP CONSTRAINT IF EXISTS friend_requests_receiver_id_fkey;
+ALTER TABLE IF EXISTS public.friendships DROP CONSTRAINT IF EXISTS friendships_user_a_fkey;
+ALTER TABLE IF EXISTS public.friendships DROP CONSTRAINT IF EXISTS friendships_user_b_fkey;
+ALTER TABLE IF EXISTS public.conversations DROP CONSTRAINT IF EXISTS conversations_created_by_fkey;
+ALTER TABLE IF EXISTS public.messages DROP CONSTRAINT IF EXISTS messages_sender_id_fkey;
+ALTER TABLE IF EXISTS public.statuses DROP CONSTRAINT IF EXISTS statuses_user_id_fkey;
 
 -- 3. User Profiles Table (Website Members Directory)
 CREATE TABLE IF NOT EXISTS public.user_profiles (
@@ -86,6 +104,7 @@ CREATE TABLE IF NOT EXISTS public.user_credentials (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE public.user_credentials ADD COLUMN IF NOT EXISTS id UUID DEFAULT uuid_generate_v4();
 ALTER TABLE public.user_credentials ADD COLUMN IF NOT EXISTS uid TEXT;
 ALTER TABLE public.user_credentials ADD COLUMN IF NOT EXISTS pin_hash TEXT DEFAULT '';
 ALTER TABLE public.user_credentials ADD COLUMN IF NOT EXISTS salt TEXT DEFAULT '';
@@ -95,6 +114,14 @@ ALTER TABLE public.user_credentials ADD COLUMN IF NOT EXISTS auth_salt TEXT DEFA
 ALTER TABLE public.user_credentials ADD COLUMN IF NOT EXISTS failed_attempts INT DEFAULT 0;
 ALTER TABLE public.user_credentials ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;
 ALTER TABLE public.user_credentials ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+-- Relax legacy NOT NULL on user_credentials.user_id and backfill uid from user_id if present
+DO $$
+BEGIN
+  ALTER TABLE public.user_credentials ALTER COLUMN user_id DROP NOT NULL;
+  UPDATE public.user_credentials SET uid = user_id::text WHERE (uid IS NULL OR uid = '') AND user_id IS NOT NULL;
+EXCEPTION WHEN undefined_column THEN NULL;
+END $$;
 
 DO $$
 BEGIN

@@ -842,7 +842,13 @@ export function CounterCard() {
   // 15. Translation Requests
   if (/(translate|tarjuma|tarjama|meaning)/i.test(lower)) {
     const quoted = query.match(/["“']([^"”']+)["”']/);
-    const phrase = quoted ? quoted[1] : 'Believe in your journey';
+    const extracted = quoted
+      ? quoted[1]
+      : query
+          .replace(/\b(translate|tarjuma|tarjama|meaning|of|into|to|in|urdu|roman urdu|english|arabic|hindi|french|me|mein|karo|kardo|kar dein)\b/gi, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+    const phrase = extracted.length >= 2 ? extracted : 'Believe in your journey';
     const knownTranslations: Record<string, { ur: string; ro: string; ar: string; fr: string }> = {
       'Welcome to ERROREX Vault': {
         ur: 'ایروریکس والٹ میں خوش آمدید',
@@ -864,18 +870,33 @@ export function CounterCard() {
     return `### Translation Ready for "${phrase}" 🌐\n\n- **Original Text:** ${phrase}\n\nApna sentence aur target language (Urdu, English, Arabic, French, Hindi) likhein — main turant saaf aur sahi tarjuma kar dunga!`;
   }
 
-  // 16. Essays, Articles, Speeches, Explanations, or Open Questions ("what is / why / how / essay / article / mazmoon / kya hai")
+  // 16. Friendly Conversational Prompts ("say hello...", "introduce yourself", casual chat)
+  if (
+    /^(say hello|say hi|greet|write a greeting|wish me|give me a friendly|tell me something nice|make me smile|i am sad|i feel lonely|bored|madad|help me)/i.test(
+      lower
+    )
+  ) {
+    if (/(sad|lonely|udaas|udas|pareshan)/i.test(lower)) {
+      return isRomanUrdu
+        ? `Dil chhota na karein, har andheri raat ke baad ek roshan savera zaroor aata hai 🌸\n\nMain yahin hoon aapke sath! Agar dil halka karna ho, koi pyari **ghazal** sunni ho, ya koi **motivational baat** padhni ho to bas batayein.`
+        : `I'm right here with you 🌸 Even heavy days pass, and you're stronger than this moment.\n\nWould you like an uplifting quote, a calming poem, or just someone to chat with?`;
+    }
+    return isRomanUrdu
+      ? `Assalam-o-Alaikum aur dil se khush aamdeed! ✨ Umeed hai aapka din khubsurat, pur-sukoon aur muskurahaton se bhara guzar raha hoga.\n\nBatayein aaj main aapke liye kya likhun ya kis baat me madad karun?`
+      : `Hello and warm wishes to you! ✨ May your day be bright, peaceful, and filled with good moments ahead.\n\nWhat would you like to explore or create together next?`;
+  }
+
+  // 17. Essays, Articles, Speeches, Explanations, or Knowledge Questions
   const topic = extractCleanTopic(query);
   if (
     /(essay|article|paragraph|mazmoon|speech|taqreer|what is|who is|why |how |kya hai|kya hota|kon hai|kaun hai|explain|samjhao|smjhao|tell me about|baare me|bare me|history|benefit|faide|advantage|disadvantage|tips|guide)/i.test(
       lower
-    ) ||
-    query.split(/\s+/).length >= 3
+    )
   ) {
     return generateEssayOrArticle(topic, lang);
   }
 
-  // 17. Direct Warm Conversational Fallback (zero technical tips / zero key prompts)
+  // 18. Direct Warm Conversational Response (no robotic essay wrapping on short chat messages)
   if (isArabicRequested) {
     return `### **${topic}** — إجابة واضحة ومفصلة ✨\n\nأهلاً بك! يسعدني مساعدتك في موضوع **"${topic}"**:\n\n1. **الفكرة الأساسية:** يعتمد فهم هذا الموضوع بعمق على التركيز على أهدافه الرئيسية وتطبيقها بخطوات عملية ومنظمة.\n2. **النصيحة العملية:** ابدأ بالخطوات البسيطة الواضحة، وحافظ على الاستمرارية لتحقيق أفضل النتائج.\n\nأخبرني إذا كنت ترغب في تفصيل أوسع، أو أمثلة تطبيقية، أو صياغة بأسلوب مختلف!`;
   }
@@ -893,8 +914,12 @@ export function CounterCard() {
   }
 
   if (isRomanUrdu) {
+    return `Ji bilkul! **"${topic}"** par main aapki poori madad karne ke liye hazir hoon ✨\n\n- **Saaf Rehnumai:** Batayein ke aapko is par **ghazal / shayari**, **promotional post**, **detail article**, ya **step-by-step guide** chahiye?\n- **Mukammal Jawab:** Aap bas apna exact maqsad likh dein — main bilkul saaf, stylish aur friendly andaaz me tayyar kar dunga!`;
+  }
+
+  if (query.split(/\s+/).length >= 6) {
     return generateEssayOrArticle(topic, lang);
   }
 
-  return generateEssayOrArticle(topic, lang);
+  return `Got it! Here is a clean take on **${topic}** ✨\n\n- Tell me whether you'd like a **full article**, **creative poetry**, **marketing copy**, **working code**, or a **step-by-step guide** on this — and I'll write the whole piece clearly for you right away!`;
 }

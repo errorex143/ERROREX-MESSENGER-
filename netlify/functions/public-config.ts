@@ -1,6 +1,14 @@
+function readEnvVar(name: string): string {
+  const fromNetlify =
+    typeof (globalThis as any).Netlify?.env?.get === 'function'
+      ? (globalThis as any).Netlify.env.get(name)
+      : '';
+  return String(fromNetlify || process.env[name] || '').trim();
+}
+
 export default async (): Promise<Response> => {
-  const supabaseUrl = (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '').trim();
-  const supabaseAnonKey = (process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '').trim();
+  const supabaseUrl = readEnvVar('VITE_SUPABASE_URL') || readEnvVar('SUPABASE_URL');
+  const supabaseAnonKey = readEnvVar('VITE_SUPABASE_ANON_KEY') || readEnvVar('SUPABASE_ANON_KEY');
 
   return new Response(
     JSON.stringify({
@@ -17,7 +25,8 @@ export default async (): Promise<Response> => {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Cache-Control': 'no-store'
+        'Cache-Control': 'no-store',
+        'Access-Control-Allow-Origin': '*'
       }
     }
   );

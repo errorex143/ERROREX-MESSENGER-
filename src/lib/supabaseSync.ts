@@ -328,31 +328,102 @@ export async function fetchSupabaseUserProfileByEmail(
 }
 
 // --- Secret 8-Digit PIN & Cross-Device Auth Credentials ---
+async function findCredentialRowByUid(
+  uid: string
+): Promise<{ matchedCol: 'uid' | 'user_id'; row: any } | null> {
+  if (!supabase) return null;
+
+  const { data: byUid, error: uidErr } = await supabase
+    .from('user_credentials')
+    .select('uid, pin_hash, salt, has_pin, auth_hash, auth_salt')
+    .eq('uid', uid)
+    .limit(1)
+    .maybeSingle();
+
+  if (!uidErr && byUid) {
+    return { matchedCol: 'uid', row: byUid };
+  }
+
+  // Fallback for legacy schemas where user_id stores the UUID and uid may be null
+  if (isValidUUID(uid)) {
+    const { data: byUserId, error: userIdErr } = await supabase
+      .from('user_credentials')
+      .select('uid, user_id, pin_hash, salt, has_pin, auth_hash, auth_salt')
+      .eq('user_id', uid)
+      .limit(1)
+      .maybeSingle();
+
+    if (!userIdErr && byUserId) {
+      return { matchedCol: 'user_id', row: byUserId };
+    }
+  }
+
+  return null;
+}
+
 export async function upsertSupabasePinCredential(
   uid: string,
   pinHash: string,
   salt: string
 ): Promise<boolean> {
   if (!isSupabaseConfigured || !supabase || !uid) return false;
+  const nowIso = new Date().toISOString();
+  const basePayload: Record<string, any> = {
+    uid,
+    pin_hash: pinHash,
+    salt,
+    has_pin: true,
+    failed_attempts: 0,
+    updated_at: nowIso
+  };
+
   try {
-    const { error } = await supabase
-      .from('user_credentials')
-      .upsert(
-        {
+    // 1. Check if row already exists by uid or user_id
+    const found = await findCredentialRowByUid(uid);
+    if (found) {
+      const { error: updErr } = await supabase
+        .from('user_credentials')
+        .update({
           uid,
           pin_hash: pinHash,
           salt,
           has_pin: true,
           failed_attempts: 0,
-          updated_at: new Date().toISOString()
-        },
-        { onConflict: 'uid' }
-      );
-    if (error) {
-      console.warn('[Supabase] user_credentials PIN upsert notice:', error.message);
+          updated_at: nowIso
+        })
+        .eq(found.matchedCol, uid);
+      if (!updErr) return true;
+      console.warn('[Supabase] user_credentials PIN update notice:', updErr.message);
       return false;
     }
-    return true;
+
+    // 2. Try standard upsert on uid
+    const { error } = await supabase
+      .from('user_credentials')
+      .upsert(basePayload, { onConflict: 'uid' });
+    if (!error) return true;
+
+    // 3. Support legacy schemas where `user_id` is NOT NULL or PK (`23502` or `42P10`)
+    if (
+      (error.code === '23502' && error.message?.includes('user_id')) ||
+      error.code === '42P10'
+    ) {
+      const withUserId = isValidUUID(uid) ? { ...basePayload, user_id: uid } : basePayload;
+      const conflictTarget = error.code === '42P10' && isValidUUID(uid) ? 'user_id' : 'uid';
+      const { error: retryErr } = await supabase
+        .from('user_credentials')
+        .upsert(withUserId, { onConflict: conflictTarget });
+      if (!retryErr) return true;
+
+      // Final manual insert fallback if ON CONFLICT fails
+      const { error: insErr } = await supabase.from('user_credentials').insert(withUserId);
+      if (!insErr) return true;
+      console.warn('[Supabase] user_credentials PIN legacy retry notice:', insErr.message);
+      return false;
+    }
+
+    console.warn('[Supabase] user_credentials PIN upsert notice:', error.message);
+    return false;
   } catch (err) {
     console.warn('[Supabase] user_credentials PIN upsert error:', err);
     return false;
@@ -364,13 +435,9 @@ export async function fetchSupabasePinCredential(
 ): Promise<{ pinHash: string; salt: string; hasPin: boolean } | null> {
   if (!isSupabaseConfigured || !supabase || !uid) return null;
   try {
-    const { data, error } = await supabase
-      .from('user_credentials')
-      .select('pin_hash, salt, has_pin')
-      .eq('uid', uid)
-      .maybeSingle();
-
-    if (error || !data) return null;
+    const found = await findCredentialRowByUid(uid);
+    const data = found?.row;
+    if (!data) return null;
     const hasValidPin = Boolean(data.has_pin && data.pin_hash && data.salt);
     if (!hasValidPin) return null;
     return {
@@ -389,37 +456,28 @@ export async function upsertSupabaseAuthCredential(
   authSalt: string
 ): Promise<boolean> {
   if (!isSupabaseConfigured || !supabase || !uid || !authHash || !authSalt) return false;
+  const nowIso = new Date().toISOString();
+
   try {
-    // Check if row exists first so we don't accidentally clobber existing pin_hash/salt
-    const { data: existing, error: selErr } = await supabase
-      .from('user_credentials')
-      .select('uid, pin_hash, salt, has_pin')
-      .eq('uid', uid)
-      .maybeSingle();
-
-    if (selErr && (selErr.code === '42703' || selErr.code === 'PGRST204')) {
-      return false;
-    }
-
-    if (existing) {
+    const found = await findCredentialRowByUid(uid);
+    if (found) {
       const { error } = await supabase
         .from('user_credentials')
         .update({
+          uid,
           auth_hash: authHash,
           auth_salt: authSalt,
-          updated_at: new Date().toISOString()
+          updated_at: nowIso
         })
-        .eq('uid', uid);
-      if (error) {
-        if (error.code !== '42703' && error.code !== 'PGRST204') {
-          console.warn('[Supabase] auth_hash update notice:', error.message);
-        }
-        return false;
+        .eq(found.matchedCol, uid);
+      if (!error) return true;
+      if (error.code !== '42703' && error.code !== 'PGRST204') {
+        console.warn('[Supabase] auth_hash update notice:', error.message);
       }
-      return true;
+      return false;
     }
 
-    const { error } = await supabase.from('user_credentials').insert({
+    const baseInsert: Record<string, any> = {
       uid,
       pin_hash: '',
       salt: '',
@@ -427,15 +485,28 @@ export async function upsertSupabaseAuthCredential(
       auth_hash: authHash,
       auth_salt: authSalt,
       failed_attempts: 0,
-      updated_at: new Date().toISOString()
-    });
-    if (error) {
-      if (error.code !== '42703' && error.code !== 'PGRST204') {
-        console.warn('[Supabase] auth_hash insert notice:', error.message);
+      updated_at: nowIso
+    };
+
+    const { error } = await supabase.from('user_credentials').insert(baseInsert);
+    if (!error) return true;
+
+    // Legacy user_id NOT NULL fallback
+    if (error.code === '23502' && error.message?.includes('user_id') && isValidUUID(uid)) {
+      const { error: retryErr } = await supabase
+        .from('user_credentials')
+        .insert({ ...baseInsert, user_id: uid });
+      if (!retryErr) return true;
+      if (retryErr.code !== '42703' && retryErr.code !== 'PGRST204') {
+        console.warn('[Supabase] auth_hash legacy insert notice:', retryErr.message);
       }
       return false;
     }
-    return true;
+
+    if (error.code !== '42703' && error.code !== 'PGRST204') {
+      console.warn('[Supabase] auth_hash insert notice:', error.message);
+    }
+    return false;
   } catch {
     return false;
   }
@@ -446,12 +517,9 @@ export async function fetchSupabaseAuthCredential(
 ): Promise<{ authHash: string; authSalt: string } | null> {
   if (!isSupabaseConfigured || !supabase || !uid) return null;
   try {
-    const { data, error } = await supabase
-      .from('user_credentials')
-      .select('auth_hash, auth_salt')
-      .eq('uid', uid)
-      .maybeSingle();
-    if (error || !data || !data.auth_hash || !data.auth_salt) return null;
+    const found = await findCredentialRowByUid(uid);
+    const data = found?.row;
+    if (!data || !data.auth_hash || !data.auth_salt) return null;
     return {
       authHash: data.auth_hash,
       authSalt: data.auth_salt
