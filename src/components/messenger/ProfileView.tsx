@@ -159,14 +159,14 @@ export const ProfileView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="py-1 px-3 rounded-lg gold-button text-xs font-semibold text-[var(--accent-primary)] hover:gold-glow-sm transition-all cursor-pointer"
+                  className="min-h-[40px] py-2 px-3.5 rounded-xl gold-button text-xs font-semibold text-[var(--accent-primary)] hover:gold-glow-sm transition-all cursor-pointer"
                 >
                   Upload New DP
                 </button>
                 <button
                   type="button"
                   onClick={() => setIsDpPreviewOpen(true)}
-                  className="py-1 px-3 rounded-lg border border-[var(--accent-border)] hover:border-[var(--accent-primary)] text-xs font-semibold text-[var(--text-main)] flex items-center gap-1 transition-all cursor-pointer"
+                  className="min-h-[40px] py-2 px-3.5 rounded-xl border border-[var(--accent-border)] hover:border-[var(--accent-primary)] text-xs font-semibold text-[var(--text-main)] flex items-center gap-1.5 transition-all cursor-pointer"
                 >
                   <Eye className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
                   <span>View DP</span>
@@ -175,7 +175,7 @@ export const ProfileView: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleRemovePhoto}
-                    className="py-1 px-2.5 rounded-lg border border-neutral-700 text-xs text-neutral-400 hover:text-rose-400 transition-colors cursor-pointer"
+                    className="min-h-[40px] py-2 px-3 rounded-xl border border-[var(--accent-border)] text-xs text-[var(--text-muted)] hover:text-rose-400 transition-colors cursor-pointer"
                   >
                     Remove Photo
                   </button>
@@ -184,15 +184,15 @@ export const ProfileView: React.FC = () => {
 
               {/* Preset Avatar Quick Picks */}
               <div className="pt-2">
-                <span className="text-[10px] text-[var(--text-muted)] block mb-1">Preset Avatars:</span>
-                <div className="flex items-center justify-center sm:justify-start gap-2">
+                <span className="text-[10px] text-[var(--text-muted)] block mb-1.5">Preset Avatars:</span>
+                <div className="flex items-center justify-center sm:justify-start gap-2.5">
                   {HERALDIC_AVATARS.map((url, idx) => (
                     <img
                       key={idx}
                       src={url}
                       alt="Preset"
                       onClick={() => handleSelectPresetAvatar(url)}
-                      className="w-7 h-7 rounded-full object-cover border border-neutral-600 hover:border-[var(--accent-primary)] cursor-pointer hover:scale-110 transition-transform"
+                      className="w-9 h-9 rounded-full object-cover border border-neutral-400 dark:border-neutral-600 hover:border-[var(--accent-primary)] cursor-pointer hover:scale-110 transition-transform"
                     />
                   ))}
                 </div>
@@ -303,7 +303,7 @@ export const ProfileView: React.FC = () => {
             <button
               type="submit"
               disabled={saving}
-              className="w-full sm:w-auto py-3 px-8 rounded-xl gold-button-accent text-xs font-bold text-black uppercase tracking-wider disabled:opacity-50 hover:gold-glow-sm transition-all cursor-pointer"
+              className="w-full sm:w-auto min-h-[44px] py-3 px-8 rounded-xl gold-button-accent text-xs font-bold text-black uppercase tracking-wider disabled:opacity-50 hover:gold-glow-sm transition-all cursor-pointer"
             >
               {saving ? 'Saving...' : 'Save Profile Changes'}
             </button>
@@ -322,7 +322,7 @@ export const ProfileView: React.FC = () => {
             <button
               type="button"
               onClick={lockMessenger}
-              className="flex-1 sm:flex-initial py-2.5 px-4 rounded-xl gold-button border border-[var(--accent-border)] text-xs font-semibold text-[var(--accent-primary)] flex items-center justify-center gap-1.5 cursor-pointer"
+              className="flex-1 sm:flex-initial min-h-[44px] py-2.5 px-4 rounded-xl gold-button border border-[var(--accent-border)] text-xs font-semibold text-[var(--accent-primary)] flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <Lock className="w-3.5 h-3.5" />
               <span>Lock Vault</span>
@@ -330,7 +330,7 @@ export const ProfileView: React.FC = () => {
             <button
               type="button"
               onClick={logout}
-              className="flex-1 sm:flex-initial py-2.5 px-4 rounded-xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-xs font-semibold text-rose-400 flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+              className="flex-1 sm:flex-initial min-h-[44px] py-2.5 px-4 rounded-xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-xs font-semibold text-rose-400 flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
             >
               <LogOut className="w-3.5 h-3.5" />
               <span>Sign Out</span>

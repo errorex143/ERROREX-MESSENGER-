@@ -71,13 +71,13 @@ export const EmojiKeyboard: React.FC<EmojiKeyboardProps> = ({ onSelectEmoji, onC
           <button
             type="button"
             onClick={() => handleTabChange('live_all')}
-            className={`py-1 px-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 ${
+            className={`min-h-[34px] py-1.5 px-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap shrink-0 ${
               filterTab === 'live_all'
                 ? 'gold-button-accent text-black shadow-sm'
                 : 'bg-[var(--bg-card)] border border-[var(--accent-border)] text-[var(--accent-primary)] hover:border-[var(--accent-primary)]'
             }`}
           >
-            <Flame className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
+            <Flame className="w-3.5 h-3.5 text-amber-500" />
             <span>1000 Live Stickers</span>
           </button>
 
@@ -177,7 +177,8 @@ export const EmojiKeyboard: React.FC<EmojiKeyboardProps> = ({ onSelectEmoji, onC
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded-lg text-neutral-400 hover:text-[var(--text-main)] hover:bg-[var(--accent-surface)] transition-colors shrink-0"
+            aria-label="Close stickers and emojis"
+            className="w-9 h-9 rounded-lg flex items-center justify-center text-neutral-400 hover:text-[var(--text-main)] hover:bg-[var(--accent-surface)] transition-colors shrink-0"
             title="Close Stickers / Emojis"
           >
             <X className="w-4 h-4" />
@@ -186,8 +187,8 @@ export const EmojiKeyboard: React.FC<EmojiKeyboardProps> = ({ onSelectEmoji, onC
       </div>
 
       {/* Search Bar */}
-      <div className="px-3 py-1.5 border-b border-neutral-200 dark:border-white/5 bg-[var(--bg-card)] relative">
-        <Search className="w-3.5 h-3.5 absolute left-5 top-3 text-neutral-400" />
+      <div className="px-3 py-2 border-b border-neutral-200 dark:border-white/5 bg-[var(--bg-card)] relative">
+        <Search className="w-4 h-4 absolute left-5 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
         <input
           type="text"
           value={search}
@@ -195,17 +196,18 @@ export const EmojiKeyboard: React.FC<EmojiKeyboardProps> = ({ onSelectEmoji, onC
           placeholder={
             isStandardTab
               ? 'Search 600+ standard emojis...'
-              : `Search 1000 different live stickers (funny, happy, smile, royal)...`
+              : `Search 1000 live stickers...`
           }
-          className="w-full pl-8 pr-8 py-1.5 text-xs rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] placeholder-neutral-500 focus:outline-none transition-colors"
+          className="w-full pl-9 pr-10 py-2 sm:py-1.5 text-base sm:text-xs rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] placeholder-neutral-500 focus:outline-none transition-colors"
         />
         {search && (
           <button
             type="button"
             onClick={() => setSearch('')}
-            className="absolute right-5 top-3 text-neutral-400 hover:text-white"
+            aria-label="Clear search"
+            className="w-7 h-7 flex items-center justify-center rounded-lg absolute right-4 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-[var(--text-main)]"
           >
-            <X className="w-3 h-3" />
+            <X className="w-3.5 h-3.5" />
           </button>
         )}
       </div>

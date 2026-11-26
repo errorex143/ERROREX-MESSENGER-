@@ -202,80 +202,66 @@ export const Calculator: React.FC<CalculatorProps> = ({ onOpenAuth }) => {
   }, [clearAll, handleBackspace, handleEquals, inputDecimal, inputDigit, setOperator]);
 
   return (
-    <div className="min-h-[100dvh] w-full flex flex-col items-center justify-center py-3 sm:py-5 md:py-6 px-3 sm:px-6 pb-[max(1rem,env(safe-area-inset-bottom))] bg-marble-surface select-none relative overflow-x-hidden overflow-y-auto">
+    <div className="min-h-[100dvh] w-full flex flex-col items-center justify-center py-3 sm:py-6 px-3.5 sm:px-6 pb-[max(1rem,env(safe-area-inset-bottom))] bg-marble-surface select-none relative overflow-x-hidden overflow-y-auto">
       {/* Subtle Luxury Golden Ambient Glow */}
       <div className="absolute top-1/4 -left-32 w-80 sm:w-96 h-80 sm:h-96 rounded-full bg-[var(--accent-glow)] blur-[120px] opacity-20 pointer-events-none" />
       <div className="absolute bottom-1/4 -right-32 w-80 sm:w-96 h-80 sm:h-96 rounded-full bg-[var(--accent-glow)] blur-[120px] opacity-20 pointer-events-none" />
 
-      {/* Top ERROREX Sovereign Header */}
-      <header className="w-full max-w-[390px] sm:max-w-[420px] lg:max-w-[440px] flex flex-col gap-2 mb-3 sm:mb-4 z-10 shrink-0">
-        {/* Brand row: ERROREX wordmark alone with crown */}
-        <div className="flex items-center justify-between w-full gap-2">
-          <div className="flex items-center min-w-0">
-            <CrownLogo size="md" showWordmark={true} className="hover:scale-105 transition-transform" />
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            {/* Auto Theme Indicator if active */}
-            {autoCycleEnabled && (
-              <span className="text-[10px] font-mono px-2 py-1 rounded-xl bg-[var(--accent-surface)] text-[var(--accent-primary)] border border-[var(--accent-border)] font-bold flex items-center gap-1 shadow-sm">
-                <span>🔄</span>
-                <span>{formattedCountdown}</span>
-              </span>
-            )}
-
-            {/* Account Sign In / Register Option */}
-            {!user ? (
-              <button
-                type="button"
-                onClick={onOpenAuth}
-                className="flex items-center gap-1.5 min-h-[38px] py-1.5 px-3 rounded-xl bg-white hover:bg-neutral-100 dark:bg-neutral-900/90 dark:hover:bg-neutral-800 text-xs font-semibold text-neutral-900 dark:text-neutral-100 border border-neutral-300 dark:border-neutral-700 hover:border-[var(--accent-primary)] transition-all shadow-sm active:scale-95 cursor-pointer whitespace-nowrap"
-                title="Sign in or Create Account"
-              >
-                <LogIn className="w-3.5 h-3.5 text-[var(--accent-primary)] shrink-0" />
-                <span>Sign In / ID</span>
-              </button>
-            ) : (
-              <div className="flex items-center gap-1.5">
-                <span className="text-[11px] font-mono px-2.5 py-1.5 rounded-xl bg-[var(--accent-surface)] text-[var(--accent-primary)] border border-[var(--accent-border)] font-semibold truncate max-w-[115px] sm:max-w-[140px]">
-                  {user.displayName || user.email?.split('@')[0] || 'User'}
-                </span>
-                <button
-                  type="button"
-                  onClick={logout}
-                  className="p-2 rounded-xl border border-neutral-300 dark:border-neutral-700 text-neutral-500 hover:text-rose-400 hover:border-rose-400 text-xs transition-colors cursor-pointer"
-                  title="Sign Out / Switch ID"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
-          </div>
+      {/* Clean Single-Row ERROREX Header */}
+      <header className="w-full max-w-[390px] sm:max-w-[420px] lg:max-w-[440px] flex items-center justify-between gap-2 mb-3 sm:mb-4 z-10 shrink-0">
+        <div className="flex items-center min-w-0">
+          <CrownLogo size="md" showWordmark={true} className="hover:scale-105 transition-transform" />
         </div>
 
-        {/* Function Name ALONE and clearly separated */}
-        <div className="w-full flex items-center justify-between gap-2 px-3.5 py-2 rounded-2xl bg-[var(--bg-card)]/90 border border-[var(--accent-border)] backdrop-blur-md shadow-sm">
-          <span className="text-[10px] font-mono uppercase tracking-[0.18em] sm:tracking-[0.22em] text-[var(--accent-primary)] font-bold flex items-center gap-2 truncate">
-            <span className="w-2 h-2 rounded-full bg-[var(--accent-primary)] shrink-0" />
-            <span className="truncate">FUNCTION: KING VAULT 👑</span>
-          </span>
-          <span className="text-[10px] font-mono text-[var(--text-muted)] shrink-0 whitespace-nowrap">
-            Sovereign Calculator
-          </span>
+        <div className="flex items-center gap-2 shrink-0">
+          {autoCycleEnabled && (
+            <span className="text-[11px] font-mono tabular-nums text-[var(--accent-primary)] font-semibold whitespace-nowrap">
+              {formattedCountdown}
+            </span>
+          )}
+
+          {!user ? (
+            <button
+              type="button"
+              onClick={onOpenAuth}
+              className="flex items-center gap-1.5 min-h-[42px] py-2 px-3.5 rounded-2xl bg-[var(--bg-card)] hover:bg-[var(--bg-card-hover)] text-xs font-semibold text-[var(--text-main)] border border-[var(--accent-border)] hover:border-[var(--accent-primary)] transition-all shadow-sm active:scale-95 cursor-pointer whitespace-nowrap"
+              title="Sign in or Create Account"
+            >
+              <LogIn className="w-4 h-4 text-[var(--accent-primary)] shrink-0" />
+              <span>Sign In / ID</span>
+            </button>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-medium text-[var(--accent-primary)] truncate max-w-[115px] sm:max-w-[150px]">
+                @{userProfile?.username || user.displayName || user.email?.split('@')[0] || 'member'}
+              </span>
+              <button
+                type="button"
+                onClick={logout}
+                className="min-w-[40px] min-h-[40px] rounded-xl bg-[var(--bg-card)] border border-[var(--accent-border)] text-[var(--text-muted)] hover:text-rose-400 hover:border-rose-400 flex items-center justify-center transition-colors cursor-pointer"
+                title="Sign Out / Switch ID"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
       {/* Main Calculator Body */}
       <main className="w-full max-w-[390px] sm:max-w-[420px] lg:max-w-[440px] rounded-3xl p-4 sm:p-6 bg-marble-card border border-[var(--accent-border)] gold-glow shadow-2xl relative z-10 transition-all">
-        {/* Calculator Display Screen Sub-Header */}
-        <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-neutral-200 dark:border-white/5">
-          <span className="text-[11px] sm:text-xs tracking-[0.2em] uppercase font-display font-bold gold-gradient-text">
-            PRECISION INTERFACE
+        {/* Clean Display Meta Strip */}
+        <div className="flex items-center justify-between gap-2 pb-2.5 mb-3 border-b border-neutral-200/80 dark:border-white/5">
+          <span className="text-[11px] sm:text-xs tracking-[0.18em] uppercase font-display font-bold gold-gradient-text truncate">
+            King Vault Calculator
+          </span>
+          <span className="text-[11px] text-[var(--text-muted)] shrink-0 whitespace-nowrap">
+            Precision Mode
           </span>
         </div>
 
         {/* Display Screen */}
-        <div className="w-full rounded-2xl p-3.5 sm:p-5 mb-4 sm:mb-5 bg-[var(--calc-display-bg)] border border-[var(--calc-btn-border)] flex flex-col justify-end min-h-[88px] sm:min-h-[106px] text-right shadow-inner transition-colors">
+        <div className="w-full rounded-2xl p-3.5 sm:p-5 mb-4 sm:mb-5 bg-[var(--calc-display-bg)] border border-[var(--calc-btn-border)] flex flex-col justify-end min-h-[92px] sm:min-h-[112px] text-right shadow-inner transition-colors">
           {/* History Formula */}
           <div className="h-5 sm:h-6 text-xs sm:text-sm font-mono-calc text-neutral-500 dark:text-neutral-400 truncate mb-1">
             {historyExpression || '\u00A0'}
@@ -289,34 +275,34 @@ export const Calculator: React.FC<CalculatorProps> = ({ onOpenAuth }) => {
           </div>
         </div>
 
-        {/* Keypad Grid */}
-        <div className="grid grid-cols-4 gap-2 sm:gap-3">
+        {/* Keypad Grid (>=52px mobile tap targets for comfortable one-hand thumb entry) */}
+        <div className="grid grid-cols-4 gap-2.5 sm:gap-3">
           {/* Row 1 */}
           <button
             type="button"
             onClick={clearAll}
-            className="h-12 sm:h-14 rounded-2xl bg-neutral-200/90 dark:bg-neutral-900/90 border border-neutral-300 dark:border-neutral-800 hover:border-rose-400 text-sm font-bold text-rose-500 active:scale-95 transition-all shadow-sm cursor-pointer"
+            className="h-[52px] sm:h-14 rounded-2xl bg-neutral-200/90 dark:bg-neutral-900/90 border border-neutral-300 dark:border-neutral-800 hover:border-rose-400 text-sm sm:text-base font-bold text-rose-500 active:scale-95 transition-all shadow-sm cursor-pointer"
           >
             AC
           </button>
           <button
             type="button"
             onClick={toggleSign}
-            className="h-12 sm:h-14 rounded-2xl bg-neutral-200/90 dark:bg-neutral-900/90 border border-neutral-300 dark:border-neutral-800 text-sm font-bold text-neutral-800 dark:text-neutral-300 active:scale-95 transition-all shadow-sm cursor-pointer"
+            className="h-[52px] sm:h-14 rounded-2xl bg-neutral-200/90 dark:bg-neutral-900/90 border border-neutral-300 dark:border-neutral-800 text-base font-bold text-neutral-800 dark:text-neutral-300 active:scale-95 transition-all shadow-sm cursor-pointer"
           >
             ±
           </button>
           <button
             type="button"
             onClick={inputPercent}
-            className="h-12 sm:h-14 rounded-2xl bg-neutral-200/90 dark:bg-neutral-900/90 border border-neutral-300 dark:border-neutral-800 text-sm font-bold text-neutral-800 dark:text-neutral-300 active:scale-95 transition-all shadow-sm cursor-pointer"
+            className="h-[52px] sm:h-14 rounded-2xl bg-neutral-200/90 dark:bg-neutral-900/90 border border-neutral-300 dark:border-neutral-800 text-base font-bold text-neutral-800 dark:text-neutral-300 active:scale-95 transition-all shadow-sm cursor-pointer"
           >
             %
           </button>
           <button
             type="button"
             onClick={() => setOperator('÷')}
-            className={`h-12 sm:h-14 rounded-2xl border text-base font-bold active:scale-95 transition-all shadow-sm cursor-pointer ${
+            className={`h-[52px] sm:h-14 rounded-2xl border text-lg font-bold active:scale-95 transition-all shadow-sm cursor-pointer ${
               operation === '÷'
                 ? 'bg-[var(--accent-primary)] text-black border-white'
                 : 'bg-[var(--accent-surface)] border-[var(--accent-border)] text-[var(--accent-primary)] hover:border-[var(--accent-primary)]'
@@ -329,28 +315,28 @@ export const Calculator: React.FC<CalculatorProps> = ({ onOpenAuth }) => {
           <button
             type="button"
             onClick={() => inputDigit('7')}
-            className="h-12 sm:h-14 rounded-2xl gold-button text-lg font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
+            className="h-[52px] sm:h-14 rounded-2xl gold-button text-lg sm:text-xl font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
           >
             7
           </button>
           <button
             type="button"
             onClick={() => inputDigit('8')}
-            className="h-12 sm:h-14 rounded-2xl gold-button text-lg font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
+            className="h-[52px] sm:h-14 rounded-2xl gold-button text-lg sm:text-xl font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
           >
             8
           </button>
           <button
             type="button"
             onClick={() => inputDigit('9')}
-            className="h-12 sm:h-14 rounded-2xl gold-button text-lg font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
+            className="h-[52px] sm:h-14 rounded-2xl gold-button text-lg sm:text-xl font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
           >
             9
           </button>
           <button
             type="button"
             onClick={() => setOperator('×')}
-            className={`h-12 sm:h-14 rounded-2xl border text-base font-bold active:scale-95 transition-all shadow-sm cursor-pointer ${
+            className={`h-[52px] sm:h-14 rounded-2xl border text-lg font-bold active:scale-95 transition-all shadow-sm cursor-pointer ${
               operation === '×'
                 ? 'bg-[var(--accent-primary)] text-black border-white'
                 : 'bg-[var(--accent-surface)] border-[var(--accent-border)] text-[var(--accent-primary)] hover:border-[var(--accent-primary)]'
@@ -363,28 +349,28 @@ export const Calculator: React.FC<CalculatorProps> = ({ onOpenAuth }) => {
           <button
             type="button"
             onClick={() => inputDigit('4')}
-            className="h-12 sm:h-14 rounded-2xl gold-button text-lg font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
+            className="h-[52px] sm:h-14 rounded-2xl gold-button text-lg sm:text-xl font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
           >
             4
           </button>
           <button
             type="button"
             onClick={() => inputDigit('5')}
-            className="h-12 sm:h-14 rounded-2xl gold-button text-lg font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
+            className="h-[52px] sm:h-14 rounded-2xl gold-button text-lg sm:text-xl font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
           >
             5
           </button>
           <button
             type="button"
             onClick={() => inputDigit('6')}
-            className="h-12 sm:h-14 rounded-2xl gold-button text-lg font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
+            className="h-[52px] sm:h-14 rounded-2xl gold-button text-lg sm:text-xl font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
           >
             6
           </button>
           <button
             type="button"
             onClick={() => setOperator('-')}
-            className={`h-12 sm:h-14 rounded-2xl border text-base font-bold active:scale-95 transition-all shadow-sm cursor-pointer ${
+            className={`h-[52px] sm:h-14 rounded-2xl border text-lg font-bold active:scale-95 transition-all shadow-sm cursor-pointer ${
               operation === '-'
                 ? 'bg-[var(--accent-primary)] text-black border-white'
                 : 'bg-[var(--accent-surface)] border-[var(--accent-border)] text-[var(--accent-primary)] hover:border-[var(--accent-primary)]'
@@ -397,28 +383,28 @@ export const Calculator: React.FC<CalculatorProps> = ({ onOpenAuth }) => {
           <button
             type="button"
             onClick={() => inputDigit('1')}
-            className="h-12 sm:h-14 rounded-2xl gold-button text-lg font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
+            className="h-[52px] sm:h-14 rounded-2xl gold-button text-lg sm:text-xl font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
           >
             1
           </button>
           <button
             type="button"
             onClick={() => inputDigit('2')}
-            className="h-12 sm:h-14 rounded-2xl gold-button text-lg font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
+            className="h-[52px] sm:h-14 rounded-2xl gold-button text-lg sm:text-xl font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
           >
             2
           </button>
           <button
             type="button"
             onClick={() => inputDigit('3')}
-            className="h-12 sm:h-14 rounded-2xl gold-button text-lg font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
+            className="h-[52px] sm:h-14 rounded-2xl gold-button text-lg sm:text-xl font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
           >
             3
           </button>
           <button
             type="button"
             onClick={() => setOperator('+')}
-            className={`h-12 sm:h-14 rounded-2xl border text-base font-bold active:scale-95 transition-all shadow-sm cursor-pointer ${
+            className={`h-[52px] sm:h-14 rounded-2xl border text-lg font-bold active:scale-95 transition-all shadow-sm cursor-pointer ${
               operation === '+'
                 ? 'bg-[var(--accent-primary)] text-black border-white'
                 : 'bg-[var(--accent-surface)] border-[var(--accent-border)] text-[var(--accent-primary)] hover:border-[var(--accent-primary)]'
@@ -432,28 +418,28 @@ export const Calculator: React.FC<CalculatorProps> = ({ onOpenAuth }) => {
             type="button"
             onClick={handleBackspace}
             title="Backspace"
-            className="h-12 sm:h-14 rounded-2xl bg-neutral-200/90 dark:bg-neutral-900/90 border border-neutral-300 dark:border-neutral-800 hover:border-neutral-400 text-sm font-bold text-neutral-700 dark:text-neutral-400 active:scale-95 transition-all shadow-sm flex items-center justify-center cursor-pointer"
+            className="h-[52px] sm:h-14 rounded-2xl bg-neutral-200/90 dark:bg-neutral-900/90 border border-neutral-300 dark:border-neutral-800 hover:border-neutral-400 text-sm font-bold text-neutral-700 dark:text-neutral-400 active:scale-95 transition-all shadow-sm flex items-center justify-center cursor-pointer"
           >
             <Delete className="w-5 h-5" />
           </button>
           <button
             type="button"
             onClick={() => inputDigit('0')}
-            className="h-12 sm:h-14 rounded-2xl gold-button text-lg font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
+            className="h-[52px] sm:h-14 rounded-2xl gold-button text-lg sm:text-xl font-mono-calc font-semibold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
           >
             0
           </button>
           <button
             type="button"
             onClick={inputDecimal}
-            className="h-12 sm:h-14 rounded-2xl gold-button text-lg font-mono-calc font-bold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
+            className="h-[52px] sm:h-14 rounded-2xl gold-button text-lg sm:text-xl font-mono-calc font-bold text-[var(--text-main)] active:scale-95 transition-all shadow-sm cursor-pointer"
           >
             .
           </button>
           <button
             type="button"
             onClick={handleEquals}
-            className="h-12 sm:h-14 rounded-2xl gold-button-accent text-lg font-bold active:scale-95 transition-all shadow-md flex items-center justify-center cursor-pointer"
+            className="h-[52px] sm:h-14 rounded-2xl gold-button-accent text-xl font-bold active:scale-95 transition-all shadow-md flex items-center justify-center cursor-pointer"
           >
             {isVerifying ? (
               <span className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />

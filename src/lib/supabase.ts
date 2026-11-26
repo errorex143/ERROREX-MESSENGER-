@@ -180,7 +180,7 @@ export async function testSupabaseConnection(): Promise<SupabaseDiagnostics> {
     return {
       connected: false,
       message:
-        'Supabase URL/Anon Key not found. Add VITE_SUPABASE_URL & VITE_SUPABASE_ANON_KEY in Netlify and redeploy, or connect below.'
+        'Supabase URL/Anon Key not found. Add VITE_SUPABASE_URL & VITE_SUPABASE_ANON_KEY in Netlify or Cloudflare and redeploy.'
     };
   }
 

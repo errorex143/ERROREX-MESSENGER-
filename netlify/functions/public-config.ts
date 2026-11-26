@@ -3,7 +3,9 @@ function readEnvVar(name: string): string {
     typeof (globalThis as any).Netlify?.env?.get === 'function'
       ? (globalThis as any).Netlify.env.get(name)
       : '';
-  return String(fromNetlify || process.env[name] || '').trim();
+  const fromProc =
+    typeof process !== 'undefined' && process?.env ? process.env[name] : '';
+  return String(fromNetlify || fromProc || '').trim();
 }
 
 export default async (): Promise<Response> => {

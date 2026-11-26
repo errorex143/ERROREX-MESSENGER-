@@ -148,15 +148,17 @@ export const StatusView: React.FC<StatusViewProps> = ({
           {/* Sub-tab Navigation */}
           <div className="flex items-center gap-2 pb-3 border-b border-neutral-200 dark:border-white/5 overflow-x-auto scrollbar-none">
             <button
+              type="button"
               onClick={() => setActiveSubTab('status')}
-              className="py-2 px-3.5 sm:px-4 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all whitespace-nowrap shrink-0 text-[var(--text-muted)] hover:text-[var(--text-main)] border-transparent hover:bg-neutral-200/60 dark:hover:bg-neutral-900 cursor-pointer"
+              className="min-h-[40px] py-2 px-3.5 sm:px-4 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all whitespace-nowrap shrink-0 text-[var(--text-muted)] hover:text-[var(--text-main)] border-transparent hover:bg-neutral-200/60 dark:hover:bg-neutral-900 cursor-pointer"
             >
               <Sparkles className="w-3.5 h-3.5" />
               <span>Status Stories</span>
             </button>
             <button
+              type="button"
               onClick={() => setActiveSubTab('groups')}
-              className="py-2 px-3.5 sm:px-4 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all whitespace-nowrap shrink-0 bg-[var(--accent-surface)] border-[var(--accent-primary)] text-[var(--accent-primary)] shadow-sm cursor-pointer"
+              className="min-h-[40px] py-2 px-3.5 sm:px-4 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all whitespace-nowrap shrink-0 bg-[var(--accent-surface)] border-[var(--accent-primary)] text-[var(--accent-primary)] shadow-sm cursor-pointer"
             >
               <Users className="w-3.5 h-3.5" />
               <span>Encrypted Groups</span>
@@ -180,15 +182,17 @@ export const StatusView: React.FC<StatusViewProps> = ({
       {/* Sub-tab Navigation */}
       <div className="flex items-center gap-2 pb-3 sm:pb-4 mb-4 border-b border-neutral-200 dark:border-white/5 overflow-x-auto scrollbar-none shrink-0">
         <button
+          type="button"
           onClick={() => setActiveSubTab('status')}
-          className="py-2 px-3.5 sm:px-4 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all whitespace-nowrap shrink-0 bg-[var(--accent-surface)] border-[var(--accent-primary)] text-[var(--accent-primary)] shadow-sm cursor-pointer"
+          className="min-h-[40px] py-2 px-3.5 sm:px-4 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all whitespace-nowrap shrink-0 bg-[var(--accent-surface)] border-[var(--accent-primary)] text-[var(--accent-primary)] shadow-sm cursor-pointer"
         >
           <Sparkles className="w-3.5 h-3.5" />
           <span>Status Stories</span>
         </button>
         <button
+          type="button"
           onClick={() => setActiveSubTab('groups')}
-          className="py-2 px-3.5 sm:px-4 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all whitespace-nowrap shrink-0 text-[var(--text-muted)] hover:text-[var(--text-main)] border-transparent hover:bg-neutral-200/60 dark:hover:bg-neutral-900 cursor-pointer"
+          className="min-h-[40px] py-2 px-3.5 sm:px-4 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all whitespace-nowrap shrink-0 text-[var(--text-muted)] hover:text-[var(--text-main)] border-transparent hover:bg-neutral-200/60 dark:hover:bg-neutral-900 cursor-pointer"
         >
           <Users className="w-3.5 h-3.5" />
           <span>Encrypted Groups</span>
@@ -207,8 +211,9 @@ export const StatusView: React.FC<StatusViewProps> = ({
         </div>
 
         <button
+          type="button"
           onClick={() => setIsCreatingStatus(true)}
-          className="py-2.5 sm:py-2 px-4 rounded-xl gold-button-accent text-xs font-bold text-black uppercase tracking-wider flex items-center justify-center gap-2 hover:gold-glow-sm w-full sm:w-auto shrink-0 cursor-pointer"
+          className="min-h-[44px] py-2.5 sm:py-2 px-4 rounded-xl gold-button-accent text-xs font-bold text-black uppercase tracking-wider flex items-center justify-center gap-2 hover:gold-glow-sm w-full sm:w-auto shrink-0 cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span>Post Status</span>
@@ -219,20 +224,20 @@ export const StatusView: React.FC<StatusViewProps> = ({
       <div className="mt-6 space-y-6">
         {/* My Status */}
         <div>
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">
             My Status
           </h2>
           {myStatuses.length === 0 ? (
             <div
               onClick={() => setIsCreatingStatus(true)}
-              className="p-4 max-w-sm rounded-2xl bg-neutral-900/40 border border-dashed border-neutral-800 hover:border-[var(--accent-primary)] cursor-pointer flex items-center gap-3 transition-colors"
+              className="p-4 max-w-sm rounded-2xl bg-[var(--bg-card)] border border-dashed border-[var(--accent-border)] hover:border-[var(--accent-primary)] cursor-pointer flex items-center gap-3 transition-colors shadow-sm"
             >
-              <div className="w-12 h-12 rounded-full bg-[var(--accent-surface)] border border-[var(--accent-border)] flex items-center justify-center text-[var(--accent-primary)]">
+              <div className="w-12 h-12 rounded-full bg-[var(--accent-surface)] border border-[var(--accent-border)] flex items-center justify-center text-[var(--accent-primary)] shrink-0">
                 <Plus className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-xs font-semibold text-white">Add to my status</p>
-                <p className="text-[10px] text-neutral-500">Disappears in 24 hours</p>
+                <p className="text-xs font-semibold text-[var(--text-main)]">Add to my status</p>
+                <p className="text-[10px] text-[var(--text-muted)]">Disappears in 24 hours</p>
               </div>
             </div>
           ) : (
@@ -324,19 +329,23 @@ export const StatusView: React.FC<StatusViewProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1.5">
                     {current.userId === currentUserId && (
                       <button
+                        type="button"
                         onClick={() => handleDeleteStatus(current.id)}
-                        className="p-1.5 rounded-lg bg-black/40 hover:bg-rose-950 text-neutral-400 hover:text-rose-400"
+                        aria-label="Delete story"
+                        className="w-10 h-10 rounded-xl bg-black/40 hover:bg-rose-950 flex items-center justify-center text-neutral-300 hover:text-rose-400"
                         title="Delete Story"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     )}
                     <button
+                      type="button"
                       onClick={() => setActiveStoryIndex(null)}
-                      className="p-1.5 rounded-lg bg-black/40 text-neutral-400 hover:text-white"
+                      aria-label="Close story"
+                      className="w-10 h-10 rounded-xl bg-black/40 flex items-center justify-center text-neutral-300 hover:text-white"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -364,19 +373,23 @@ export const StatusView: React.FC<StatusViewProps> = ({
                 {/* Navigation arrows */}
                 <div className="flex items-center justify-between text-white">
                   <button
+                    type="button"
                     disabled={activeStoryIndex === 0}
                     onClick={() => setActiveStoryIndex(prev => (prev !== null ? prev - 1 : null))}
-                    className="p-2 rounded-full bg-black/50 hover:bg-black/80 disabled:opacity-30"
+                    aria-label="Previous story"
+                    className="w-10 h-10 rounded-full bg-black/50 hover:bg-black/80 flex items-center justify-center disabled:opacity-30"
                   >
                     <ChevronLeft className="w-5 h-5" />
                   </button>
-                  <span className="text-[10px] font-mono text-neutral-400">
+                  <span className="text-[10px] font-mono tabular-nums text-neutral-400">
                     {activeStoryIndex + 1} of {statuses.length}
                   </span>
                   <button
+                    type="button"
                     disabled={activeStoryIndex === statuses.length - 1}
                     onClick={() => setActiveStoryIndex(prev => (prev !== null ? prev + 1 : null))}
-                    className="p-2 rounded-full bg-black/50 hover:bg-black/80 disabled:opacity-30"
+                    aria-label="Next story"
+                    className="w-10 h-10 rounded-full bg-black/50 hover:bg-black/80 flex items-center justify-center disabled:opacity-30"
                   >
                     <ChevronRight className="w-5 h-5" />
                   </button>
@@ -389,24 +402,37 @@ export const StatusView: React.FC<StatusViewProps> = ({
 
       {/* Create Status Modal */}
       {isCreatingStatus && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
-          <div className="w-full max-w-md my-auto max-h-[92dvh] overflow-y-auto p-5 sm:p-6 rounded-3xl bg-[#0E0E12] border border-[var(--accent-border)] gold-glow shadow-2xl flex flex-col space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-white/5">
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto"
+          onClick={() => setIsCreatingStatus(false)}
+        >
+          <div
+            className="w-full sm:max-w-md max-h-[92dvh] overflow-y-auto p-5 sm:p-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] rounded-t-3xl sm:rounded-3xl bg-[var(--bg-sidebar)] border-t sm:border border-[var(--accent-border)] gold-glow shadow-2xl flex flex-col space-y-4 text-[var(--text-main)]"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="sm:hidden w-10 h-1 rounded-full bg-neutral-400/40 mx-auto -mt-1" />
+
+            <div className="flex items-center justify-between pb-2 border-b border-neutral-200 dark:border-white/5">
               <h2 className="text-sm font-display font-bold gold-gradient-text">
                 Post 24-Hour Status
               </h2>
-              <button onClick={() => setIsCreatingStatus(false)} className="text-neutral-400 hover:text-white">
+              <button
+                type="button"
+                onClick={() => setIsCreatingStatus(false)}
+                aria-label="Close modal"
+                className="w-9 h-9 rounded-full flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-main)]"
+              >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Type selector */}
-            <div className="flex rounded-xl bg-black/50 p-1 border border-white/5">
+            <div className="flex rounded-xl bg-[var(--bg-card)] p-1 border border-[var(--accent-border)]">
               <button
                 type="button"
                 onClick={() => setStatusType('text')}
-                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-colors ${
-                  statusType === 'text' ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-white' : 'text-neutral-400'
+                className={`flex-1 min-h-[38px] py-1.5 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-colors ${
+                  statusType === 'text' ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--text-main)]' : 'text-[var(--text-muted)]'
                 }`}
               >
                 <Type className="w-3.5 h-3.5" />
@@ -418,8 +444,8 @@ export const StatusView: React.FC<StatusViewProps> = ({
                   setStatusType('image');
                   fileInputRef.current?.click();
                 }}
-                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-colors ${
-                  statusType === 'image' ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-white' : 'text-neutral-400'
+                className={`flex-1 min-h-[38px] py-1.5 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-colors ${
+                  statusType === 'image' ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--text-main)]' : 'text-[var(--text-muted)]'
                 }`}
               >
                 <Camera className="w-3.5 h-3.5" />
@@ -443,19 +469,20 @@ export const StatusView: React.FC<StatusViewProps> = ({
                   value={statusText}
                   onChange={e => setStatusText(e.target.value)}
                   placeholder="What's on your mind? (Encrypted story)"
-                  className="w-full p-4 text-sm rounded-2xl bg-neutral-900 border border-neutral-800 focus:border-[var(--accent-primary)] text-white focus:outline-none"
+                  className="w-full p-4 text-base sm:text-sm rounded-2xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] focus:outline-none"
                 />
 
                 {/* Color pickers */}
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-neutral-400">Background:</span>
+                <div className="flex items-center flex-wrap gap-2">
+                  <span className="text-xs text-[var(--text-muted)]">Background:</span>
                   {['#18181B', '#7C2D12', '#14532D', '#1E3A8A', '#581C87', '#831843'].map(color => (
                     <button
                       key={color}
                       type="button"
                       onClick={() => setStatusBgColor(color)}
-                      className={`w-6 h-6 rounded-full border-2 transition-transform ${
-                        statusBgColor === color ? 'scale-110 border-white' : 'border-transparent'
+                      aria-label={`Select color ${color}`}
+                      className={`w-8 h-8 rounded-full border-2 transition-transform ${
+                        statusBgColor === color ? 'scale-110 border-[var(--accent-primary)]' : 'border-transparent'
                       }`}
                       style={{ backgroundColor: color }}
                     />
@@ -465,12 +492,13 @@ export const StatusView: React.FC<StatusViewProps> = ({
             ) : (
               <div className="space-y-3">
                 {mediaDataUrl ? (
-                  <div className="relative h-44 rounded-2xl overflow-hidden border border-neutral-700">
+                  <div className="relative h-44 rounded-2xl overflow-hidden border border-[var(--accent-border)]">
                     <img src={mediaDataUrl} alt="Preview" className="w-full h-full object-cover" />
                     <button
                       type="button"
                       onClick={() => setMediaDataUrl(null)}
-                      className="absolute top-2 right-2 p-1 rounded-full bg-black/60 text-white"
+                      aria-label="Remove photo"
+                      className="w-8 h-8 flex items-center justify-center absolute top-2 right-2 rounded-full bg-black/60 text-white"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -479,7 +507,7 @@ export const StatusView: React.FC<StatusViewProps> = ({
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="w-full h-36 rounded-2xl border-2 border-dashed border-neutral-800 hover:border-[var(--accent-primary)] flex flex-col items-center justify-center text-neutral-400 gap-2"
+                    className="w-full h-36 rounded-2xl border-2 border-dashed border-[var(--accent-border)] hover:border-[var(--accent-primary)] flex flex-col items-center justify-center text-[var(--text-muted)] gap-2"
                   >
                     <Camera className="w-6 h-6 text-[var(--accent-primary)]" />
                     <span className="text-xs">Click to select photo</span>
@@ -491,15 +519,16 @@ export const StatusView: React.FC<StatusViewProps> = ({
                   value={caption}
                   onChange={e => setCaption(e.target.value)}
                   placeholder="Add a caption..."
-                  className="w-full px-4 py-2.5 text-xs rounded-xl bg-neutral-900 border border-neutral-800 focus:border-[var(--accent-primary)] text-white focus:outline-none"
+                  className="w-full px-4 py-2.5 text-base sm:text-xs rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] focus:outline-none"
                 />
               </div>
             )}
 
             <button
+              type="button"
               onClick={handlePublishStatus}
               disabled={isSubmitting}
-              className="w-full py-3 rounded-xl gold-button-accent text-xs font-semibold uppercase tracking-wider disabled:opacity-50"
+              className="w-full min-h-[44px] py-3 rounded-xl gold-button-accent text-xs font-bold text-black uppercase tracking-wider disabled:opacity-50"
             >
               {isSubmitting ? 'Publishing...' : 'Share Status'}
             </button>

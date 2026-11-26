@@ -191,18 +191,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col items-center p-3 sm:p-5 bg-black/80 backdrop-blur-md overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-5 bg-black/80 backdrop-blur-md overflow-y-auto"
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-[400px] sm:max-w-md p-5 sm:p-8 rounded-3xl bg-[#0E0E12] border border-[var(--accent-border)] gold-glow shadow-2xl my-auto max-h-[94dvh] overflow-y-auto"
+        className="relative w-full sm:max-w-md p-5 sm:p-8 pb-[max(1.25rem,env(safe-area-inset-bottom))] rounded-t-3xl sm:rounded-3xl bg-[#0E0E12] border-t sm:border border-[var(--accent-border)] gold-glow shadow-2xl max-h-[94dvh] overflow-y-auto"
         onClick={e => e.stopPropagation()}
       >
+        <div className="sm:hidden w-10 h-1 rounded-full bg-neutral-500/40 mx-auto mb-3" />
+
         <button
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="absolute right-4 top-4 w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+          className="absolute right-4 top-4 w-9 h-9 rounded-full bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
         >
           ✕
         </button>
@@ -231,7 +233,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                 setError(null);
                 setInfoMessage(null);
               }}
-              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+              className={`flex-1 min-h-[40px] py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                 !isRegister
                   ? 'bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-secondary)] text-black shadow-md'
                   : 'text-neutral-400 hover:text-white'
@@ -246,7 +248,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                 setError(null);
                 setInfoMessage(null);
               }}
-              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+              className={`flex-1 min-h-[40px] py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                 isRegister
                   ? 'bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-secondary)] text-black shadow-md'
                   : 'text-neutral-400 hover:text-white'
@@ -279,14 +281,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                 Full Name / Display Name
               </label>
               <div className="relative">
-                <User className="w-4 h-4 absolute left-3.5 top-3 text-neutral-500" />
+                <User className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none" />
                 <input
                   type="text"
                   maxLength={25}
                   value={displayName}
                   onChange={e => setDisplayName(e.target.value)}
                   placeholder="Your Name (visible in Find Members)"
-                  className="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl bg-neutral-900/80 border border-neutral-700/60 focus:border-[var(--accent-primary)] focus:outline-none text-white placeholder-neutral-500 transition-colors"
+                  className="w-full pl-10 pr-4 py-2.5 text-base sm:text-sm rounded-xl bg-neutral-900/80 border border-neutral-700/60 focus:border-[var(--accent-primary)] focus:outline-none text-white placeholder-neutral-500 transition-colors"
                 />
               </div>
             </div>
@@ -298,14 +300,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                 Gmail / Email Address
               </label>
               <div className="relative">
-                <Mail className="w-4 h-4 absolute left-3.5 top-3 text-neutral-500" />
+                <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none" />
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   placeholder="yourname@gmail.com"
-                  className="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl bg-neutral-900/80 border border-neutral-700/60 focus:border-[var(--accent-primary)] focus:outline-none text-white placeholder-neutral-500 transition-colors"
+                  className="w-full pl-10 pr-4 py-2.5 text-base sm:text-sm rounded-xl bg-neutral-900/80 border border-neutral-700/60 focus:border-[var(--accent-primary)] focus:outline-none text-white placeholder-neutral-500 transition-colors"
                 />
               </div>
             </div>
@@ -341,14 +343,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                   New Password
                 </label>
                 <div className="relative">
-                  <KeyRound className="w-4 h-4 absolute left-3.5 top-3 text-neutral-500" />
+                  <KeyRound className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none" />
                   <input
                     type="password"
                     required
                     value={newPassword}
                     onChange={e => setNewPassword(e.target.value)}
                     placeholder="Enter new password (min 6 characters)"
-                    className="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl bg-neutral-900/80 border border-neutral-700/60 focus:border-[var(--accent-primary)] focus:outline-none text-white placeholder-neutral-500 transition-colors"
+                    className="w-full pl-10 pr-4 py-2.5 text-base sm:text-sm rounded-xl bg-neutral-900/80 border border-neutral-700/60 focus:border-[var(--accent-primary)] focus:outline-none text-white placeholder-neutral-500 transition-colors"
                   />
                 </div>
               </div>
@@ -370,14 +372,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                   )}
                 </div>
                 <div className="relative">
-                  <ShieldCheck className="w-4 h-4 absolute left-3.5 top-3 text-neutral-500" />
+                  <ShieldCheck className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none" />
                   <input
                     type="password"
                     required
                     value={confirmNewPassword}
                     onChange={e => setConfirmNewPassword(e.target.value)}
                     placeholder="Re-enter new password"
-                    className="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl bg-neutral-900/80 border border-neutral-700/60 focus:border-[var(--accent-primary)] focus:outline-none text-white placeholder-neutral-500 transition-colors"
+                    className="w-full pl-10 pr-4 py-2.5 text-base sm:text-sm rounded-xl bg-neutral-900/80 border border-neutral-700/60 focus:border-[var(--accent-primary)] focus:outline-none text-white placeholder-neutral-500 transition-colors"
                   />
                 </div>
               </div>
@@ -409,14 +411,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                   )}
                 </div>
                 <div className="relative">
-                  <KeyRound className="w-4 h-4 absolute left-3.5 top-3 text-neutral-500" />
+                  <KeyRound className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none" />
                   <input
                     type="password"
                     required
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     placeholder="Minimum 6 characters"
-                    className="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl bg-neutral-900/80 border border-neutral-700/60 focus:border-[var(--accent-primary)] focus:outline-none text-white placeholder-neutral-500 transition-colors"
+                    className="w-full pl-10 pr-4 py-2.5 text-base sm:text-sm rounded-xl bg-neutral-900/80 border border-neutral-700/60 focus:border-[var(--accent-primary)] focus:outline-none text-white placeholder-neutral-500 transition-colors"
                   />
                 </div>
               </div>
@@ -435,14 +437,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                     )}
                   </div>
                   <div className="relative">
-                    <ShieldCheck className="w-4 h-4 absolute left-3.5 top-3 text-neutral-500" />
+                    <ShieldCheck className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none" />
                     <input
                       type="password"
                       required
                       value={confirmPassword}
                       onChange={e => setConfirmPassword(e.target.value)}
                       placeholder="Re-enter same password"
-                      className="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl bg-neutral-900/80 border border-neutral-700/60 focus:border-[var(--accent-primary)] focus:outline-none text-white placeholder-neutral-500 transition-colors"
+                      className="w-full pl-10 pr-4 py-2.5 text-base sm:text-sm rounded-xl bg-neutral-900/80 border border-neutral-700/60 focus:border-[var(--accent-primary)] focus:outline-none text-white placeholder-neutral-500 transition-colors"
                     />
                   </div>
                 </div>
@@ -466,7 +468,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 rounded-xl gold-button-accent flex items-center justify-center gap-2 text-xs uppercase tracking-wider disabled:opacity-50 mt-2 cursor-pointer"
+            className="w-full min-h-[46px] py-3 rounded-xl gold-button-accent flex items-center justify-center gap-2 text-xs uppercase tracking-wider disabled:opacity-50 mt-2 cursor-pointer"
           >
             {loading ? (
               <span className="inline-block w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />

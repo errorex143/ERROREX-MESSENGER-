@@ -107,10 +107,10 @@ export const ContactsView: React.FC<ContactsViewProps> = ({ onStartChatWithConta
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 pb-4 border-b border-neutral-200 dark:border-white/5">
         <div className="min-w-0">
-          <h1 className="text-base sm:text-lg font-display font-bold gold-gradient-text flex items-center gap-2 flex-wrap">
+          <h1 className="text-base sm:text-lg font-display font-bold gold-gradient-text flex items-baseline gap-2 flex-wrap">
             <span>Private Contacts Book</span>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--accent-surface)] text-[var(--accent-primary)] border border-[var(--accent-border)] font-mono">
-              {contacts.length}
+            <span className="text-xs text-[var(--accent-primary)] font-mono tabular-nums">
+              ({contacts.length})
             </span>
           </h1>
           <p className="text-xs text-[var(--text-muted)]">
@@ -119,8 +119,9 @@ export const ContactsView: React.FC<ContactsViewProps> = ({ onStartChatWithConta
         </div>
 
         <button
+          type="button"
           onClick={() => setIsAddModalOpen(true)}
-          className="py-2.5 sm:py-2 px-4 rounded-xl gold-button-accent text-xs font-bold text-black flex items-center justify-center gap-1.5 hover:gold-glow-sm transition-all w-full sm:w-auto shrink-0 cursor-pointer"
+          className="min-h-[44px] py-2.5 sm:py-2 px-4 rounded-xl gold-button-accent text-xs font-bold text-black flex items-center justify-center gap-1.5 hover:gold-glow-sm transition-all w-full sm:w-auto shrink-0 cursor-pointer"
         >
           <UserPlus className="w-4 h-4" />
           <span>Add New Contact</span>
@@ -133,7 +134,7 @@ export const ContactsView: React.FC<ContactsViewProps> = ({ onStartChatWithConta
             <Check className="w-4 h-4 text-emerald-400 shrink-0" />
             <span className="truncate">{notice}</span>
           </span>
-          <button onClick={() => setNotice(null)} className="text-neutral-400 hover:text-white shrink-0">
+          <button type="button" onClick={() => setNotice(null)} className="text-neutral-400 hover:text-white shrink-0">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -141,13 +142,13 @@ export const ContactsView: React.FC<ContactsViewProps> = ({ onStartChatWithConta
 
       {/* Search Bar */}
       <div className="mt-4 mb-4 relative w-full sm:max-w-md">
-        <Search className="w-4 h-4 absolute left-3.5 top-3.5 sm:top-3 text-neutral-500" />
+        <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none" />
         <input
           type="text"
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
           placeholder="Search by name, @username, or status..."
-          className="w-full pl-10 pr-4 py-2.5 text-base sm:text-xs rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] placeholder-neutral-500 focus:outline-none transition-colors"
+          className="w-full min-h-[42px] pl-10 pr-4 py-2.5 text-base sm:text-xs rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] placeholder-neutral-500 focus:outline-none transition-colors"
         />
       </div>
 
@@ -216,6 +217,7 @@ export const ContactsView: React.FC<ContactsViewProps> = ({ onStartChatWithConta
               {/* Action Buttons */}
               <div className="flex items-center gap-1.5 shrink-0">
                 <button
+                  type="button"
                   onClick={() =>
                     onStartChatWithContact({
                       displayName: contact.name,
@@ -224,18 +226,20 @@ export const ContactsView: React.FC<ContactsViewProps> = ({ onStartChatWithConta
                       bio: contact.bio
                     })
                   }
-                  className="py-1.5 px-3 rounded-xl gold-button text-xs font-semibold text-[var(--accent-primary)] hover:gold-glow-sm flex items-center gap-1 transition-all cursor-pointer"
+                  className="min-h-[40px] py-2 px-3.5 rounded-xl gold-button text-xs font-semibold text-[var(--accent-primary)] hover:gold-glow-sm flex items-center gap-1.5 transition-all cursor-pointer"
                   title={`Start Chat with ${contact.name}`}
                 >
                   <MessageSquare className="w-3.5 h-3.5" />
                   <span>Chat</span>
                 </button>
                 <button
+                  type="button"
                   onClick={() => handleDeleteContact(contact.id, contact.name)}
-                  className="p-2 rounded-lg text-neutral-400 hover:text-rose-500 transition-colors opacity-85 md:opacity-0 md:group-hover:opacity-100 cursor-pointer"
+                  aria-label={`Delete ${contact.name}`}
+                  className="min-w-[40px] min-h-[40px] rounded-xl text-neutral-400 hover:text-rose-500 flex items-center justify-center transition-colors opacity-90 md:opacity-0 md:group-hover:opacity-100 cursor-pointer"
                   title="Delete Contact"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Trash2 className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -246,16 +250,26 @@ export const ContactsView: React.FC<ContactsViewProps> = ({ onStartChatWithConta
 
       {/* Add New Contact Modal */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md overflow-y-auto">
-          <div className="w-full max-w-md my-auto max-h-[92dvh] overflow-y-auto p-5 sm:p-6 rounded-3xl bg-[var(--bg-sidebar)] border border-[var(--accent-border)] gold-glow shadow-2xl flex flex-col space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-white/5">
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md overflow-y-auto"
+          onClick={() => setIsAddModalOpen(false)}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="w-full sm:max-w-md max-h-[92dvh] overflow-y-auto p-5 sm:p-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] rounded-t-3xl sm:rounded-3xl bg-[var(--bg-sidebar)] border-t sm:border border-[var(--accent-border)] gold-glow shadow-2xl flex flex-col space-y-4"
+          >
+            <div className="sm:hidden w-10 h-1 rounded-full bg-neutral-400/40 mx-auto -mt-1" />
+
+            <div className="flex items-center justify-between pb-2 border-b border-neutral-200 dark:border-white/5">
               <h2 className="text-sm font-display font-bold gold-gradient-text flex items-center gap-2">
                 <UserPlus className="w-4 h-4 text-[var(--accent-primary)]" />
                 <span>Add Private Contact</span>
               </h2>
               <button
+                type="button"
                 onClick={() => setIsAddModalOpen(false)}
-                className="text-neutral-400 hover:text-[var(--text-main)]"
+                aria-label="Close modal"
+                className="w-9 h-9 rounded-full flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-main)]"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -358,17 +372,17 @@ export const ContactsView: React.FC<ContactsViewProps> = ({ onStartChatWithConta
                 </div>
               </div>
 
-              <div className="pt-2 flex gap-2">
+              <div className="pt-2 flex gap-2.5">
                 <button
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}
-                  className="flex-1 py-2 rounded-xl border border-neutral-700 text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors"
+                  className="flex-1 min-h-[44px] py-2.5 rounded-xl border border-[var(--accent-border)] hover:border-[var(--accent-primary)] text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2 rounded-xl gold-button-accent text-xs font-bold text-black uppercase tracking-wider"
+                  className="flex-1 min-h-[44px] py-2.5 rounded-xl gold-button-accent text-xs font-bold text-black uppercase tracking-wider"
                 >
                   Save Contact
                 </button>

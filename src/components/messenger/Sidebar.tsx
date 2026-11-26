@@ -210,7 +210,7 @@ export const MobileBottomNav: React.FC<SidebarProps> = ({
   return (
     <nav
       aria-label="Mobile Navigation"
-      className="md:hidden w-full bg-[var(--bg-sidebar)]/95 backdrop-blur-md border-t border-[var(--accent-border)] grid grid-cols-6 items-center px-1 pt-1 pb-[max(0.35rem,env(safe-area-inset-bottom))] shrink-0 z-30 shadow-lg select-none"
+      className="md:hidden w-full bg-[var(--bg-sidebar)]/95 backdrop-blur-xl border-t border-[var(--accent-border)] grid grid-cols-6 items-center px-1.5 pt-1 pb-[max(0.4rem,env(safe-area-inset-bottom))] shrink-0 z-30 shadow-[0_-8px_24px_rgba(0,0,0,0.12)] select-none"
     >
       {navItems.map(item => {
         const Icon = item.icon;
@@ -228,21 +228,27 @@ export const MobileBottomNav: React.FC<SidebarProps> = ({
                 onSelectTab(item.id);
               }
             }}
-            className={`relative min-h-[48px] flex flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 transition-colors cursor-pointer ${
+            className={`relative min-h-[50px] flex flex-col items-center justify-center gap-1 rounded-2xl px-1 py-1.5 transition-all active:scale-95 cursor-pointer ${
               isActive
-                ? 'text-[var(--accent-primary)] bg-[var(--accent-surface)] font-semibold'
+                ? 'text-[var(--accent-primary)] font-semibold'
                 : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
             }`}
           >
-            <Icon className="w-[18px] h-[18px] shrink-0" />
-            <span className="text-[10px] leading-tight truncate max-w-full">
+            {/* Active top indicator bar */}
+            {isActive && (
+              <span className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-[2.5px] rounded-full bg-[var(--accent-primary)]" />
+            )}
+            <span className="relative flex items-center justify-center">
+              <Icon className="w-[19px] h-[19px] shrink-0" />
+              {item.badge !== undefined && item.badge > 0 && (
+                <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-mono tabular-nums font-bold bg-[var(--accent-primary)] text-black flex items-center justify-center shadow-sm">
+                  {item.badge > 99 ? '99+' : item.badge}
+                </span>
+              )}
+            </span>
+            <span className="text-[10px] leading-none whitespace-nowrap truncate max-w-full">
               {item.label}
             </span>
-            {item.badge !== undefined && item.badge > 0 && (
-              <span className="absolute top-1 right-2 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-mono font-bold bg-[var(--accent-primary)] text-black flex items-center justify-center">
-                {item.badge > 99 ? '99+' : item.badge}
-              </span>
-            )}
           </button>
         );
       })}

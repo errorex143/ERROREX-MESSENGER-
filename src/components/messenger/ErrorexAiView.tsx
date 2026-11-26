@@ -426,18 +426,18 @@ Chat fresh ho gayi hai. Ab aap **Urdu alphabet (اردو), Arabic (العربي�
         <button
           type="button"
           onClick={handleClearChat}
-          className="py-1.5 px-3 sm:px-3.5 rounded-xl border border-neutral-300 dark:border-neutral-700 hover:border-rose-500 text-xs font-medium text-[var(--text-muted)] hover:text-rose-500 flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+          className="min-h-[40px] py-2 px-3 sm:px-3.5 rounded-xl border border-neutral-300 dark:border-neutral-700 hover:border-rose-500 text-xs font-medium text-[var(--text-muted)] hover:text-rose-500 flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
           title="Clear Chat History"
         >
-          <Trash2 className="w-3.5 h-3.5" />
+          <Trash2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
           <span className="hidden sm:inline">New Chat</span>
         </button>
       </div>
 
       {/* Messages Scroll Area */}
-      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-5 chat-scroll-area">
-        {/* Clean Starter Prompts Card */}
-        <div className="max-w-3xl xl:max-w-4xl mx-auto p-3.5 sm:p-5 rounded-2xl bg-[var(--bg-card)] border border-[var(--accent-border)] space-y-2.5 sm:space-y-3">
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-6 space-y-3.5 sm:space-y-5 chat-scroll-area">
+        {/* Clean Starter Prompts Card: Horizontal swipe carousel on mobile, grid on tablet/desktop */}
+        <div className="max-w-3xl xl:max-w-4xl mx-auto p-3 sm:p-5 rounded-2xl bg-[var(--bg-card)] border border-[var(--accent-border)] space-y-2.5 sm:space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-[var(--accent-primary)]">
               <CrownLogo size="sm" showWordmark={false} />
@@ -448,14 +448,14 @@ Chat fresh ho gayi hai. Ab aap **Urdu alphabet (اردو), Arabic (العربي�
             </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+          <div className="flex sm:grid sm:grid-cols-2 lg:grid-cols-3 gap-2 overflow-x-auto sm:overflow-visible scrollbar-none pb-0.5 sm:pb-0">
             {QUICK_PROMPTS.map((prompt, idx) => (
               <button
                 key={idx}
                 type="button"
                 dir="auto"
                 onClick={() => handleSendMessage(prompt)}
-                className="py-2 px-3 rounded-xl text-xs bg-[var(--bg-sidebar)] border border-[var(--accent-border)] hover:border-[var(--accent-primary)] text-[var(--text-main)] transition-colors text-left cursor-pointer leading-relaxed"
+                className="w-[232px] sm:w-auto shrink-0 py-2.5 px-3 rounded-xl text-xs bg-[var(--bg-sidebar)] border border-[var(--accent-border)] hover:border-[var(--accent-primary)] text-[var(--text-main)] transition-colors text-left cursor-pointer leading-relaxed"
               >
                 {prompt}
               </button>
@@ -600,7 +600,7 @@ Chat fresh ho gayi hai. Ab aap **Urdu alphabet (اردو), Arabic (العربي�
               type="button"
               disabled={isLoading}
               onClick={() => handleSendMessage(item.prompt)}
-              className="inline-flex items-center gap-1.5 py-1.5 px-3 rounded-xl text-xs font-medium bg-[var(--bg-card)] border border-[var(--accent-border)] hover:border-[var(--accent-primary)] hover:bg-[var(--accent-surface)] text-[var(--text-main)] hover:text-[var(--accent-primary)] whitespace-nowrap shrink-0 transition-colors cursor-pointer disabled:opacity-50"
+              className="min-h-[38px] inline-flex items-center gap-1.5 py-1.5 px-3 rounded-xl text-xs font-medium bg-[var(--bg-card)] border border-[var(--accent-border)] hover:border-[var(--accent-primary)] hover:bg-[var(--accent-surface)] text-[var(--text-main)] hover:text-[var(--accent-primary)] whitespace-nowrap shrink-0 transition-colors cursor-pointer disabled:opacity-50"
             >
               <Icon className="w-3.5 h-3.5 text-[var(--accent-primary)] shrink-0" />
               <span>{item.label}</span>
@@ -620,7 +620,7 @@ Chat fresh ho gayi hai. Ab aap **Urdu alphabet (اردو), Arabic (العربي�
         <button
           type="button"
           onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-          className="p-2 sm:p-2.5 rounded-xl text-[var(--text-muted)] hover:text-[var(--accent-primary)] hover:bg-[var(--bg-card)] transition-colors cursor-pointer shrink-0"
+          className="min-w-[40px] min-h-[40px] p-2 sm:p-2.5 rounded-xl text-[var(--text-muted)] hover:text-[var(--accent-primary)] hover:bg-[var(--bg-card)] flex items-center justify-center transition-colors cursor-pointer shrink-0"
           title="Emojis"
         >
           <Smile className="w-5 h-5" />
@@ -639,7 +639,7 @@ Chat fresh ho gayi hai. Ab aap **Urdu alphabet (اردو), Arabic (العربي�
             }
           }}
           placeholder="Kuch bhi poochein — Urdu (اردو), Arabic, Hindi, poetry (2/4/6 lines), translation..."
-          className="flex-1 min-w-0 px-3 sm:px-4 py-2 sm:py-2.5 text-base sm:text-sm rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] placeholder-neutral-500 focus:outline-none transition-colors resize-none max-h-32 overflow-y-auto leading-relaxed"
+          className="flex-1 min-w-0 min-h-[40px] px-3 sm:px-4 py-2 sm:py-2.5 text-base sm:text-sm rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] placeholder-neutral-500 focus:outline-none transition-colors resize-none max-h-32 overflow-y-auto leading-relaxed"
           disabled={isLoading}
         />
 
@@ -647,7 +647,7 @@ Chat fresh ho gayi hai. Ab aap **Urdu alphabet (اردو), Arabic (العربي�
           <button
             type="button"
             onClick={handleStopGenerating}
-            className="py-2.5 px-3.5 sm:px-4 rounded-xl border border-rose-500/40 bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap shrink-0 cursor-pointer"
+            className="min-w-[40px] min-h-[40px] py-2.5 px-3.5 sm:px-4 rounded-xl border border-rose-500/40 bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap shrink-0 cursor-pointer"
             title="Stop generating"
           >
             <Square className="w-3.5 h-3.5 fill-current" />
@@ -657,7 +657,7 @@ Chat fresh ho gayi hai. Ab aap **Urdu alphabet (اردو), Arabic (العربي�
           <button
             type="submit"
             disabled={!input.trim()}
-            className="py-2.5 px-3.5 sm:px-4 rounded-xl gold-button-accent text-black font-bold flex items-center gap-1.5 transition-all disabled:opacity-50 whitespace-nowrap shrink-0 cursor-pointer"
+            className="min-w-[40px] min-h-[40px] py-2.5 px-3.5 sm:px-4 rounded-xl gold-button-accent text-black font-bold flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 whitespace-nowrap shrink-0 cursor-pointer"
             title="Send to ERROREX AI"
           >
             <Send className="w-4 h-4" />

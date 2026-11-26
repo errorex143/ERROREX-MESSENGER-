@@ -556,19 +556,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   return (
     <div className="flex-1 min-w-0 h-full flex flex-col bg-[var(--bg-window)] text-[var(--text-main)] relative select-none transition-colors">
       {/* Top Header: Contact Details, Live Net Status, and Encrypted Badge */}
-      <div className="p-2.5 sm:p-3 px-3 sm:px-4 bg-[var(--bg-sidebar)] border-b border-[var(--accent-border)] flex items-center justify-between gap-2 z-10 shrink-0 shadow-sm">
+      <div className="py-2.5 px-3 sm:px-4 bg-[var(--bg-sidebar)] border-b border-[var(--accent-border)] flex items-center justify-between gap-2 z-10 shrink-0 shadow-sm">
         <div
           onClick={() => setIsContactInfoOpen(true)}
-          className="flex items-center gap-3 cursor-pointer group flex-1 min-w-0"
+          className="flex items-center gap-2.5 sm:gap-3 cursor-pointer group flex-1 min-w-0"
           title="Click to view Contact Profile & Info"
         >
           {onCloseMobileChat && (
             <button
+              type="button"
               onClick={e => {
                 e.stopPropagation();
                 onCloseMobileChat();
               }}
-              className="md:hidden p-2 rounded-xl bg-[var(--bg-card)] border border-[var(--accent-border)] text-[var(--accent-primary)] hover:border-[var(--accent-primary)] shadow-sm"
+              aria-label="Back to conversations"
+              className="md:hidden min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl bg-[var(--bg-card)] border border-[var(--accent-border)] text-[var(--accent-primary)] hover:border-[var(--accent-primary)] shadow-sm shrink-0"
               title="Back to conversations"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -602,15 +604,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
           <div className="flex flex-col text-left min-w-0 flex-1">
             <div className="flex items-center gap-1.5 min-w-0">
-              <h2 className="text-sm font-bold text-[var(--text-main)] tracking-wide truncate max-w-[150px] sm:max-w-xs group-hover:text-[var(--accent-primary)] transition-colors">
+              <h2 className="text-sm font-bold text-[var(--text-main)] tracking-wide truncate group-hover:text-[var(--accent-primary)] transition-colors">
                 {chatTitle}
               </h2>
-              <span className="text-[10px] font-mono text-[var(--accent-primary)] truncate">
+              <span className="text-[10px] font-mono text-[var(--accent-primary)] truncate shrink-0 max-w-[90px] sm:max-w-[140px]">
                 @{chatUsername}
               </span>
               {conversation.isBlocked && (
-                <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/40 uppercase tracking-wider">
-                  Blocked 🚫
+                <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/40 uppercase tracking-wider shrink-0">
+                  Blocked
                 </span>
               )}
             </div>
@@ -635,14 +637,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         </div>
 
         {/* Clean Header: Encrypted Badge */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
             onClick={() => setIsContactInfoOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--bg-card)] border border-[var(--accent-border)] text-xs font-mono text-[var(--accent-primary)] hover:border-[var(--accent-primary)] hover:gold-glow-sm transition-all shadow-sm"
+            aria-label="Contact info & encryption"
+            className="min-w-[40px] min-h-[40px] flex items-center justify-center gap-1.5 px-2.5 sm:px-3 rounded-xl bg-[var(--bg-card)] border border-[var(--accent-border)] text-xs font-mono text-[var(--accent-primary)] hover:border-[var(--accent-primary)] hover:gold-glow-sm transition-all shadow-sm cursor-pointer"
             title="Encrypted Conversation"
           >
-            <ShieldCheck className="w-3.5 h-3.5" />
+            <ShieldCheck className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
             <span className="hidden sm:inline">Encrypted</span>
           </button>
         </div>
@@ -678,10 +681,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 {/* Quote Reply preview if present */}
                 {msg.replyToText && !isMsgDeleted && (
                   <div
-                    className={`text-[11px] px-3 py-1 rounded-t-xl max-w-sm truncate italic border-x border-t ${
+                    className={`text-[11px] px-3 py-1 rounded-t-xl max-w-[85%] sm:max-w-sm truncate italic border-x border-t ${
                       isOwn
-                        ? 'bg-amber-900/40 text-amber-200 border-amber-700/50'
-                        : 'bg-neutral-800 text-neutral-300 border-neutral-700'
+                        ? 'bg-[var(--accent-surface)] text-[var(--accent-primary)] border-[var(--accent-border)]'
+                        : 'bg-[var(--bg-card)] text-[var(--text-muted)] border-[var(--accent-border)]'
                     }`}
                   >
                     ↳ Replying to: {msg.replyToText}
@@ -690,9 +693,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
                 {/* Message Bubble with Sender @username and DP identification */}
                 <div
-                  className={`relative max-w-[86%] sm:max-w-md lg:max-w-lg xl:max-w-xl p-3 rounded-2xl text-xs sm:text-[13px] leading-relaxed shadow-md ${
+                  className={`relative max-w-[88%] sm:max-w-md lg:max-w-lg xl:max-w-xl p-3 rounded-2xl text-[13px] leading-relaxed shadow-md ${
                     isMsgDeleted
-                      ? 'bg-neutral-900/60 border border-neutral-800 text-neutral-400 italic rounded-2xl'
+                      ? 'bg-[var(--bg-card)] border border-[var(--accent-border)] text-[var(--text-muted)] italic rounded-2xl'
                       : isOwn
                       ? 'bg-gradient-to-br from-[var(--accent-surface)] to-[var(--bg-card)] border border-[var(--accent-border)] text-[var(--text-main)] rounded-br-xs'
                       : 'bg-[var(--bg-bubble-in)] border border-[var(--border-bubble-in)] text-[var(--text-main)] rounded-bl-xs'
@@ -818,13 +821,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               </div>
 
               {/* Message Actions: Always accessible on touchscreens, hover-reveal on desktop */}
-              <div className="opacity-85 md:opacity-0 md:group-hover:opacity-100 flex items-center gap-1 mt-1 transition-opacity">
+              <div className="opacity-90 md:opacity-0 md:group-hover:opacity-100 flex items-center gap-1.5 mt-1.5 transition-opacity">
                 {!isMsgDeleted && (
                   <>
                     <button
                       type="button"
                       onClick={() => handleReaction(msg.id, '❤️')}
-                      className="p-1 px-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--accent-border)] hover:border-[var(--accent-primary)] hover:scale-125 transition-transform text-xs shadow-sm"
+                      className="min-w-[32px] min-h-[32px] px-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--accent-border)] hover:border-[var(--accent-primary)] hover:scale-110 transition-transform text-xs shadow-sm flex items-center justify-center"
                       title="Heart"
                     >
                       ❤️
@@ -832,7 +835,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     <button
                       type="button"
                       onClick={() => handleReaction(msg.id, '👍')}
-                      className="p-1 px-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--accent-border)] hover:border-[var(--accent-primary)] hover:scale-125 transition-transform text-xs shadow-sm"
+                      className="min-w-[32px] min-h-[32px] px-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--accent-border)] hover:border-[var(--accent-primary)] hover:scale-110 transition-transform text-xs shadow-sm flex items-center justify-center"
                       title="Like"
                     >
                       👍
@@ -840,7 +843,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     <button
                       type="button"
                       onClick={() => handleReaction(msg.id, '🔥')}
-                      className="p-1 px-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--accent-border)] hover:border-[var(--accent-primary)] hover:scale-125 transition-transform text-xs shadow-sm"
+                      className="min-w-[32px] min-h-[32px] px-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--accent-border)] hover:border-[var(--accent-primary)] hover:scale-110 transition-transform text-xs shadow-sm flex items-center justify-center"
                       title="Fire"
                     >
                       🔥
@@ -848,10 +851,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     <button
                       type="button"
                       onClick={() => setReplyingTo(msg)}
-                      className="p-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--accent-border)] text-neutral-400 hover:text-[var(--accent-primary)] hover:border-[var(--accent-primary)] shadow-sm transition-all"
+                      className="min-w-[32px] min-h-[32px] p-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--accent-border)] text-[var(--text-muted)] hover:text-[var(--accent-primary)] hover:border-[var(--accent-primary)] shadow-sm transition-all flex items-center justify-center"
                       title="Reply"
                     >
-                      <CornerUpLeft className="w-3 h-3" />
+                      <CornerUpLeft className="w-3.5 h-3.5" />
                     </button>
                     {isOwn && (
                       <button
@@ -860,10 +863,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                           setEditingMessage(msg);
                           setInputText(msg.text);
                         }}
-                        className="p-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--accent-border)] text-neutral-400 hover:text-white hover:border-neutral-400 shadow-sm transition-all"
+                        className="min-w-[32px] min-h-[32px] p-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--accent-border)] text-[var(--text-muted)] hover:text-[var(--text-main)] hover:border-[var(--accent-primary)] shadow-sm transition-all flex items-center justify-center"
                         title="Edit"
                       >
-                        <Edit2 className="w-3 h-3" />
+                        <Edit2 className="w-3.5 h-3.5" />
                       </button>
                     )}
                   </>
@@ -872,10 +875,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 <button
                   type="button"
                   onClick={() => setMessageToDelete(msg)}
-                  className="p-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--accent-border)] text-neutral-400 hover:text-rose-400 hover:border-rose-400 shadow-sm transition-all cursor-pointer"
+                  className="min-w-[32px] min-h-[32px] p-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--accent-border)] text-[var(--text-muted)] hover:text-rose-400 hover:border-rose-400 shadow-sm transition-all cursor-pointer flex items-center justify-center"
                   title="Delete message"
                 >
-                  <Trash2 className="w-3 h-3" />
+                  <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>
@@ -892,8 +895,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             <span className="truncate">Replying to: {replyingTo.text}</span>
           </div>
           <button
+            type="button"
             onClick={() => setReplyingTo(null)}
-            className="p-1 hover:text-white text-neutral-400"
+            className="w-7 h-7 flex items-center justify-center rounded-lg hover:text-[var(--text-main)] text-[var(--text-muted)]"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -908,11 +912,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             <span className="truncate">Editing message: {editingMessage.text}</span>
           </div>
           <button
+            type="button"
             onClick={() => {
               setEditingMessage(null);
               setInputText('');
             }}
-            className="p-1 hover:text-white text-neutral-400"
+            className="w-7 h-7 flex items-center justify-center rounded-lg hover:text-[var(--text-main)] text-[var(--text-muted)]"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -962,7 +967,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="p-2 sm:p-2.5 rounded-xl bg-[var(--bg-card)] border border-[var(--accent-border)] text-[var(--accent-primary)] hover:border-[var(--accent-primary)] hover:gold-glow-sm shadow-sm transition-all flex items-center justify-center shrink-0 cursor-pointer"
+            className="min-w-[40px] min-h-[40px] p-2 sm:p-2.5 rounded-xl bg-[var(--bg-card)] border border-[var(--accent-border)] text-[var(--accent-primary)] hover:border-[var(--accent-primary)] hover:gold-glow-sm shadow-sm transition-all flex items-center justify-center shrink-0 cursor-pointer"
             title="Send Photo / File"
           >
             <Paperclip className="w-4 h-4 stroke-[2]" />
@@ -972,7 +977,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           <button
             type="button"
             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-            className="p-2 sm:p-2.5 rounded-xl bg-[var(--bg-card)] border border-[var(--accent-border)] text-[var(--accent-primary)] hover:border-[var(--accent-primary)] hover:gold-glow-sm shadow-sm transition-all flex items-center justify-center shrink-0 cursor-pointer"
+            className="min-w-[40px] min-h-[40px] p-2 sm:p-2.5 rounded-xl bg-[var(--bg-card)] border border-[var(--accent-border)] text-[var(--accent-primary)] hover:border-[var(--accent-primary)] hover:gold-glow-sm shadow-sm transition-all flex items-center justify-center shrink-0 cursor-pointer"
             title="1000 Live Animated Stickers & Emojis"
           >
             <Smile className="w-4 h-4 stroke-[2]" />
@@ -993,14 +998,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 <button
                   type="button"
                   onClick={cancelRecording}
-                  className="text-xs font-semibold text-neutral-300 hover:text-white px-2.5 py-1 rounded-xl border border-neutral-700 bg-neutral-900/60 hover:border-neutral-500 transition-colors shadow-sm cursor-pointer"
+                  className="min-h-[34px] text-xs font-semibold text-neutral-300 hover:text-white px-2.5 py-1 rounded-xl border border-neutral-700 bg-neutral-900/60 hover:border-neutral-500 transition-colors shadow-sm cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={stopRecording}
-                  className="text-xs font-bold text-black bg-[var(--accent-primary)] px-3 py-1 rounded-xl hover:gold-glow-sm transition-all shadow-md cursor-pointer"
+                  className="min-h-[34px] text-xs font-bold text-black bg-[var(--accent-primary)] px-3 py-1 rounded-xl hover:gold-glow-sm transition-all shadow-md cursor-pointer"
                 >
                   Send Voice
                 </button>
@@ -1012,7 +1017,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               value={inputText}
               onChange={e => setInputText(e.target.value)}
               placeholder="Type encrypted message..."
-              className="flex-1 min-w-0 px-3 sm:px-4 py-2 sm:py-2.5 text-base sm:text-xs rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] placeholder-neutral-500 focus:outline-none transition-colors shadow-inner"
+              className="flex-1 min-w-0 min-h-[40px] px-3 sm:px-4 py-2 sm:py-2.5 text-base sm:text-xs rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] placeholder-neutral-500 focus:outline-none transition-colors shadow-inner"
             />
           )}
 
@@ -1020,7 +1025,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           {inputText.trim() ? (
             <button
               type="submit"
-              className="px-3 sm:px-4 py-2.5 rounded-xl gold-button-accent text-black font-bold hover:gold-glow-sm transition-all shadow-md flex items-center gap-1.5 text-xs uppercase tracking-wider shrink-0 cursor-pointer"
+              className="min-w-[40px] min-h-[40px] px-3 sm:px-4 py-2.5 rounded-xl gold-button-accent text-black font-bold hover:gold-glow-sm transition-all shadow-md flex items-center justify-center gap-1.5 text-xs uppercase tracking-wider shrink-0 cursor-pointer"
               title="Send Message"
             >
               <Send className="w-4 h-4 stroke-[2.5]" />
@@ -1030,7 +1035,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             <button
               type="button"
               onClick={isRecording ? stopRecording : startRecording}
-              className={`px-3 sm:px-3.5 py-2.5 rounded-xl transition-all shadow-md flex items-center gap-1.5 shrink-0 text-xs font-semibold cursor-pointer ${
+              className={`min-w-[40px] min-h-[40px] px-3 sm:px-3.5 py-2.5 rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 shrink-0 text-xs font-semibold cursor-pointer ${
                 isRecording
                   ? 'bg-rose-600 text-white animate-pulse'
                   : 'gold-button border border-[var(--accent-border)] hover:border-[var(--accent-primary)] text-[var(--accent-primary)] hover:gold-glow-sm'
@@ -1044,21 +1049,25 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         </form>
       )}
 
-      {/* WhatsApp-Style Contact Info Modal: DP, Username, Bio, Privacy */}
+      {/* Contact Info Modal: DP, Username, Bio, Privacy */}
       {isContactInfoOpen && (
         <div
-          className="fixed inset-0 z-50 flex flex-col items-center p-3 sm:p-4 bg-black/80 backdrop-blur-md overflow-y-auto"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md overflow-y-auto"
           onClick={() => setIsContactInfoOpen(false)}
         >
           <div
-            className="w-full max-w-sm p-5 sm:p-6 rounded-3xl bg-[var(--bg-sidebar)] border border-[var(--accent-border)] gold-glow shadow-2xl flex flex-col items-center text-center space-y-4 my-auto max-h-[90dvh] overflow-y-auto"
+            className="w-full sm:max-w-sm p-5 sm:p-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] rounded-t-3xl sm:rounded-3xl bg-[var(--bg-sidebar)] border-t sm:border border-[var(--accent-border)] gold-glow shadow-2xl flex flex-col items-center text-center space-y-4 max-h-[92dvh] overflow-y-auto"
             onClick={e => e.stopPropagation()}
           >
-            <div className="w-full flex items-center justify-between pb-2 border-b border-white/5">
+            <div className="sm:hidden w-10 h-1 rounded-full bg-neutral-400/40 mx-auto -mt-1" />
+
+            <div className="w-full flex items-center justify-between pb-2 border-b border-neutral-200 dark:border-white/5">
               <span className="text-xs font-semibold text-[var(--text-muted)]">Contact Info</span>
               <button
+                type="button"
                 onClick={() => setIsContactInfoOpen(false)}
-                className="text-neutral-400 hover:text-[var(--text-main)]"
+                aria-label="Close contact info"
+                className="w-9 h-9 rounded-full flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-neutral-200/50 dark:hover:bg-white/5"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1109,19 +1118,19 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
             {/* Security Handshake Details */}
             <div className="w-full p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-left flex items-start gap-2.5">
-              <ShieldCheck className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-              <div className="text-[11px] text-amber-300">
+              <ShieldCheck className="w-4 h-4 text-amber-500 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div className="text-[11px] text-amber-700 dark:text-amber-300">
                 <p className="font-bold">End-to-End Encrypted</p>
-                <p className="text-[10px] text-amber-400/80 mt-0.5">
+                <p className="text-[10px] text-amber-600 dark:text-amber-400/80 mt-0.5">
                   Messages and voice memos are protected by Sovereign AES-256 keys. Only you and @{chatUsername} have access.
                 </p>
               </div>
             </div>
 
-
             <button
+              type="button"
               onClick={() => setIsContactInfoOpen(false)}
-              className="w-full py-2.5 rounded-xl gold-button text-xs font-bold text-[var(--text-main)] border border-[var(--accent-border)] hover:border-[var(--accent-primary)] shadow-sm transition-all"
+              className="w-full min-h-[44px] py-2.5 rounded-xl gold-button text-xs font-bold text-[var(--text-main)] border border-[var(--accent-border)] hover:border-[var(--accent-primary)] shadow-sm transition-all"
             >
               Close Profile
             </button>
@@ -1130,8 +1139,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       )}
       {/* In-Chat Settings Modal */}
       {isChatSettingsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-black/80 backdrop-blur-md">
-          <div className="w-full max-w-xl max-h-[92dvh] flex flex-col rounded-3xl bg-[var(--bg-sidebar)] border border-[var(--accent-border)] gold-glow shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md">
+          <div className="w-full sm:max-w-xl max-h-[92dvh] flex flex-col rounded-t-3xl sm:rounded-3xl bg-[var(--bg-sidebar)] border-t sm:border border-[var(--accent-border)] gold-glow shadow-2xl overflow-hidden">
             {/* Modal Header */}
             <div className="p-4 sm:p-5 border-b border-neutral-200 dark:border-white/5 flex items-center justify-between bg-[var(--bg-card)] shrink-0">
               <div className="flex items-center gap-2.5">
@@ -1139,11 +1148,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   <Settings className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="text-sm font-bold text-[var(--text-main)] flex items-center gap-2">
-                    <span>Chat & App Settings</span>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[var(--accent-surface)] text-[var(--accent-primary)] border border-[var(--accent-border)]">
-                      ERROREX
-                    </span>
+                  <h2 className="text-sm font-bold text-[var(--text-main)]">
+                    Chat & App Settings
                   </h2>
                   <p className="text-[11px] text-[var(--text-muted)]">
                     Profile, Privacy, 3 modes & 14 themes
@@ -1154,7 +1160,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               <button
                 type="button"
                 onClick={() => setIsChatSettingsOpen(false)}
-                className="w-8 h-8 rounded-full bg-neutral-200/50 dark:bg-neutral-800/50 hover:bg-neutral-300 dark:hover:bg-neutral-700 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors"
+                aria-label="Close settings"
+                className="w-9 h-9 rounded-full bg-neutral-200/50 dark:bg-neutral-800/50 hover:bg-neutral-300 dark:hover:bg-neutral-700 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1282,15 +1289,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
                       {/* Preset Avatars */}
                       <div className="pt-1">
-                        <span className="text-[10px] text-[var(--text-muted)] block mb-1">Preset Avatars:</span>
-                        <div className="flex items-center justify-center sm:justify-start gap-2">
+                        <span className="text-[10px] text-[var(--text-muted)] block mb-1.5">Preset Avatars:</span>
+                        <div className="flex items-center justify-center sm:justify-start gap-2.5">
                           {HERALDIC_AVATARS.map((url, idx) => (
                             <img
                               key={idx}
                               src={url}
                               alt="Preset"
                               onClick={() => setMyPhotoURL(url)}
-                              className="w-6 h-6 rounded-full object-cover border border-neutral-600 hover:border-[var(--accent-primary)] cursor-pointer hover:scale-110 transition-transform"
+                              className="w-9 h-9 rounded-full object-cover border border-neutral-400 dark:border-neutral-600 hover:border-[var(--accent-primary)] cursor-pointer hover:scale-110 transition-transform"
                             />
                           ))}
                         </div>
@@ -1312,7 +1319,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         value={myDisplayName}
                         onChange={e => setMyDisplayName(e.target.value)}
                         placeholder="Enter your name"
-                        className="w-full px-3.5 py-2 text-xs rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] focus:outline-none"
+                        className="w-full px-3.5 py-2.5 sm:py-2 text-base sm:text-xs rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] focus:outline-none"
                       />
                     </div>
 
@@ -1328,7 +1335,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         </span>
                       </div>
                       <div className="relative">
-                        <span className="absolute left-3 top-2 text-xs font-mono text-[var(--accent-primary)] font-bold">@</span>
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm sm:text-xs font-mono text-[var(--accent-primary)] font-bold">@</span>
                         <input
                           type="text"
                           required
@@ -1336,7 +1343,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                           value={myUsername}
                           onChange={e => setMyUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
                           placeholder="your_handle"
-                          className="w-full pl-8 pr-3 py-2 text-xs font-mono rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--accent-primary)] focus:outline-none transition-colors"
+                          className="w-full pl-8 pr-3 py-2.5 sm:py-2 text-base sm:text-xs font-mono rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--accent-primary)] focus:outline-none transition-colors"
                         />
                       </div>
                       <p className="mt-1 text-[10px] text-[var(--text-muted)]">
@@ -1354,19 +1361,19 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         value={myBio}
                         onChange={e => setMyBio(e.target.value)}
                         placeholder="Tell contacts about yourself..."
-                        className="w-full px-3.5 py-2 text-xs rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] focus:outline-none"
+                        className="w-full px-3.5 py-2.5 sm:py-2 text-base sm:text-xs rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] focus:outline-none"
                       />
 
                       {/* Status presets */}
                       <div className="mt-1.5 space-y-1">
                         <span className="text-[10px] text-[var(--text-muted)] block">Status Presets:</span>
-                        <div className="flex flex-wrap gap-1">
+                        <div className="flex flex-wrap gap-1.5">
                           {WHATSAPP_STATUS_PRESETS.map((preset, idx) => (
                             <button
                               key={idx}
                               type="button"
                               onClick={() => setMyBio(preset)}
-                              className={`py-0.5 px-2 rounded-lg text-[10px] border transition-colors ${
+                              className={`py-1 px-2.5 rounded-lg text-[11px] sm:text-[10px] border transition-colors ${
                                 myBio === preset
                                   ? 'bg-[var(--accent-surface)] border-[var(--accent-primary)] text-[var(--accent-primary)] font-semibold'
                                   : 'border-neutral-300 dark:border-neutral-800 text-[var(--text-muted)] hover:text-[var(--text-main)]'
@@ -1381,7 +1388,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
                     <button
                       type="submit"
-                      className="w-full py-2.5 rounded-xl gold-button-accent text-xs font-bold text-black uppercase tracking-wider hover:gold-glow-sm transition-all"
+                      className="w-full min-h-[44px] py-2.5 rounded-xl gold-button-accent text-xs font-bold text-black uppercase tracking-wider hover:gold-glow-sm transition-all"
                     >
                       Save Profile Changes
                     </button>
@@ -1747,12 +1754,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         </div>
       )}
 
-      {/* WhatsApp-Style Delete Message Dialog: Delete for Everyone vs Delete for Me */}
+      {/* Delete Message Dialog: Delete for Everyone vs Delete for Me */}
       {messageToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-3xl bg-[var(--bg-card)] border border-[var(--accent-border)] p-5 sm:p-6 gold-glow shadow-2xl space-y-4 text-[var(--text-main)]">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm">
+          <div className="w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl bg-[var(--bg-card)] border-t sm:border border-[var(--accent-border)] p-5 sm:p-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] gold-glow shadow-2xl space-y-4 text-[var(--text-main)]">
+            <div className="sm:hidden w-10 h-1 rounded-full bg-neutral-400/40 mx-auto -mt-1" />
+
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
+              <div className="w-10 h-10 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-500 dark:text-rose-400 shrink-0">
                 <Trash2 className="w-5 h-5" />
               </div>
               <div>
@@ -1761,7 +1770,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               </div>
             </div>
 
-            <div className="space-y-2 pt-1">
+            <div className="space-y-2.5 pt-1">
               {/* Option 1: Delete for Everyone (Available if own message) */}
               {messageToDelete.senderId === currentUserId && (
                 <button
@@ -1770,7 +1779,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     chatStore.deleteMessageForEveryone(conversation.id, messageToDelete.id);
                     setMessageToDelete(null);
                   }}
-                  className="w-full p-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center justify-between transition-all shadow-md active:scale-98 cursor-pointer"
+                  className="w-full min-h-[48px] p-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center justify-between transition-all shadow-md active:scale-98 cursor-pointer"
                 >
                   <div className="flex items-center gap-2.5">
                     <Trash2 className="w-4 h-4 shrink-0" />
@@ -1790,13 +1799,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   chatStore.deleteMessageForMe(conversation.id, messageToDelete.id, currentUserId);
                   setMessageToDelete(null);
                 }}
-                className="w-full p-3 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-100 border border-neutral-700 font-semibold text-xs flex items-center justify-between transition-all active:scale-98 cursor-pointer"
+                className="w-full min-h-[48px] p-3 rounded-xl bg-[var(--bg-sidebar)] hover:bg-[var(--accent-surface)] text-[var(--text-main)] border border-[var(--accent-border)] font-semibold text-xs flex items-center justify-between transition-all active:scale-98 cursor-pointer"
               >
                 <div className="flex items-center gap-2.5">
-                  <Trash2 className="w-4 h-4 shrink-0 text-neutral-400" />
+                  <Trash2 className="w-4 h-4 shrink-0 text-[var(--text-muted)]" />
                   <div className="text-left">
                     <p className="leading-none">Delete for Me</p>
-                    <p className="text-[10px] text-neutral-400 font-normal mt-1">Deletes only from your chat screen</p>
+                    <p className="text-[10px] text-[var(--text-muted)] font-normal mt-1">Deletes only from your chat screen</p>
                   </div>
                 </div>
                 <span className="text-xs font-mono">👤</span>
@@ -1807,7 +1816,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               <button
                 type="button"
                 onClick={() => setMessageToDelete(null)}
-                className="w-full py-2.5 rounded-xl border border-neutral-700 hover:border-neutral-500 text-neutral-400 hover:text-white text-xs font-semibold transition-all cursor-pointer"
+                className="w-full min-h-[44px] py-2.5 rounded-xl border border-[var(--accent-border)] hover:border-[var(--accent-primary)] text-[var(--text-muted)] hover:text-[var(--text-main)] text-xs font-semibold transition-all cursor-pointer"
               >
                 Cancel
               </button>

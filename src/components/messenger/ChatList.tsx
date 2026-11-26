@@ -310,42 +310,45 @@ export const ChatList: React.FC<ChatListProps> = ({
     <div className="w-full h-full bg-[var(--bg-list)] border-r border-[var(--accent-border)] flex flex-col shrink-0 select-none transition-colors relative">
       {/* Top Header: All Chats Details & Count */}
       <div className="p-3.5 border-b border-neutral-200 dark:border-white/5 space-y-3 shrink-0">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h1 className="text-sm font-display font-bold gold-gradient-text">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-baseline gap-1.5 min-w-0">
+            <h1 className="text-sm sm:text-base font-display font-bold gold-gradient-text truncate">
               Messages & Chats
             </h1>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--accent-surface)] text-[var(--accent-primary)] font-mono font-bold border border-[var(--accent-border)]">
-              {conversations.length}
+            <span className="text-xs font-mono text-[var(--accent-primary)] font-semibold tabular-nums shrink-0">
+              ({conversations.length})
             </span>
           </div>
 
           <button
+            type="button"
             onClick={onOpenNewChat}
-            className="py-1.5 px-3 rounded-xl gold-button text-xs font-semibold text-[var(--accent-primary)] hover:gold-glow-sm flex items-center gap-1.5 transition-all shadow-sm border border-[var(--accent-border)] hover:border-[var(--accent-primary)] cursor-pointer"
+            className="min-h-[40px] py-2 px-3.5 rounded-xl gold-button text-xs font-semibold text-[var(--accent-primary)] hover:gold-glow-sm flex items-center gap-1.5 transition-all shadow-sm border border-[var(--accent-border)] hover:border-[var(--accent-primary)] whitespace-nowrap shrink-0 cursor-pointer"
             title="Start New Conversation"
           >
-            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-            <span className="text-[11px] font-bold">New Chat</span>
+            <Plus className="w-4 h-4 stroke-[2.5]" />
+            <span className="text-xs font-bold">New Chat</span>
           </button>
         </div>
 
         {/* Search Bar */}
         <div className="relative">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-neutral-500" />
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none" />
           <input
             type="text"
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            placeholder="Search by name, @username, or message..."
-            className="w-full pl-8 pr-8 py-2 text-xs rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] placeholder-neutral-500 focus:outline-none transition-colors shadow-inner"
+            placeholder="Search name, @username, or message..."
+            className="w-full pl-9 pr-10 py-2.5 sm:py-2 text-base sm:text-xs rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] placeholder-neutral-500 focus:outline-none transition-colors shadow-inner"
           />
           {searchTerm && (
             <button
+              type="button"
               onClick={() => setSearchTerm('')}
-              className="absolute right-2.5 top-2.5 text-neutral-400 hover:text-white cursor-pointer"
+              aria-label="Clear search"
+              className="w-8 h-8 flex items-center justify-center rounded-lg absolute right-1.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-[var(--text-main)] cursor-pointer"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="w-4 h-4" />
             </button>
           )}
         </div>
@@ -353,31 +356,33 @@ export const ChatList: React.FC<ChatListProps> = ({
         {/* Filter Chips: All, Unread, Pinned, Archived */}
         <div className="flex items-center gap-1.5 pt-0.5 overflow-x-auto scrollbar-none">
           <button
+            type="button"
             onClick={() => setFilter('all')}
-            className={`py-1 px-2.5 rounded-xl text-[10px] font-semibold whitespace-nowrap transition-all shadow-sm cursor-pointer ${
+            className={`min-h-[34px] py-1.5 px-3 rounded-xl text-[11px] font-semibold whitespace-nowrap transition-all shadow-sm cursor-pointer shrink-0 tabular-nums ${
               filter === 'all'
                 ? 'bg-[var(--accent-surface)] text-[var(--accent-primary)] border border-[var(--accent-primary)] font-bold'
                 : 'bg-[var(--bg-card)] text-[var(--text-muted)] border border-[var(--accent-border)] hover:text-[var(--text-main)] hover:border-[var(--accent-primary)]'
             }`}
           >
-            All Chats ({conversations.filter(c => !c.isArchived).length})
+            All ({conversations.filter(c => !c.isArchived).length})
           </button>
           <button
+            type="button"
             onClick={() => setFilter('unread')}
-            className={`py-1 px-2.5 rounded-xl text-[10px] font-semibold whitespace-nowrap transition-all flex items-center gap-1 shadow-sm cursor-pointer ${
+            className={`min-h-[34px] py-1.5 px-3 rounded-xl text-[11px] font-semibold whitespace-nowrap transition-all flex items-center gap-1 shadow-sm cursor-pointer shrink-0 tabular-nums ${
               filter === 'unread'
                 ? 'bg-[var(--accent-surface)] text-[var(--accent-primary)] border border-[var(--accent-primary)] font-bold'
                 : 'bg-[var(--bg-card)] text-[var(--text-muted)] border border-[var(--accent-border)] hover:text-[var(--text-main)] hover:border-[var(--accent-primary)]'
             }`}
           >
-            <span>Unread</span>
-            {conversations.filter(c => !c.isArchived && c.unreadCount && c.unreadCount > 0).length > 0 && (
-              <span className="w-2 h-2 rounded-full bg-[var(--accent-primary)]" />
-            )}
+            <span>
+              Unread ({conversations.filter(c => !c.isArchived && c.unreadCount && c.unreadCount > 0).length})
+            </span>
           </button>
           <button
+            type="button"
             onClick={() => setFilter('pinned')}
-            className={`py-1 px-2.5 rounded-xl text-[10px] font-semibold whitespace-nowrap transition-all flex items-center gap-1 shadow-sm cursor-pointer ${
+            className={`min-h-[34px] py-1.5 px-3 rounded-xl text-[11px] font-semibold whitespace-nowrap transition-all flex items-center gap-1 shadow-sm cursor-pointer shrink-0 tabular-nums ${
               filter === 'pinned'
                 ? 'bg-[var(--accent-surface)] text-[var(--accent-primary)] border border-[var(--accent-primary)] font-bold'
                 : 'bg-[var(--bg-card)] text-[var(--text-muted)] border border-[var(--accent-border)] hover:text-[var(--text-main)] hover:border-[var(--accent-primary)]'
@@ -388,8 +393,9 @@ export const ChatList: React.FC<ChatListProps> = ({
           </button>
           {conversations.some(c => c.isArchived) && (
             <button
+              type="button"
               onClick={() => setFilter('archived')}
-              className={`py-1 px-2.5 rounded-xl text-[10px] font-semibold whitespace-nowrap transition-all flex items-center gap-1 shadow-sm cursor-pointer ${
+              className={`min-h-[34px] py-1.5 px-3 rounded-xl text-[11px] font-semibold whitespace-nowrap transition-all flex items-center gap-1 shadow-sm cursor-pointer shrink-0 tabular-nums ${
                 filter === 'archived'
                   ? 'bg-[var(--accent-surface)] text-[var(--accent-primary)] border border-[var(--accent-primary)] font-bold'
                   : 'bg-[var(--bg-card)] text-[var(--text-muted)] border border-[var(--accent-border)] hover:text-[var(--text-main)] hover:border-[var(--accent-primary)]'
@@ -501,7 +507,7 @@ export const ChatList: React.FC<ChatListProps> = ({
                   className="relative shrink-0 cursor-pointer group/dp"
                   title="Tap to view DP & Bio"
                 >
-                  <div className="w-11 h-11 rounded-full bg-neutral-200 dark:bg-neutral-900 border border-[var(--accent-border)] group-hover/dp:border-[var(--accent-primary)] flex items-center justify-center text-[var(--accent-primary)] font-bold text-sm overflow-hidden shadow-inner transition-colors">
+                  <div className="w-12 h-12 rounded-full bg-neutral-200 dark:bg-neutral-900 border border-[var(--accent-border)] group-hover/dp:border-[var(--accent-primary)] flex items-center justify-center text-[var(--accent-primary)] font-bold text-sm overflow-hidden shadow-inner transition-colors">
                     {visibleAvatar ? (
                       <img src={visibleAvatar} alt={title} className="w-full h-full object-cover" />
                     ) : conv.isGroup ? (
@@ -521,13 +527,13 @@ export const ChatList: React.FC<ChatListProps> = ({
                 </button>
 
                 {/* Details Column: Title, Username, Last Message, Time, Badges */}
-                <div className="flex-1 min-w-0 pr-6">
+                <div className="flex-1 min-w-0 pr-10">
                   <div className="flex items-center justify-between gap-2 mb-0.5">
                     <div className="flex items-center gap-1.5 min-w-0 flex-1 pr-1">
-                      <span className="text-xs font-bold text-[var(--text-main)] truncate">
+                      <span className="text-[13px] sm:text-xs font-bold text-[var(--text-main)] truncate">
                         {title}
                       </span>
-                      <span className="text-[10px] font-mono text-[var(--accent-primary)] truncate opacity-80 shrink-0 max-w-[90px] sm:max-w-[120px]">
+                      <span className="text-[10px] font-mono text-[var(--accent-primary)] truncate opacity-80 shrink-0 max-w-[82px] sm:max-w-[120px]">
                         @{username}
                       </span>
                       {conv.isPinned && (
@@ -547,7 +553,7 @@ export const ChatList: React.FC<ChatListProps> = ({
                       )}
                     </div>
 
-                    <span className="text-[10px] font-mono text-neutral-500 shrink-0">
+                    <span className="text-[10px] font-mono tabular-nums text-neutral-500 shrink-0">
                       {formatTime(conv.lastMessageAt || conv.updatedAt)}
                     </span>
                   </div>
@@ -580,7 +586,7 @@ export const ChatList: React.FC<ChatListProps> = ({
                     </div>
 
                     {Boolean(conv.unreadCount && conv.unreadCount > 0) && (
-                      <span className="px-1.5 py-0.2 rounded-full text-[9px] font-mono font-bold bg-[var(--accent-primary)] text-black shrink-0 shadow-sm">
+                      <span className="min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-mono tabular-nums font-bold bg-[var(--accent-primary)] text-black flex items-center justify-center shrink-0 shadow-sm">
                         {conv.unreadCount}
                       </span>
                     )}
@@ -592,7 +598,8 @@ export const ChatList: React.FC<ChatListProps> = ({
                   <button
                     type="button"
                     onClick={e => handleOpenMenu(e, conv.id)}
-                    className="w-8 h-8 rounded-lg hover:bg-black/20 dark:hover:bg-black/40 text-neutral-500 dark:text-neutral-400 hover:text-[var(--accent-primary)] flex items-center justify-center transition-all cursor-pointer"
+                    aria-label="Chat options"
+                    className="w-9 h-9 rounded-xl hover:bg-neutral-200/70 dark:hover:bg-black/40 text-neutral-500 dark:text-neutral-400 hover:text-[var(--accent-primary)] flex items-center justify-center transition-all cursor-pointer"
                     title="Chat Options (Profile, Pin, Mute, Archive, Block, Delete)"
                   >
                     <MoreVertical className="w-4 h-4" />
@@ -686,17 +693,21 @@ export const ChatList: React.FC<ChatListProps> = ({
       {/* USER PROFILE VIEW MODAL */}
       {viewingProfileUser && (
         <div
-          className="fixed inset-0 z-50 flex flex-col items-center p-3 sm:p-4 bg-black/80 backdrop-blur-md overflow-y-auto"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md overflow-y-auto"
           onClick={() => setViewingProfileUser(null)}
         >
           <div
-            className="w-full max-w-sm rounded-3xl bg-[#0E0E12] border border-[var(--accent-border)] gold-glow shadow-2xl p-5 sm:p-6 text-[var(--text-main)] relative my-auto max-h-[90dvh] overflow-y-auto"
+            className="w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl bg-[var(--bg-sidebar)] border-t sm:border border-[var(--accent-border)] gold-glow shadow-2xl p-5 sm:p-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-[var(--text-main)] relative max-h-[92dvh] overflow-y-auto"
             onClick={e => e.stopPropagation()}
           >
+            <div className="sm:hidden w-10 h-1 rounded-full bg-neutral-400/40 mx-auto mb-3" />
+
             {/* Close Button */}
             <button
+              type="button"
               onClick={() => setViewingProfileUser(null)}
-              className="absolute right-4 top-4 w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-neutral-400 hover:text-white transition-colors cursor-pointer"
+              aria-label="Close profile"
+              className="absolute right-4 top-4 w-9 h-9 rounded-full bg-neutral-200/60 dark:bg-white/5 hover:bg-neutral-300 dark:hover:bg-white/10 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -720,7 +731,7 @@ export const ChatList: React.FC<ChatListProps> = ({
                 className="relative mb-3 cursor-pointer hover:scale-105 transition-transform"
                 title="Tap to open full-size DP"
               >
-                <div className="w-24 h-24 rounded-full bg-neutral-900 border-2 border-[var(--accent-primary)] flex items-center justify-center overflow-hidden shadow-xl gold-glow-sm">
+                <div className="w-24 h-24 rounded-full bg-neutral-200 dark:bg-neutral-900 border-2 border-[var(--accent-primary)] flex items-center justify-center overflow-hidden shadow-xl gold-glow-sm">
                   {viewingProfileUser.photoURL ? (
                     <img
                       src={viewingProfileUser.photoURL}
@@ -735,7 +746,7 @@ export const ChatList: React.FC<ChatListProps> = ({
                 </div>
                 {viewingProfileUser.showOnlineStatus !== false && (
                   <span
-                    className={`w-4 h-4 rounded-full border-2 border-[#0E0E12] absolute bottom-1 right-1 shadow-md ${
+                    className={`w-4 h-4 rounded-full border-2 border-[var(--bg-sidebar)] absolute bottom-1 right-1 shadow-md ${
                       viewingProfileUser.isOnline ? 'bg-emerald-500' : 'bg-neutral-500'
                     }`}
                     title={viewingProfileUser.isOnline ? 'Online' : 'Offline'}
@@ -743,8 +754,8 @@ export const ChatList: React.FC<ChatListProps> = ({
                 )}
               </button>
 
-              {/* Display Name & Sovereign Badge */}
-              <h2 className="text-base font-bold text-white flex items-center gap-1.5">
+              {/* Display Name & Badge */}
+              <h2 className="text-base font-bold text-[var(--text-main)] flex items-center gap-1.5">
                 <span>{viewingProfileUser.displayName}</span>
                 <Sparkles className="w-4 h-4 text-[var(--accent-primary)] inline" />
               </h2>
@@ -753,21 +764,21 @@ export const ChatList: React.FC<ChatListProps> = ({
               </span>
 
               {/* Bio & Status */}
-              <div className="w-full mt-4 p-3.5 rounded-2xl bg-black/50 border border-white/5 text-left space-y-2">
+              <div className="w-full mt-4 p-3.5 rounded-2xl bg-[var(--bg-card)] border border-[var(--accent-border)] text-left space-y-2">
                 <div>
-                  <span className="text-[10px] uppercase font-mono tracking-wider text-neutral-500">
+                  <span className="text-[10px] uppercase font-mono tracking-wider text-[var(--text-muted)]">
                     Bio / Status
                   </span>
-                  <p className={`text-xs mt-0.5 leading-relaxed ${viewingProfileUser.bioHiddenByPrivacy ? 'text-neutral-400 italic' : 'text-neutral-200'}`}>
+                  <p className={`text-xs mt-0.5 leading-relaxed ${viewingProfileUser.bioHiddenByPrivacy ? 'text-[var(--text-muted)] italic' : 'text-[var(--text-main)]'}`}>
                     {viewingProfileUser.bioHiddenByPrivacy
                       ? 'Bio hidden by privacy settings'
                       : viewingProfileUser.bio || 'Available on ERROREX'}
                   </p>
                 </div>
 
-                <div className="pt-2 border-t border-white/5 flex items-center justify-between text-xs">
-                  <span className="text-neutral-400">Security Protocol:</span>
-                  <span className="text-emerald-400 font-mono font-semibold flex items-center gap-1">
+                <div className="pt-2 border-t border-neutral-200/70 dark:border-white/5 flex items-center justify-between text-xs">
+                  <span className="text-[var(--text-muted)]">Security Protocol:</span>
+                  <span className="text-emerald-600 dark:text-emerald-400 font-mono font-semibold flex items-center gap-1">
                     <ShieldCheck className="w-3.5 h-3.5" />
                     <span>AES-256 Verified</span>
                   </span>
@@ -775,7 +786,7 @@ export const ChatList: React.FC<ChatListProps> = ({
               </div>
 
               {/* Action Buttons */}
-              <div className="w-full mt-5 flex gap-2">
+              <div className="w-full mt-5 flex gap-2.5">
                 <button
                   type="button"
                   onClick={() => {
@@ -784,14 +795,14 @@ export const ChatList: React.FC<ChatListProps> = ({
                     }
                     setViewingProfileUser(null);
                   }}
-                  className="flex-1 py-2.5 rounded-xl gold-button-accent text-xs font-bold uppercase tracking-wider text-black cursor-pointer shadow-md"
+                  className="flex-1 min-h-[44px] py-2.5 rounded-xl gold-button-accent text-xs font-bold uppercase tracking-wider text-black cursor-pointer shadow-md"
                 >
                   Send Message
                 </button>
                 <button
                   type="button"
                   onClick={() => setViewingProfileUser(null)}
-                  className="py-2.5 px-4 rounded-xl bg-neutral-900 border border-neutral-700 hover:border-white text-xs font-semibold text-neutral-300 hover:text-white cursor-pointer"
+                  className="min-h-[44px] py-2.5 px-4 rounded-xl bg-[var(--bg-card)] border border-[var(--accent-border)] hover:border-[var(--accent-primary)] text-xs font-semibold text-[var(--text-main)] cursor-pointer"
                 >
                   Close
                 </button>

@@ -222,30 +222,31 @@ export const MessengerDashboard: React.FC = () => {
     <div className="h-[100dvh] w-full flex flex-col bg-[var(--bg-page)] text-[var(--text-main)] overflow-hidden relative font-sans transition-colors">
       {/* Top Header: Hidden on mobile when inside an active full-screen chat so ChatWindow header gets maximum height */}
       <header
-        className={`w-full h-12 sm:h-13 border-b border-[var(--accent-border)] bg-[var(--bg-sidebar)] items-center justify-between px-3.5 sm:px-6 shrink-0 z-30 shadow-sm select-none ${
+        className={`w-full h-13 border-b border-[var(--accent-border)] bg-[var(--bg-sidebar)]/95 backdrop-blur-md items-center justify-between px-3.5 sm:px-6 shrink-0 z-30 shadow-sm select-none ${
           isMobileFullScreenChat ? 'hidden md:flex' : 'flex'
         }`}
       >
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-2.5 min-w-0">
           <CrownLogo size="md" showWordmark={true} />
-          <span className="hidden sm:inline-flex text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-[var(--accent-surface)] text-[var(--accent-primary)] border border-[var(--accent-border)] font-bold uppercase tracking-widest">
-            Sovereign Messenger
+          <span className="hidden sm:inline text-xs text-[var(--text-muted)] truncate">
+            · Private Messenger
           </span>
         </div>
 
         {/* Mobile Quick Controls (visible on < md when sidebar is at bottom) */}
-        <div className="flex md:hidden items-center gap-1.5 shrink-0">
+        <div className="flex md:hidden items-center gap-2 shrink-0">
           <button
             type="button"
             onClick={() => setActiveTab('profile')}
-            className="p-2 rounded-xl bg-[var(--bg-card)] border border-[var(--accent-border)] text-[var(--accent-primary)] flex items-center justify-center cursor-pointer"
+            className="w-10 h-10 rounded-xl bg-[var(--bg-card)] border border-[var(--accent-border)] hover:border-[var(--accent-primary)] text-[var(--accent-primary)] flex items-center justify-center overflow-hidden cursor-pointer active:scale-95 transition-transform"
             title="Profile"
+            aria-label="Open Profile"
           >
             {userProfile?.photoURL ? (
               <img
                 src={userProfile.photoURL}
                 alt={userProfile.displayName}
-                className="w-4 h-4 rounded-full object-cover"
+                className="w-full h-full object-cover"
               />
             ) : (
               <Users className="w-4 h-4" />
@@ -254,10 +255,10 @@ export const MessengerDashboard: React.FC = () => {
           <button
             type="button"
             onClick={lockMessenger}
-            className="py-1.5 px-2.5 rounded-xl bg-[var(--accent-surface)] border border-[var(--accent-border)] text-[11px] font-bold text-[var(--accent-primary)] flex items-center gap-1 cursor-pointer"
+            className="min-h-[40px] py-2 px-3 rounded-xl bg-[var(--accent-surface)] border border-[var(--accent-border)] text-xs font-semibold text-[var(--accent-primary)] flex items-center gap-1.5 cursor-pointer active:scale-95 transition-transform whitespace-nowrap"
             title="Lock to Calculator"
           >
-            <Lock className="w-3.5 h-3.5" />
+            <Lock className="w-3.5 h-3.5 shrink-0" />
             <span>Lock</span>
           </button>
         </div>
@@ -434,24 +435,27 @@ export const MessengerDashboard: React.FC = () => {
         />
       )}
 
-      {/* New Chat Modal */}
+      {/* New Chat Modal (Native mobile bottom sheet -> centered dialog on sm+) */}
       {isNewChatModalOpen && (
         <div
-          className="fixed inset-0 z-50 flex flex-col items-center p-3 sm:p-4 bg-black/80 backdrop-blur-md overflow-y-auto"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md"
           onClick={() => setIsNewChatModalOpen(false)}
         >
           <div
-            className="w-full max-w-md p-5 sm:p-6 rounded-3xl bg-[var(--bg-sidebar)] border border-[var(--accent-border)] gold-glow shadow-2xl flex flex-col space-y-4 my-auto max-h-[90dvh] overflow-y-auto"
+            className="w-full sm:max-w-md p-5 sm:p-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] rounded-t-3xl sm:rounded-3xl bg-[var(--bg-sidebar)] border border-[var(--accent-border)] gold-glow shadow-2xl flex flex-col space-y-4 max-h-[90dvh] overflow-y-auto"
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between pb-2 border-b border-white/5">
-              <h2 className="text-sm font-display font-bold gold-gradient-text flex items-center gap-1.5">
+            <div className="w-10 h-1 rounded-full bg-neutral-400/40 mx-auto sm:hidden shrink-0" />
+            <div className="flex items-center justify-between pb-2.5 border-b border-neutral-200 dark:border-white/5">
+              <h2 className="text-sm font-display font-bold gold-gradient-text flex items-center gap-2">
                 <MessageSquare className="w-4 h-4 text-[var(--accent-primary)]" />
                 <span>Start New Private Chat</span>
               </h2>
               <button
+                type="button"
                 onClick={() => setIsNewChatModalOpen(false)}
-                className="text-neutral-400 hover:text-[var(--text-main)]"
+                className="w-9 h-9 rounded-full bg-neutral-200/60 dark:bg-neutral-800/60 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-main)] cursor-pointer"
+                aria-label="Close modal"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -460,7 +464,7 @@ export const MessengerDashboard: React.FC = () => {
             {/* Direct Name and Username Input */}
             <form onSubmit={handleCreateCustomChat} className="space-y-3">
               <div>
-                <label className="text-[11px] font-semibold text-[var(--text-muted)] block mb-1">
+                <label className="text-xs font-semibold text-[var(--text-muted)] block mb-1">
                   Contact Display Name
                 </label>
                 <input
@@ -468,24 +472,24 @@ export const MessengerDashboard: React.FC = () => {
                   required
                   value={newChatNameInput}
                   onChange={e => setNewChatNameInput(e.target.value)}
-                  placeholder="e.g. Sarah Connor, Dr. Vance, Boss..."
-                  className="w-full px-3.5 py-2 text-xs rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] placeholder-neutral-500 focus:outline-none"
+                  placeholder="e.g. Sarah Connor, Dr. Vance..."
+                  className="w-full px-3.5 py-2.5 text-base sm:text-xs rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] placeholder-neutral-500 focus:outline-none"
                   autoFocus
                 />
               </div>
 
               <div>
-                <label className="text-[11px] font-semibold text-[var(--text-muted)] block mb-1">
+                <label className="text-xs font-semibold text-[var(--text-muted)] block mb-1">
                   Unique Username (@handle)
                 </label>
                 <div className="relative">
-                  <AtSign className="w-3.5 h-3.5 absolute left-3 top-2.5 text-neutral-500" />
+                  <AtSign className="w-4 h-4 absolute left-3 top-3 sm:top-2.5 text-neutral-500" />
                   <input
                     type="text"
                     value={newChatUsernameInput}
                     onChange={e => setNewChatUsernameInput(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
                     placeholder="e.g. sarah_connor (optional)"
-                    className="w-full pl-8 pr-3 py-2 text-xs font-mono rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] placeholder-neutral-500 focus:outline-none"
+                    className="w-full pl-9 pr-3 py-2.5 text-base sm:text-xs font-mono rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] placeholder-neutral-500 focus:outline-none"
                   />
                 </div>
               </div>
@@ -493,7 +497,7 @@ export const MessengerDashboard: React.FC = () => {
               <button
                 type="submit"
                 disabled={!newChatNameInput.trim()}
-                className="w-full py-2.5 rounded-xl gold-button-accent text-xs font-bold text-black uppercase tracking-wider disabled:opacity-50 hover:gold-glow-sm transition-all"
+                className="w-full min-h-[44px] py-2.5 rounded-xl gold-button-accent text-xs font-bold text-black uppercase tracking-wider disabled:opacity-50 hover:gold-glow-sm transition-all cursor-pointer"
               >
                 Open Encrypted Dialogue
               </button>

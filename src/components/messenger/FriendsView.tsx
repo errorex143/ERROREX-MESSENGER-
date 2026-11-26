@@ -330,8 +330,9 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
         {/* Sub-tabs */}
         <div className="flex items-center gap-1 p-1 bg-neutral-200/70 dark:bg-black/60 rounded-xl border border-neutral-300 dark:border-white/5 overflow-x-auto scrollbar-none w-full lg:w-auto shrink-0">
           <button
+            type="button"
             onClick={() => setActiveSubTab('friends')}
-            className={`py-2 px-3 rounded-lg text-xs font-semibold transition-all whitespace-nowrap shrink-0 flex-1 lg:flex-initial cursor-pointer ${
+            className={`min-h-[40px] py-2 px-3 rounded-lg text-xs font-semibold transition-all whitespace-nowrap shrink-0 flex-1 lg:flex-initial tabular-nums cursor-pointer ${
               activeSubTab === 'friends'
                 ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--text-main)] shadow-sm'
                 : 'text-neutral-600 dark:text-neutral-400 hover:text-[var(--text-main)]'
@@ -340,8 +341,9 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
             Friends ({friends.length})
           </button>
           <button
+            type="button"
             onClick={() => setActiveSubTab('requests')}
-            className={`py-2 px-3 rounded-lg text-xs font-semibold transition-all relative whitespace-nowrap shrink-0 flex-1 lg:flex-initial cursor-pointer ${
+            className={`min-h-[40px] py-2 px-3 rounded-lg text-xs font-semibold transition-all relative whitespace-nowrap shrink-0 flex-1 lg:flex-initial tabular-nums cursor-pointer ${
               activeSubTab === 'requests'
                 ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--text-main)] shadow-sm'
                 : 'text-neutral-600 dark:text-neutral-400 hover:text-[var(--text-main)]'
@@ -355,8 +357,9 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
             )}
           </button>
           <button
+            type="button"
             onClick={() => setActiveSubTab('directory')}
-            className={`py-2 px-3 rounded-lg text-xs font-semibold transition-all whitespace-nowrap shrink-0 flex-1 lg:flex-initial cursor-pointer ${
+            className={`min-h-[40px] py-2 px-3 rounded-lg text-xs font-semibold transition-all whitespace-nowrap shrink-0 flex-1 lg:flex-initial tabular-nums cursor-pointer ${
               activeSubTab === 'directory'
                 ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--text-main)] shadow-sm'
                 : 'text-neutral-600 dark:text-neutral-400 hover:text-[var(--text-main)]'
@@ -479,9 +482,10 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                     {/* Actions */}
                     <div className="flex items-center gap-1.5 shrink-0">
                       <button
+                        type="button"
                         onClick={() => onStartChatWithUser(friend)}
                         title="Send Encrypted Message"
-                        className="py-2 px-3 rounded-xl gold-button text-xs font-semibold text-[var(--accent-primary)] hover:gold-glow-sm flex items-center gap-1.5 transition-all cursor-pointer"
+                        className="min-h-[40px] py-2 px-3.5 rounded-xl gold-button text-xs font-semibold text-[var(--accent-primary)] hover:gold-glow-sm flex items-center gap-1.5 transition-all cursor-pointer"
                       >
                         <MessageSquare className="w-4 h-4" />
                         <span>Chat</span>
@@ -540,17 +544,20 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex items-center gap-2 shrink-0">
                       <button
+                        type="button"
                         onClick={() => handleAcceptRequest(req)}
-                        className="py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                        className="min-h-[40px] py-2 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
                       >
                         <Check className="w-3.5 h-3.5" />
                         <span>Accept</span>
                       </button>
                       <button
+                        type="button"
                         onClick={() => handleRejectRequest(req)}
-                        className="p-1.5 rounded-lg bg-neutral-200 dark:bg-neutral-800 hover:bg-rose-700 text-neutral-600 dark:text-neutral-300 hover:text-white cursor-pointer"
+                        aria-label="Reject friend request"
+                        className="min-w-[40px] min-h-[40px] rounded-xl bg-neutral-200 dark:bg-neutral-800 hover:bg-rose-700 text-neutral-600 dark:text-neutral-300 hover:text-white flex items-center justify-center cursor-pointer"
                       >
                         <X className="w-4 h-4" />
                       </button>
@@ -579,8 +586,9 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                       Request sent to member ID: {req.receiverId.slice(0, 8)}...
                     </span>
                     <button
+                      type="button"
                       onClick={() => handleCancelRequest(req.id)}
-                      className="text-xs text-[var(--text-muted)] hover:text-rose-400 py-1.5 px-3 rounded-lg border border-neutral-300 dark:border-neutral-700 shrink-0 cursor-pointer"
+                      className="min-h-[40px] text-xs text-[var(--text-muted)] hover:text-rose-400 py-2 px-3.5 rounded-xl border border-neutral-300 dark:border-neutral-700 shrink-0 cursor-pointer"
                     >
                       Cancel
                     </button>
@@ -598,23 +606,23 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
             <form onSubmit={handleSearchUsers} className="flex gap-2 w-full md:max-w-md min-w-0">
               <div className="relative flex-1 min-w-0">
-                <Search className="w-4 h-4 absolute left-3 top-3 sm:top-2.5 text-neutral-500" />
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   placeholder="Filter by name, @username, or bio..."
-                  className="w-full pl-9 pr-4 py-2 text-base sm:text-xs rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] placeholder-neutral-500 focus:outline-none"
+                  className="w-full min-h-[42px] pl-9 pr-4 py-2 text-base sm:text-xs rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] placeholder-neutral-500 focus:outline-none"
                 />
               </div>
               <button
                 type="submit"
                 disabled={isSearching}
-                className="py-2 px-3.5 rounded-xl gold-button border border-[var(--accent-border)] text-xs font-semibold text-[var(--accent-primary)] flex items-center gap-1.5 hover:gold-glow-sm transition-all cursor-pointer shrink-0"
+                className="min-h-[42px] py-2 px-3.5 rounded-xl gold-button border border-[var(--accent-border)] text-xs font-semibold text-[var(--accent-primary)] flex items-center gap-1.5 hover:gold-glow-sm transition-all cursor-pointer shrink-0"
                 title="Refresh all website members"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isSearching ? 'animate-spin' : ''}`} />
-                <span className="hidden xs:inline sm:inline">Refresh</span>
+                <span className="hidden sm:inline">Refresh</span>
               </button>
             </form>
 
@@ -747,33 +755,34 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                         type="button"
                         onClick={() => onStartChatWithUser(member)}
                         title="Start Private Chat"
-                        className="p-2 rounded-xl gold-button border border-[var(--accent-border)] text-[var(--accent-primary)] hover:gold-glow-sm transition-all cursor-pointer"
+                        aria-label={`Message ${member.displayName}`}
+                        className="min-w-[40px] min-h-[40px] rounded-xl gold-button border border-[var(--accent-border)] text-[var(--accent-primary)] hover:gold-glow-sm flex items-center justify-center transition-all cursor-pointer"
                       >
-                        <MessageSquare className="w-3.5 h-3.5" />
+                        <MessageSquare className="w-4 h-4" />
                       </button>
 
                       {isAlreadyFriend ? (
-                        <span className="text-[10px] font-semibold text-emerald-500 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-1.5 rounded-xl border border-emerald-500/30">
+                        <span className="min-h-[40px] inline-flex items-center text-[11px] font-semibold text-emerald-500 dark:text-emerald-400 bg-emerald-500/10 px-2.5 rounded-xl border border-emerald-500/30">
                           Friends
                         </span>
                       ) : incomingReq ? (
                         <button
                           type="button"
                           onClick={() => handleAcceptRequest(incomingReq)}
-                          className="py-1.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                          className="min-h-[40px] py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold flex items-center gap-1 cursor-pointer"
                         >
                           <Check className="w-3.5 h-3.5" />
                           <span>Accept</span>
                         </button>
                       ) : isPending ? (
-                        <span className="text-[10px] text-[var(--text-muted)] bg-neutral-200 dark:bg-neutral-800 px-2.5 py-1.5 rounded-xl">
+                        <span className="min-h-[40px] inline-flex items-center text-[11px] text-[var(--text-muted)] bg-neutral-200 dark:bg-neutral-800 px-2.5 rounded-xl">
                           Pending
                         </span>
                       ) : (
                         <button
                           type="button"
                           onClick={() => handleSendFriendRequest(member)}
-                          className="py-1.5 px-3 rounded-xl gold-button border border-[var(--accent-border)] text-xs font-semibold text-[var(--accent-primary)] flex items-center gap-1 hover:gold-glow-sm cursor-pointer"
+                          className="min-h-[40px] py-2 px-3 rounded-xl gold-button border border-[var(--accent-border)] text-xs font-semibold text-[var(--accent-primary)] flex items-center gap-1 hover:gold-glow-sm cursor-pointer"
                         >
                           <UserPlus className="w-3.5 h-3.5" />
                           <span>Add</span>

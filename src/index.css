@@ -201,6 +201,20 @@
     color: var(--text-main);
     transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   }
+
+  button,
+  a,
+  [role="button"] {
+    touch-action: manipulation;
+  }
+}
+
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
 }
 
 /* Custom Luxury Gold & Marble Styling Utilities */
