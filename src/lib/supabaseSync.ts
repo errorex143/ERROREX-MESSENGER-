@@ -945,3 +945,107 @@ export async function fetchSupabaseStatuses(): Promise<UserStatus[]> {
     return [];
   }
 }
+
+export async function deleteSupabaseUserAccount(uid: string): Promise<boolean> {
+  if (!isSupabaseConfigured || !supabase || !uid) return false;
+
+  try {
+    // 1. Delete statuses
+    try {
+      await supabase.from('statuses').delete().eq('user_id', uid);
+    } catch {
+      // ignore
+    }
+
+    // 2. Delete friend requests (sent or received)
+    try {
+      await supabase
+        .from('friend_requests')
+        .delete()
+        .or(`sender_id.eq.${uid},receiver_id.eq.${uid}`);
+    } catch {
+      // ignore
+    }
+
+    // 3. Delete friendships
+    try {
+      await supabase
+        .from('friendships')
+        .delete()
+        .or(`user_a.eq.${uid},user_b.eq.${uid}`);
+    } catch {
+      // ignore
+    }
+
+    // 4. Clean up conversations & messages involving this user
+    try {
+      const convs = await fetchSupabaseConversations(uid);
+      for (const conv of convs) {
+        if (!isValidUUID(conv.id)) continue;
+        if (!conv.isGroup) {
+          await supabase.from('messages').delete().eq('conversation_id', conv.id);
+          await supabase.from('conversations').delete().eq('id', conv.id);
+        } else {
+          const remaining = (conv.participants || []).filter(p => p !== uid);
+          if (remaining.length === 0) {
+            await supabase.from('messages').delete().eq('conversation_id', conv.id);
+            await supabase.from('conversations').delete().eq('id', conv.id);
+          } else {
+            const nextDetails = { ...(conv.participantDetails || {}) };
+            delete nextDetails[uid];
+            await supabase
+              .from('conversations')
+              .update({
+                participants: remaining,
+                participant_details: nextDetails,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', conv.id);
+          }
+        }
+      }
+    } catch {
+      // ignore conversation cleanup failure
+    }
+
+    // 5. Delete any remaining messages sent by this user
+    try {
+      await supabase.from('messages').delete().eq('sender_id', uid);
+    } catch {
+      // ignore
+    }
+
+    // 6. Delete user_credentials (PIN & Auth hash)
+    try {
+      await supabase.from('user_credentials').delete().eq('uid', uid);
+      if (isValidUUID(uid)) {
+        await supabase.from('user_credentials').delete().eq('user_id', uid);
+      }
+    } catch {
+      // ignore
+    }
+
+    // 7. Delete user_profiles
+    try {
+      await supabase.from('user_profiles').delete().eq('uid', uid);
+      if (isValidUUID(uid)) {
+        await supabase.from('user_profiles').delete().eq('id', uid);
+      }
+    } catch {
+      // ignore
+    }
+
+    // 8. Best-effort RPC to also remove auth.users entry if SQL helper exists
+    try {
+      await supabase.rpc('delete_own_errorex_account', { target_uid: uid });
+    } catch {
+      // ignore if RPC not installed
+    }
+
+    return true;
+  } catch (err) {
+    console.warn('[Supabase] delete account notice:', err);
+    return false;
+  }
+}
+

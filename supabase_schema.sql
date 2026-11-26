@@ -355,3 +355,31 @@ ALTER TABLE public.messages REPLICA IDENTITY FULL;
 ALTER TABLE public.friend_requests REPLICA IDENTITY FULL;
 ALTER TABLE public.friendships REPLICA IDENTITY FULL;
 ALTER TABLE public.statuses REPLICA IDENTITY FULL;
+
+-- 16. Helper RPC for Permanent Account Deletion
+CREATE OR REPLACE FUNCTION public.delete_own_errorex_account(target_uid TEXT)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+BEGIN
+  IF target_uid IS NULL OR length(trim(target_uid)) = 0 THEN
+    RETURN;
+  END IF;
+
+  DELETE FROM public.statuses WHERE user_id = target_uid;
+  DELETE FROM public.friend_requests WHERE sender_id = target_uid OR receiver_id = target_uid;
+  DELETE FROM public.friendships WHERE user_a = target_uid OR user_b = target_uid;
+  DELETE FROM public.messages WHERE sender_id = target_uid;
+  DELETE FROM public.conversations WHERE is_group = false AND participants ? target_uid;
+  DELETE FROM public.user_credentials WHERE uid = target_uid;
+  DELETE FROM public.user_profiles WHERE uid = target_uid;
+
+  BEGIN
+    DELETE FROM auth.users WHERE id::text = target_uid;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+END;
+$$;
+

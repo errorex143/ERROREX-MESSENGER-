@@ -18,7 +18,10 @@ import {
   Camera,
   AlertCircle,
   Sparkles,
-  RefreshCw
+  RefreshCw,
+  Trash2,
+  EyeOff,
+  Mail
 } from 'lucide-react';
 import { updatePassword } from '../../lib/firebase';
 
@@ -51,7 +54,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   initialTab = 'appearance'
 }) => {
-  const { user, userProfile, updateUserProfile, verifyPin, setupPin, lockMessenger } = useAuth();
+  const {
+    user,
+    userProfile,
+    updateUserProfile,
+    verifyPin,
+    setupPin,
+    lockMessenger,
+    verifyAccountForDeletion,
+    permanentlyDeleteAccount
+  } = useAuth();
   const {
     theme,
     setTheme,
@@ -115,6 +127,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [pinLoading, setPinLoading] = useState(false);
   const [pinMessage, setPinMessage] = useState<string | null>(null);
   const [pinError, setPinError] = useState<string | null>(null);
+
+  // Permanent Remove Account State
+  const [deleteStep, setDeleteStep] = useState<'idle' | 'credentials' | 'confirm'>('idle');
+  const [deleteEmail, setDeleteEmail] = useState(user?.email || '');
+  const [deletePassword, setDeletePassword] = useState('');
+  const [showDeletePassword, setShowDeletePassword] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const deleteSectionRef = useRef<HTMLDivElement>(null);
 
   if (!isOpen) return null;
 
@@ -211,6 +232,51 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setPinError(err.message || 'Error communicating with server.');
     } finally {
       setPinLoading(false);
+    }
+  };
+
+  const openDeleteAccountFlow = () => {
+    setDeleteEmail(user?.email || '');
+    setDeletePassword('');
+    setDeleteError(null);
+    setDeleteStep('credentials');
+    setActiveTab('pin');
+    setTimeout(() => {
+      deleteSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 80);
+  };
+
+  const resetDeleteAccountFlow = () => {
+    setDeleteStep('idle');
+    setDeletePassword('');
+    setDeleteError(null);
+    setShowDeletePassword(false);
+  };
+
+  const handleVerifyDeleteCredentials = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setDeleteError(null);
+    setDeleteLoading(true);
+    try {
+      await verifyAccountForDeletion(deleteEmail, deletePassword);
+      setDeleteStep('confirm');
+    } catch (err: any) {
+      setDeleteError(err?.message || 'Could not verify your Gmail and password.');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const handleConfirmPermanentDelete = async () => {
+    setDeleteError(null);
+    setDeleteLoading(true);
+    try {
+      await permanentlyDeleteAccount(deleteEmail, deletePassword);
+      onClose();
+    } catch (err: any) {
+      setDeleteError(err?.message || 'Failed to permanently delete account.');
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -659,6 +725,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   {profileSaving ? 'Saving...' : 'Save Profile Changes'}
                 </button>
               </form>
+
+              {/* Quick Danger Shortcut */}
+              <div className="p-3.5 rounded-2xl bg-[var(--bg-card)] border border-rose-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-xs font-bold text-rose-600 dark:text-rose-400">Permanent Remove Account</h4>
+                  <p className="text-[10px] text-[var(--text-muted)]">
+                    Permanently delete your Gmail account, messages, and profile data.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={openDeleteAccountFlow}
+                  className="min-h-[40px] py-2 px-3.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/35 text-xs font-semibold text-rose-600 dark:text-rose-400 flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Remove Account</span>
+                </button>
+              </div>
             </div>
           )}
 
@@ -909,6 +993,147 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <Lock className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
                   <span>Lock Now</span>
                 </button>
+              </div>
+
+              {/* Permanent Remove Account */}
+              <div
+                ref={deleteSectionRef}
+                className="p-4 rounded-2xl bg-[var(--bg-card)] border border-rose-500/35 space-y-3 shadow-sm"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-xs font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
+                      <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                      <span>Permanent Remove Account</span>
+                    </h4>
+                    <p className="text-[10px] text-[var(--text-muted)] mt-0.5 leading-relaxed">
+                      Verify your Gmail and account password to permanently remove your entire account and data.
+                    </p>
+                  </div>
+
+                  {deleteStep === 'idle' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDeleteEmail(user?.email || '');
+                        setDeletePassword('');
+                        setDeleteError(null);
+                        setDeleteStep('credentials');
+                      }}
+                      className="min-h-[44px] py-2 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-xs text-white font-bold flex items-center justify-center gap-1.5 cursor-pointer w-full sm:w-auto shrink-0 shadow-sm transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Remove Account</span>
+                    </button>
+                  )}
+                </div>
+
+                {deleteError && (
+                  <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/35 text-rose-600 dark:text-rose-300 text-xs flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                    <span>{deleteError}</span>
+                  </div>
+                )}
+
+                {deleteStep === 'credentials' && (
+                  <form onSubmit={handleVerifyDeleteCredentials} className="space-y-3 pt-1 border-t border-rose-500/20">
+                    <div>
+                      <label className="block text-xs font-medium text-[var(--text-main)] mb-1">
+                        Account Gmail / Email
+                      </label>
+                      <div className="relative">
+                        <Mail className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="email"
+                          required
+                          value={deleteEmail}
+                          onChange={e => setDeleteEmail(e.target.value)}
+                          placeholder="yourname@gmail.com"
+                          className="w-full pl-9 pr-3.5 py-2.5 sm:py-2 text-base sm:text-xs rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-rose-500 text-[var(--text-main)] focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-[var(--text-main)] mb-1">
+                        Current Account Password
+                      </label>
+                      <div className="relative">
+                        <Lock className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type={showDeletePassword ? 'text' : 'password'}
+                          required
+                          value={deletePassword}
+                          onChange={e => setDeletePassword(e.target.value)}
+                          placeholder="Enter your password"
+                          className="w-full pl-9 pr-10 py-2.5 sm:py-2 text-base sm:text-xs rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-rose-500 text-[var(--text-main)] focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowDeletePassword(prev => !prev)}
+                          aria-label={showDeletePassword ? 'Hide password' : 'Show password'}
+                          className="absolute right-1.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-main)] cursor-pointer"
+                        >
+                          {showDeletePassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col-reverse sm:flex-row gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={resetDeleteAccountFlow}
+                        disabled={deleteLoading}
+                        className="flex-1 min-h-[44px] py-2 px-3 rounded-xl border border-[var(--accent-border)] text-xs font-semibold text-[var(--text-main)] hover:bg-white/5 cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={deleteLoading}
+                        className="flex-1 min-h-[44px] py-2 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-xs font-bold text-white flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>{deleteLoading ? 'Verifying...' : 'Delete Account'}</span>
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {deleteStep === 'confirm' && (
+                  <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/40 space-y-3">
+                    <div className="space-y-1">
+                      <h5 className="text-xs font-bold text-rose-600 dark:text-rose-300">
+                        Confirm Permanent Deletion
+                      </h5>
+                      <p className="text-[11px] text-[var(--text-main)] leading-relaxed">
+                        Gmail <span className="font-mono font-semibold">{deleteEmail}</span> verified. Clicking{' '}
+                        <strong>Permanent Delete</strong> will permanently remove your profile, DP, bio, messages,
+                        contacts, statuses, and 8-digit PIN from ERROREX. This cannot be undone.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col-reverse sm:flex-row gap-2">
+                      <button
+                        type="button"
+                        onClick={resetDeleteAccountFlow}
+                        disabled={deleteLoading}
+                        className="flex-1 min-h-[44px] py-2 px-3 rounded-xl border border-[var(--accent-border)] bg-[var(--bg-sidebar)] text-xs font-semibold text-[var(--text-main)] cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleConfirmPermanentDelete}
+                        disabled={deleteLoading}
+                        className="flex-1 min-h-[44px] py-2 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-xs font-bold text-white uppercase tracking-wide flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-md transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>{deleteLoading ? 'Removing Account...' : 'Permanent Delete'}</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

@@ -18,7 +18,8 @@ import {
   fetchSupabaseFriendships,
   upsertSupabaseConversation,
   upsertSupabaseStatus,
-  fetchSupabaseStatuses
+  fetchSupabaseStatuses,
+  deleteSupabaseUserAccount
 } from './supabaseSync';
 
 export interface StandaloneUser {
@@ -402,6 +403,10 @@ class StandaloneAuthService {
         });
 
         if (data?.user) {
+          if (data.user.user_metadata?.errorex_deleted === true) {
+            await supabase.auth.signOut().catch(() => {});
+            throw new Error('This account has been permanently deleted.');
+          }
           // Fetch full cloud profile from user_profiles so displayName, username, DP, bio stay intact
           const cloudProfile =
             (await fetchSupabaseUserProfileByUid(data.user.id)) ||
@@ -489,7 +494,12 @@ class StandaloneAuthService {
           }
         }
       } catch (err: any) {
-        if (err?.message === 'Invalid email or password.') throw err;
+        if (
+          err?.message === 'Invalid email or password.' ||
+          err?.message === 'This account has been permanently deleted.'
+        ) {
+          throw err;
+        }
       }
     }
 
@@ -828,6 +838,182 @@ class StandaloneAuthService {
         localStorage.setItem('errorex_registered_users', JSON.stringify(regUsers));
       }
     }
+  }
+
+  async verifyCurrentCredentials(user: StandaloneUser, email: string, password: string): Promise<void> {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const accountEmail = (user.email || '').trim().toLowerCase();
+
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      throw new Error('Please enter your account Gmail address.');
+    }
+    if (accountEmail && cleanEmail !== accountEmail) {
+      throw new Error('The Gmail address entered does not match your signed-in account.');
+    }
+    if (!password) {
+      throw new Error('Please enter your account password.');
+    }
+
+    await initSupabaseRuntime();
+
+    // 1. Verify against Supabase user_credentials salted hash (supports password resets too)
+    if (isSupabaseConfigured && supabase) {
+      const authCred = await fetchSupabaseAuthCredential(user.uid);
+      if (authCred && authCred.authHash && authCred.authSalt) {
+        const candidateHash = await hashPinClient(password, authCred.authSalt);
+        if (candidateHash === authCred.authHash) {
+          return;
+        }
+        throw new Error('Incorrect password. Please enter the correct password for this account.');
+      }
+    }
+
+    // 2. Verify against local registered users store
+    try {
+      const regUsersRaw = localStorage.getItem('errorex_registered_users');
+      const regUsers: any[] = regUsersRaw ? JSON.parse(regUsersRaw) : [];
+      const matchedLocal = regUsers.find(
+        u =>
+          u.uid === user.uid ||
+          (typeof u.email === 'string' && u.email.toLowerCase().trim() === cleanEmail)
+      );
+      if (matchedLocal) {
+        if (matchedLocal.password === password) {
+          return;
+        }
+        throw new Error('Incorrect password. Please enter the correct password for this account.');
+      }
+    } catch (err: any) {
+      if (err?.message?.includes('Incorrect password')) throw err;
+    }
+
+    // 3. Verify directly with Supabase Auth signInWithPassword
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password
+      });
+      if (error || !data?.user) {
+        throw new Error('Incorrect password or no password is set on this account.');
+      }
+      return;
+    }
+
+    throw new Error('Could not verify your account password.');
+  }
+
+  async permanentlyDeleteAccount(user: StandaloneUser, email: string, password: string): Promise<void> {
+    await this.verifyCurrentCredentials(user, email, password);
+
+    const uid = user.uid;
+    const cleanEmail = (email || user.email || '').trim().toLowerCase();
+
+    stopStandaloneRealtime();
+    await initSupabaseRuntime();
+
+    // 1. Mark Supabase Auth user as deleted & scramble password if active session exists
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData?.session?.user) {
+          const scrambled = `DELETED_${generateUUID()}_${Date.now()}`;
+          await supabase.auth.updateUser({
+            password: scrambled,
+            data: { errorex_deleted: true, deleted_at: new Date().toISOString() }
+          });
+        }
+      } catch {
+        // non-fatal if session isn't an active Supabase Auth JWT
+      }
+
+      // 2. Delete all user records across all 7 Supabase PostgreSQL tables
+      await deleteSupabaseUserAccount(uid);
+    }
+
+    // 3. Best-effort delete from Express backend directory if running on Express server
+    try {
+      await fetch('/api/users/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid })
+      });
+    } catch {
+      // quiet on static hosting (Netlify / Cloudflare)
+    }
+
+    // 4. Purge all local storage records for this user
+    try {
+      const regUsersRaw = localStorage.getItem('errorex_registered_users');
+      if (regUsersRaw) {
+        const regUsers: any[] = JSON.parse(regUsersRaw);
+        const filtered = regUsers.filter(
+          u =>
+            u.uid !== uid &&
+            (!cleanEmail || (u.email || '').toLowerCase().trim() !== cleanEmail)
+        );
+        localStorage.setItem('errorex_registered_users', JSON.stringify(filtered));
+      }
+
+      saveCollectionData(
+        'userProfiles',
+        getCollectionData<any>('userProfiles').filter(p => p.uid !== uid && p.id !== uid)
+      );
+      saveCollectionData(
+        'friendRequests',
+        getCollectionData<any>('friendRequests').filter(
+          r => r.senderId !== uid && r.receiverId !== uid
+        )
+      );
+      saveCollectionData(
+        'friendships',
+        getCollectionData<any>('friendships').filter(
+          f => f.userA !== uid && f.userB !== uid
+        )
+      );
+      saveCollectionData(
+        'statuses',
+        getCollectionData<any>('statuses').filter(s => s.userId !== uid)
+      );
+
+      localStorage.removeItem(`errorex_pin_cred_${uid}`);
+      localStorage.removeItem(`errorex_pin_set_${uid}`);
+      localStorage.removeItem(`errorex_unlocked_${uid}`);
+      localStorage.removeItem('errorex_standalone_user');
+      localStorage.removeItem('errorex_session');
+
+      if (localStorage.getItem('errorex_last_uid') === uid) {
+        localStorage.removeItem('errorex_last_uid');
+      }
+
+      const savedCredsRaw = localStorage.getItem('errorex_saved_credentials');
+      if (savedCredsRaw) {
+        try {
+          const parsed = JSON.parse(savedCredsRaw);
+          if ((parsed?.email || '').toLowerCase().trim() === cleanEmail) {
+            localStorage.removeItem('errorex_saved_credentials');
+          }
+        } catch {
+          localStorage.removeItem('errorex_saved_credentials');
+        }
+      }
+
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem(`errorex_force_pin_setup_${uid}`);
+      }
+    } catch {
+      // quiet
+    }
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.auth.signOut();
+      } catch {
+        // quiet
+      }
+    }
+
+    this._currentUser = null;
+    this.emitAuthChange();
   }
 }
 

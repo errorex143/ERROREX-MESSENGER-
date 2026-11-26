@@ -371,6 +371,25 @@ app.post('/api/users/sync', (req: Request, res: Response) => {
   }
 });
 
+// Permanently remove user from local Express directory and PIN store
+app.post('/api/users/delete', (req: Request, res: Response) => {
+  try {
+    const { uid } = req.body || {};
+    if (!uid || typeof uid !== 'string') {
+      return res.status(400).json({ error: 'Valid uid is required' });
+    }
+    usersDirectory.delete(uid);
+    saveUsersDirectory(usersDirectory);
+    localPins.delete(uid);
+    savePinsToDisk(localPins);
+    resetRateLimit(uid);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error in POST /api/users/delete:', error);
+    res.status(500).json({ error: 'Failed to delete user record' });
+  }
+});
+
 
 // ERROREX AI Multilingual Chat Endpoint (supports fast SSE streaming + JSON)
 app.post('/api/ai/chat', async (req: Request, res: Response) => {

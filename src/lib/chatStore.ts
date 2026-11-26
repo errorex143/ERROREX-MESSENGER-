@@ -1032,5 +1032,28 @@ export const chatStore = {
 
     notifyListeners();
     return updated;
+  },
+
+  clearUserData(uid: string) {
+    this.stopRealtime();
+    try {
+      const allConvs = this.getAllConversations();
+      const remaining = allConvs.filter(c => c.isGroup || !c.participants.includes(uid));
+      const removedIds = allConvs
+        .filter(c => !c.isGroup && c.participants.includes(uid))
+        .map(c => c.id);
+      localStorage.setItem(CONVERSATIONS_STORAGE_KEY, JSON.stringify(remaining));
+      removedIds.forEach(cid => {
+        localStorage.removeItem(`${MESSAGES_STORAGE_KEY_PREFIX}${cid}`);
+      });
+      const currentProfile = this.getUserProfile();
+      if (!currentProfile.uid || currentProfile.uid === uid) {
+        localStorage.removeItem(PROFILE_STORAGE_KEY);
+      }
+    } catch {
+      // quiet
+    }
+    notifyListeners();
   }
 };
+

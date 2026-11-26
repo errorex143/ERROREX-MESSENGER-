@@ -41,6 +41,8 @@ interface AuthContextType {
   logout: () => Promise<void>;
   updateUserProfile: (updates: Partial<UserProfile>) => Promise<void>;
   refreshProfile: () => Promise<void>;
+  verifyAccountForDeletion: (email: string, password: string) => Promise<void>;
+  permanentlyDeleteAccount: (email: string, password: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -272,7 +274,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
           const { data } = await supabase.auth.getSession();
           const suUser = data?.session?.user;
-          if (suUser && !standaloneAuth.currentUser) {
+          if (suUser && suUser.user_metadata?.errorex_deleted === true) {
+            await supabase.auth.signOut().catch(() => {});
+          } else if (suUser && !standaloneAuth.currentUser) {
             const mapped: StandaloneUser = {
               uid: suUser.id,
               email: suUser.email || null,
@@ -297,6 +301,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
           if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user) {
             const suUser = session.user;
+            if (suUser.user_metadata?.errorex_deleted === true) {
+              supabase?.auth.signOut().catch(() => {});
+              return;
+            }
             if (standaloneAuth.currentUser?.uid !== suUser.id) {
               const mapped: StandaloneUser = {
                 uid: suUser.id,
@@ -603,6 +611,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const verifyAccountForDeletion = async (email: string, password: string) => {
+    if (!user) throw new Error('No active account session found.');
+    await standaloneAuth.verifyCurrentCredentials(user, email, password);
+  };
+
+  const permanentlyDeleteAccount = async (email: string, password: string) => {
+    if (!user) throw new Error('No active account session found.');
+    const uid = user.uid;
+    await standaloneAuth.permanentlyDeleteAccount(user, email, password);
+    chatStore.clearUserData(uid);
+    setIsUnlocked(false);
+    setUser(null);
+    setUserProfile(null);
+    setHasPin(null);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -616,7 +640,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         lockMessenger,
         logout,
         updateUserProfile,
-        refreshProfile
+        refreshProfile,
+        verifyAccountForDeletion,
+        permanentlyDeleteAccount
       }}
     >
       {children}
