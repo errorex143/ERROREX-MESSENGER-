@@ -152,7 +152,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    // 2. Check Supabase user_credentials (works across devices & Netlify deployments)
+    // 2. Check Supabase user_credentials (works across devices & Cloudflare Pages deployments)
     try {
       const suCred = await fetchSupabasePinCredential(currentUser.uid);
       if (suCred && suCred.hasPin && suCred.pinHash) {
@@ -182,7 +182,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
     } catch {
-      // Static hosting (Netlify) does not expose /api/has-pin
+      // Static hosting (Cloudflare Pages) does not expose /api/has-pin
     }
 
     // No PIN configured yet -> user will be prompted with Step 2 (PinSetupScreen) once
@@ -445,7 +445,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    // 2. Verify against Supabase user_credentials (cross-device & Netlify)
+    // 2. Verify against Supabase user_credentials (cross-device & Cloudflare Pages)
     await initSupabaseRuntime();
     const suCred = await fetchSupabasePinCredential(activeUid);
     if (suCred && suCred.hasPin && suCred.pinHash && suCred.salt) {
@@ -541,7 +541,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           body: JSON.stringify({ pin })
         });
       } catch {
-        // Static hosting (Netlify) uses client hash + Supabase directly
+        // Static hosting (Cloudflare Pages) uses client hash + Supabase directly
       }
 
       setHasPin(true);

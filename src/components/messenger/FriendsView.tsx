@@ -187,7 +187,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
           }
         }
       } catch {
-        // quiet on static hosting (Netlify / Cloudflare)
+        // quiet on static hosting (Cloudflare Pages)
       }
 
       // 2. Fetch from local userProfiles collection
@@ -198,7 +198,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
         console.warn('Local userProfiles fetch notice:', e);
       }
 
-      // 3. Fetch from Supabase user_profiles (primary global directory across Netlify, Cloudflare & all devices)
+      // 3. Fetch from Supabase user_profiles (primary global directory on Cloudflare Pages & all devices)
       await initSupabaseRuntime();
       if (isSupabaseConfigured) {
         try {
@@ -529,7 +529,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
         <div className="mt-4 flex-1 space-y-6">
           <div className="flex items-center justify-between gap-2">
             <p className="text-[11px] text-[var(--text-muted)]">
-              Synced live across Netlify & Cloudflare via shared cloud directory.
+              Synced live on Cloudflare via shared cloud directory.
             </p>
             <button
               type="button"

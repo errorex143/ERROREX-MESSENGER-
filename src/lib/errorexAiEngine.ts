@@ -1,5 +1,5 @@
 // Shared ERROREX Intelligent Multilingual Engine
-// Used by Express server, Netlify Functions, and instant offline/client fallback
+// Used by Express server, Cloudflare Pages Functions, and instant offline/client fallback
 
 export const ERROREX_AI_SYSTEM_INSTRUCTION = `You are ERROREX AI — a warm, attentive, intelligent human-like friend and personal assistant inside ERROREX.
 

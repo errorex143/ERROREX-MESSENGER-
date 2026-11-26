@@ -155,7 +155,7 @@ export async function syncUserToDirectory(profile: any): Promise<boolean> {
 
   await initSupabaseRuntime();
 
-  // 1. Sync to Supabase PostgreSQL (primary cloud persistence for Netlify & all devices)
+  // 1. Sync to Supabase PostgreSQL (primary cloud persistence for Cloudflare Pages & all devices)
   const suSaved = await upsertSupabaseUserProfile({
     uid: profile.uid,
     username: profile.username,
@@ -186,7 +186,7 @@ export async function syncUserToDirectory(profile: any): Promise<boolean> {
       })
     });
   } catch {
-    // quiet on static hosting (Netlify)
+    // quiet on static hosting (Cloudflare Pages)
   }
 
   return suSaved;
@@ -292,7 +292,7 @@ export async function hydrateStandaloneFromSupabase(uid: string): Promise<void> 
       // ignore realtime subscription errors
     }
 
-    // Gentle 5s fallback refresh across Netlify & Cloudflare even if Realtime WS drops
+    // Gentle 5s fallback refresh on Cloudflare Pages even if Realtime WS drops
     socialPollTimer = setInterval(() => {
       if (typeof navigator !== 'undefined' && !navigator.onLine) return;
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
@@ -964,7 +964,7 @@ class StandaloneAuthService {
         body: JSON.stringify({ uid })
       });
     } catch {
-      // quiet on static hosting (Netlify / Cloudflare)
+      // quiet on static hosting (Cloudflare Pages)
     }
 
     // 4. Purge all local storage records for this user

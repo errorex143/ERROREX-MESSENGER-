@@ -32,12 +32,7 @@ function resolveGeminiApiKey(overrideKey?: string): string {
     typeof process !== 'undefined' && process?.env
       ? process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || ''
       : '';
-  const netlifyEnvKey =
-    typeof (globalThis as any).Netlify?.env?.get === 'function'
-      ? (globalThis as any).Netlify.env.get('GEMINI_API_KEY') ||
-        (globalThis as any).Netlify.env.get('GOOGLE_API_KEY')
-      : '';
-  return String(procEnvKey || netlifyEnvKey || '').trim();
+  return String(procEnvKey).trim();
 }
 
 function createGeminiClient(apiKey: string): GoogleGenAI {

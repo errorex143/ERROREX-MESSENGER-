@@ -804,7 +804,7 @@ export const chatStore = {
       }
     }
 
-    // Use deterministic UUID for 1-on-1 DMs so Netlify & Cloudflare peers share the exact same row
+    // Use deterministic UUID for 1-on-1 DMs so Cloudflare Pages peers share the exact same row
     const id =
       !isGroup && resolvedTargetUid && resolvedTargetUid !== 'vault_secure'
         ? getDeterministicDirectConversationId(myId, resolvedTargetUid)

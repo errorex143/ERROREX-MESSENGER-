@@ -35,7 +35,7 @@ export function generateUUID(): string {
 
 /**
  * Generates a deterministic, valid UUID for any 1-on-1 pair of users so that
- * two users on different hosts (e.g., Netlify and Cloudflare) always converge on the
+ * two users on Cloudflare Pages or different devices always converge on the
  * exact same conversation row in Supabase.
  */
 export function getDeterministicDirectConversationId(uidA: string, uidB: string): string {

@@ -135,7 +135,7 @@ let runtimeInitPromise: Promise<boolean> | null = null;
 
 /**
  * Ensures Supabase is initialized and synced with host env vars (/api/public-config)
- * across both Netlify Functions and Cloudflare Pages Functions.
+ * via Cloudflare Pages Functions.
  */
 export async function initSupabaseRuntime(): Promise<boolean> {
   if (isSupabaseConfigured && supabase && runtimeRefreshedThisLoad) return true;
@@ -194,7 +194,7 @@ export async function testSupabaseConnection(): Promise<SupabaseDiagnostics> {
     return {
       connected: false,
       message:
-        'Supabase URL/Anon Key not found. Add VITE_SUPABASE_URL & VITE_SUPABASE_ANON_KEY in Netlify or Cloudflare and redeploy.'
+        'Supabase URL/Anon Key not found. Add VITE_SUPABASE_URL & VITE_SUPABASE_ANON_KEY in Cloudflare Pages and redeploy.'
     };
   }
 
