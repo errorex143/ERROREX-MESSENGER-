@@ -224,20 +224,19 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
     }
   }, [currentUserId]);
 
-  // Automatically load all website users when FriendsView opens or userProfiles changes
+  // Automatically load all website users & hydrate from Supabase when FriendsView opens or userProfiles changes
   useEffect(() => {
+    hydrateStandaloneFromSupabase(currentUserId).then(() => loadAllWebsiteMembers(false));
     loadAllWebsiteMembers(true);
     const unsub = onSnapshot(collection(db, 'userProfiles'), () => {
       loadAllWebsiteMembers(false);
     });
     return () => unsub();
-  }, [loadAllWebsiteMembers]);
+  }, [currentUserId, loadAllWebsiteMembers]);
 
-  // Refresh when switching to Find Members tab
+  // Refresh from Supabase whenever switching between Friends, Requests, and Find Members
   useEffect(() => {
-    if (activeSubTab === 'directory') {
-      hydrateStandaloneFromSupabase(currentUserId).then(() => loadAllWebsiteMembers(false));
-    }
+    hydrateStandaloneFromSupabase(currentUserId).then(() => loadAllWebsiteMembers(false));
   }, [activeSubTab, currentUserId, loadAllWebsiteMembers]);
 
   // Live filtered members list (shows ALL members when search is empty)
@@ -295,6 +294,17 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
       await updateDoc(doc(db, 'friendRequests', req.id), {
         status: 'accepted'
       });
+      // Also resolve any reverse/duplicate pending request between the same pair
+      const relatedPending = getCollectionData<FriendRequest>('friendRequests').filter(
+        r =>
+          r.id !== req.id &&
+          r.status === 'pending' &&
+          ((r.senderId === req.senderId && r.receiverId === req.receiverId) ||
+            (r.senderId === req.receiverId && r.receiverId === req.senderId))
+      );
+      for (const rel of relatedPending) {
+        await updateDoc(doc(db, 'friendRequests', rel.id), { status: 'accepted' });
+      }
       // 2. Create friendship document
       await addDoc(collection(db, 'friendships'), {
         user1Id: req.senderId,
@@ -517,6 +527,30 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
       {/* Subtab 2: Requests */}
       {activeSubTab === 'requests' && (
         <div className="mt-4 flex-1 space-y-6">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[11px] text-[var(--text-muted)]">
+              Synced live across Netlify & Cloudflare via shared cloud directory.
+            </p>
+            <button
+              type="button"
+              disabled={isSearching}
+              onClick={async () => {
+                setIsSearching(true);
+                try {
+                  await hydrateStandaloneFromSupabase(currentUserId);
+                  await loadAllWebsiteMembers(false);
+                } finally {
+                  setIsSearching(false);
+                }
+              }}
+              className="min-h-[36px] py-1.5 px-3 rounded-xl gold-button border border-[var(--accent-border)] text-xs font-semibold text-[var(--accent-primary)] flex items-center gap-1.5 hover:gold-glow-sm transition-all cursor-pointer shrink-0"
+              title="Refresh friend requests"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSearching ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
+            </button>
+          </div>
+
           {/* Incoming */}
           <div>
             <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">
@@ -594,18 +628,41 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {outgoingRequests.map(req => {
                   const targetMember = allMembers.find(m => m.uid === req.receiverId);
+                  const displayName = targetMember?.displayName || `Member ${req.receiverId.slice(0, 8)}`;
                   return (
                     <div
                       key={req.id}
                       className="p-3.5 rounded-2xl bg-[var(--bg-card)] border border-[var(--accent-border)] flex items-center justify-between gap-3"
                     >
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-bold text-[var(--text-main)] truncate">
-                          {targetMember?.displayName || `Member ${req.receiverId.slice(0, 8)}`}
-                        </p>
-                        <p className="text-[10px] font-mono text-[var(--accent-primary)] truncate">
-                          {targetMember?.username ? `@${targetMember.username} · ` : ''}Awaiting acceptance
-                        </p>
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDpPreviewTarget({
+                              displayName,
+                              username: targetMember?.username || 'member',
+                              photoURL: targetMember?.photoURL || null,
+                              bio: targetMember?.bio || 'Awaiting friend request acceptance',
+                              showOnlineStatus: false
+                            })
+                          }
+                          className="w-10 h-10 rounded-full bg-neutral-100 dark:bg-neutral-950 border border-[var(--accent-border)] hover:border-[var(--accent-primary)] flex items-center justify-center text-[var(--accent-primary)] font-bold text-xs overflow-hidden shrink-0 cursor-pointer"
+                          title="Tap to view DP"
+                        >
+                          {targetMember?.photoURL ? (
+                            <img src={targetMember.photoURL} alt={displayName} className="w-full h-full object-cover" />
+                          ) : (
+                            displayName.slice(0, 1).toUpperCase()
+                          )}
+                        </button>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-[var(--text-main)] truncate">
+                            {displayName}
+                          </p>
+                          <p className="text-[10px] font-mono text-[var(--accent-primary)] truncate">
+                            {targetMember?.username ? `@${targetMember.username} · ` : ''}Awaiting acceptance
+                          </p>
+                        </div>
                       </div>
                       <button
                         type="button"

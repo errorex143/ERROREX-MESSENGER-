@@ -2,6 +2,7 @@ import { Conversation, ChatMessage, ContactItem, PrivacySettings, UserProfile } 
 import { supabase, isSupabaseConfigured, initSupabaseRuntime } from './supabase';
 import {
   generateUUID,
+  getDeterministicDirectConversationId,
   isLegacyTestAccount,
   isUserCurrentlyOnline,
   upsertSupabaseConversation,
@@ -335,13 +336,54 @@ export const chatStore = {
         // quiet
       }
 
-      // Gentle 5s fallback refresh while browser is visible & online
+      // Gentle 4s fallback refresh while browser is visible & online
       chatPollTimer = setInterval(() => {
         if (typeof navigator !== 'undefined' && !navigator.onLine) return;
         if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
         this.pullRemoteChats(uid).catch(() => {});
-      }, 5000);
+      }, 4000);
     }
+  },
+
+  async findExistingDirectConversation(myId: string, targetUid: string): Promise<Conversation | null> {
+    if (!myId || !targetUid) return null;
+    const localMatch = this.getAllConversations().find(
+      c => !c.isGroup && Array.isArray(c.participants) && c.participants.includes(myId) && c.participants.includes(targetUid)
+    );
+    if (localMatch) return localMatch;
+
+    await initSupabaseRuntime();
+    if (!isSupabaseConfigured || !supabase) return null;
+
+    try {
+      const remoteConvs = await fetchSupabaseConversations(myId);
+      if (remoteConvs.length > 0) {
+        this.mergeRemoteConversations(remoteConvs, myId);
+        const remoteMatch = remoteConvs.find(
+          c => !c.isGroup && Array.isArray(c.participants) && c.participants.includes(myId) && c.participants.includes(targetUid)
+        );
+        if (remoteMatch) {
+          const remoteMsgs = await fetchSupabaseMessages(remoteMatch.id);
+          if (remoteMsgs.length > 0) {
+            this.mergeRemoteMessages(remoteMatch.id, remoteMsgs, myId);
+          }
+          return remoteMatch;
+        }
+      }
+      const detId = getDeterministicDirectConversationId(myId, targetUid);
+      const detConv = await fetchSupabaseConversationById(detId);
+      if (detConv && Array.isArray(detConv.participants) && detConv.participants.includes(myId)) {
+        this.mergeRemoteConversations([detConv], myId);
+        const remoteMsgs = await fetchSupabaseMessages(detConv.id);
+        if (remoteMsgs.length > 0) {
+          this.mergeRemoteMessages(detConv.id, remoteMsgs, myId);
+        }
+        return detConv;
+      }
+    } catch {
+      // quiet
+    }
+    return null;
   },
 
   // --- Conversations ---
@@ -719,7 +761,6 @@ export const chatStore = {
     targetUid?: string
   ): Conversation {
     const allConvs = this.getAllConversations();
-    const id = generateUUID();
     const nowIso = new Date().toISOString();
     const uName = customUsername || name.toLowerCase().replace(/\s+/g, '_');
 
@@ -748,6 +789,26 @@ export const chatStore = {
     const myUsername = creatorDetails?.username || myProfile.username || 'user';
     const myPhoto = creatorDetails?.photoURL || myProfile.photoURL || '';
     const myBio = myProfile.bio || 'Available on ERROREX';
+
+    // Reuse existing 1-on-1 conversation if present locally
+    if (!isGroup && resolvedTargetUid && resolvedTargetUid !== 'vault_secure') {
+      const existing = allConvs.find(
+        c =>
+          !c.isGroup &&
+          Array.isArray(c.participants) &&
+          c.participants.includes(myId) &&
+          c.participants.includes(resolvedTargetUid!)
+      );
+      if (existing) {
+        return existing;
+      }
+    }
+
+    // Use deterministic UUID for 1-on-1 DMs so Netlify & Cloudflare peers share the exact same row
+    const id =
+      !isGroup && resolvedTargetUid && resolvedTargetUid !== 'vault_secure'
+        ? getDeterministicDirectConversationId(myId, resolvedTargetUid)
+        : generateUUID();
 
     const newConv: Conversation = {
       id,

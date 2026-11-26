@@ -8,17 +8,21 @@ import {
   isLegacyTestAccount,
   upsertSupabaseUserProfile,
   fetchSupabaseUserProfiles,
+  fetchSupabaseUserProfilesResult,
   fetchSupabaseUserProfileByUid,
   fetchSupabaseUserProfileByEmail,
   upsertSupabaseAuthCredential,
   fetchSupabaseAuthCredential,
   upsertSupabaseFriendRequest,
   fetchSupabaseFriendRequests,
+  fetchSupabaseFriendRequestsResult,
   upsertSupabaseFriendship,
   fetchSupabaseFriendships,
+  fetchSupabaseFriendshipsResult,
   upsertSupabaseConversation,
   upsertSupabaseStatus,
   fetchSupabaseStatuses,
+  fetchSupabaseStatusesResult,
   deleteSupabaseUserAccount
 } from './supabaseSync';
 
@@ -117,12 +121,18 @@ function mergeCollectionByKey(
       }
     });
   } else {
-    // Keep only non-UUID/unsynced local items if incoming replaces remote state cleanly
+    // Keep matching items plus very fresh (<15s) optimistic local writes still syncing up
     const incomingKeys = new Set(incoming.map(item => item[keyField] || item.uid || item.id).filter(Boolean));
+    const nowMs = Date.now();
     existing.forEach(item => {
       const k = item[keyField] || item.uid || item.id;
       if (!k || isLegacyTestAccount(item.uid, item.username, item.displayName)) return;
-      if (incomingKeys.has(k)) {
+      const createdMs = item.createdAt ? new Date(item.createdAt).getTime() : 0;
+      const isFreshOptimistic =
+        (collectionName === 'friendRequests' || collectionName === 'friendships') &&
+        createdMs > 0 &&
+        nowMs - createdMs < 15000;
+      if (incomingKeys.has(k) || isFreshOptimistic) {
         map.set(k, item);
       }
     });
@@ -189,25 +199,33 @@ let socialPollTimer: any = null;
 async function pullSocialFromSupabase(uid: string): Promise<void> {
   if (!isSupabaseConfigured || !supabase || !uid) return;
   try {
-    const [profiles, requests, friendships, statuses] = await Promise.all([
-      fetchSupabaseUserProfiles(),
-      fetchSupabaseFriendRequests(uid),
-      fetchSupabaseFriendships(uid),
-      fetchSupabaseStatuses()
+    const [profilesRes, requestsRes, friendshipsRes, statusesRes] = await Promise.all([
+      fetchSupabaseUserProfilesResult(),
+      fetchSupabaseFriendRequestsResult(uid),
+      fetchSupabaseFriendshipsResult(uid),
+      fetchSupabaseStatusesResult()
     ]);
 
-    if (profiles.length > 0) {
+    if (profilesRes.ok) {
       const localCurrent = getCollectionData<any>('userProfiles').find(p => p.uid === uid);
-      const mergedIncoming = profiles.map(p => ({ ...p, id: p.uid }));
+      const mergedIncoming = profilesRes.data.map(p => ({ ...p, id: p.uid }));
       if (localCurrent && !mergedIncoming.some(p => p.uid === uid)) {
         mergedIncoming.push({ ...localCurrent, id: uid });
       }
-      mergeCollectionByKey('userProfiles', mergedIncoming, 'uid', true);
+      if (mergedIncoming.length > 0) {
+        mergeCollectionByKey('userProfiles', mergedIncoming, 'uid', true);
+      }
     }
-    // Reconcile requests, friendships, statuses with authoritative Supabase data
-    mergeCollectionByKey('friendRequests', requests, 'id', true);
-    mergeCollectionByKey('friendships', friendships, 'id', true);
-    mergeCollectionByKey('statuses', statuses, 'id', true);
+    // Reconcile requests, friendships, statuses ONLY when Supabase query succeeded
+    if (requestsRes.ok) {
+      mergeCollectionByKey('friendRequests', requestsRes.data, 'id', true);
+    }
+    if (friendshipsRes.ok) {
+      mergeCollectionByKey('friendships', friendshipsRes.data, 'id', true);
+    }
+    if (statusesRes.ok) {
+      mergeCollectionByKey('statuses', statusesRes.data, 'id', true);
+    }
   } catch (err) {
     console.warn('[Supabase Hydrate] Notice:', err);
   }
@@ -239,39 +257,47 @@ export async function hydrateStandaloneFromSupabase(uid: string): Promise<void> 
       realtimeChannel = supabase
         .channel(`errorex_social_${uid}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'user_profiles' }, async () => {
-          const profiles = await fetchSupabaseUserProfiles();
-          if (profiles.length > 0) {
+          const profilesRes = await fetchSupabaseUserProfilesResult();
+          if (profilesRes.ok) {
             const localCurrent = getCollectionData<any>('userProfiles').find(p => p.uid === uid);
-            const mergedIncoming = profiles.map(p => ({ ...p, id: p.uid }));
+            const mergedIncoming = profilesRes.data.map(p => ({ ...p, id: p.uid }));
             if (localCurrent && !mergedIncoming.some(p => p.uid === uid)) {
               mergedIncoming.push({ ...localCurrent, id: uid });
             }
-            mergeCollectionByKey('userProfiles', mergedIncoming, 'uid', true);
+            if (mergedIncoming.length > 0) {
+              mergeCollectionByKey('userProfiles', mergedIncoming, 'uid', true);
+            }
           }
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'friend_requests' }, async () => {
-          const requests = await fetchSupabaseFriendRequests(uid);
-          mergeCollectionByKey('friendRequests', requests, 'id', true);
+          const requestsRes = await fetchSupabaseFriendRequestsResult(uid);
+          if (requestsRes.ok) {
+            mergeCollectionByKey('friendRequests', requestsRes.data, 'id', true);
+          }
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships' }, async () => {
-          const friendships = await fetchSupabaseFriendships(uid);
-          mergeCollectionByKey('friendships', friendships, 'id', true);
+          const friendshipsRes = await fetchSupabaseFriendshipsResult(uid);
+          if (friendshipsRes.ok) {
+            mergeCollectionByKey('friendships', friendshipsRes.data, 'id', true);
+          }
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'statuses' }, async () => {
-          const statuses = await fetchSupabaseStatuses();
-          mergeCollectionByKey('statuses', statuses, 'id', true);
+          const statusesRes = await fetchSupabaseStatusesResult();
+          if (statusesRes.ok) {
+            mergeCollectionByKey('statuses', statusesRes.data, 'id', true);
+          }
         })
         .subscribe();
     } catch {
       // ignore realtime subscription errors
     }
 
-    // Gentle fallback refresh if Realtime replication is paused or mobile socket dropped
+    // Gentle 5s fallback refresh across Netlify & Cloudflare even if Realtime WS drops
     socialPollTimer = setInterval(() => {
       if (typeof navigator !== 'undefined' && !navigator.onLine) return;
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       pullSocialFromSupabase(uid).catch(() => {});
-    }, 10000);
+    }, 5000);
   }
 }
 

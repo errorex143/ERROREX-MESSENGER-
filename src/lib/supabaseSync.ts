@@ -33,6 +33,38 @@ export function generateUUID(): string {
   });
 }
 
+/**
+ * Generates a deterministic, valid UUID for any 1-on-1 pair of users so that
+ * two users on different hosts (e.g., Netlify and Cloudflare) always converge on the
+ * exact same conversation row in Supabase.
+ */
+export function getDeterministicDirectConversationId(uidA: string, uidB: string): string {
+  const pair = [String(uidA || '').trim(), String(uidB || '').trim()].sort().join('::errorex_dm_v1::');
+  const seeds = [0x811c9dc5, 0x9e3779b1, 0x85ebca6b, 0xc2b2ae35];
+  const hexParts = seeds.map((seed, pass) => {
+    let h = seed >>> 0;
+    for (let i = 0; i < pair.length; i++) {
+      h ^= pair.charCodeAt(i) + pass * 31;
+      h = Math.imul(h, 16777619) >>> 0;
+    }
+    h ^= h >>> 16;
+    h = Math.imul(h, 0x7feb352d) >>> 0;
+    h ^= h >>> 15;
+    h = Math.imul(h, 0x846ca68b) >>> 0;
+    h ^= h >>> 16;
+    return (h >>> 0).toString(16).padStart(8, '0');
+  });
+  const raw = hexParts.join('');
+  // Format as valid RFC-4122 UUID (version 4 nibble + variant 8..b nibble)
+  const p1 = raw.slice(0, 8);
+  const p2 = raw.slice(8, 12);
+  const p3 = '4' + raw.slice(13, 16);
+  const variantNibble = (8 + (parseInt(raw[16], 16) % 4)).toString(16);
+  const p4 = variantNibble + raw.slice(17, 20);
+  const p5 = raw.slice(20, 32);
+  return `${p1}-${p2}-${p3}-${p4}-${p5}`;
+}
+
 export function isLegacyTestAccount(uid?: string, username?: string, displayName?: string): boolean {
   const u = (uid || '').toLowerCase();
   const un = (username || '').toLowerCase();
@@ -271,13 +303,23 @@ export async function upsertSupabaseUserProfile(
       break;
     }
 
-    // Handle username collision across accounts
-    if (err && err.code === '23505' && err.message?.toLowerCase().includes('username')) {
-      const suffix = profile.uid.replace(/[^a-zA-Z0-9]/g, '').slice(-4) || String(Date.now()).slice(-4);
-      currentPayload = { ...currentPayload, username: `${String(currentPayload.username).slice(0, 18)}_${suffix}` };
-      res = await attemptUpsert(currentPayload);
-      if (res.ok) return true;
-      err = res.error;
+    // Handle username or email collision across accounts
+    if (err && err.code === '23505') {
+      const msgLower = (err.message || '').toLowerCase();
+      if (msgLower.includes('username')) {
+        const suffix = profile.uid.replace(/[^a-zA-Z0-9]/g, '').slice(-4) || String(Date.now()).slice(-4);
+        currentPayload = { ...currentPayload, username: `${String(currentPayload.username).slice(0, 18)}_${suffix}` };
+        res = await attemptUpsert(currentPayload);
+        if (res.ok) return true;
+        err = res.error;
+      }
+      if (err && err.code === '23505' && (err.message || '').toLowerCase().includes('email') && 'email' in currentPayload) {
+        const { email: _dupEmail, ...withoutEmail } = currentPayload;
+        currentPayload = withoutEmail;
+        res = await attemptUpsert(currentPayload);
+        if (res.ok) return true;
+        err = res.error;
+      }
     }
 
     // Manual select -> update or insert fallback (handles legacy uid IS NULL rows)
@@ -298,6 +340,9 @@ export async function upsertSupabaseUserProfile(
         .update(updates)
         .eq('id', existing.id);
       if (!updErr) return true;
+    } else {
+      const { error: insErr } = await supabase.from('user_profiles').insert(currentPayload);
+      if (!insErr) return true;
     }
 
     if (err) {
@@ -310,8 +355,11 @@ export async function upsertSupabaseUserProfile(
   }
 }
 
-export async function fetchSupabaseUserProfiles(): Promise<Array<UserProfile & { email?: string }>> {
-  if (!isSupabaseConfigured || !supabase) return [];
+export async function fetchSupabaseUserProfilesResult(): Promise<{
+  ok: boolean;
+  data: Array<UserProfile & { email?: string }>;
+}> {
+  if (!isSupabaseConfigured || !supabase) return { ok: false, data: [] };
   try {
     let { data, error } = await supabase
       .from('user_profiles')
@@ -327,19 +375,27 @@ export async function fetchSupabaseUserProfiles(): Promise<Array<UserProfile & {
 
     if (error || !Array.isArray(data)) {
       if (error) console.warn('[Supabase] fetch user_profiles notice:', error.message);
-      return [];
+      return { ok: false, data: [] };
     }
 
-    return data
-      .filter(row => {
-        const effectiveUid = row.uid || row.id;
-        return Boolean(effectiveUid) && !isLegacyTestAccount(effectiveUid, row.username, row.display_name);
-      })
-      .map(mapRowToUserProfile);
+    return {
+      ok: true,
+      data: data
+        .filter(row => {
+          const effectiveUid = row.uid || row.id;
+          return Boolean(effectiveUid) && !isLegacyTestAccount(effectiveUid, row.username, row.display_name);
+        })
+        .map(mapRowToUserProfile)
+    };
   } catch (err) {
     console.warn('[Supabase] fetch user_profiles error:', err);
-    return [];
+    return { ok: false, data: [] };
   }
+}
+
+export async function fetchSupabaseUserProfiles(): Promise<Array<UserProfile & { email?: string }>> {
+  const res = await fetchSupabaseUserProfilesResult();
+  return res.data;
 }
 
 export async function fetchSupabaseUserProfileByUid(
@@ -592,10 +648,10 @@ export async function upsertSupabaseFriendRequest(req: FriendRequest): Promise<b
     const payload: any = {
       sender_id: req.senderId,
       receiver_id: req.receiverId,
-      sender_name: req.senderName,
-      sender_username: req.senderUsername,
+      sender_name: req.senderName || 'ERROREX Member',
+      sender_username: req.senderUsername || 'member',
       sender_photo: req.senderPhoto || '',
-      status: req.status,
+      status: req.status || 'pending',
       created_at: req.createdAt || new Date().toISOString()
     };
     if (isValidUUID(req.id)) payload.id = req.id;
@@ -611,27 +667,40 @@ export async function upsertSupabaseFriendRequest(req: FriendRequest): Promise<b
   }
 }
 
-export async function fetchSupabaseFriendRequests(uid: string): Promise<FriendRequest[]> {
-  if (!isSupabaseConfigured || !supabase || !uid) return [];
+export async function fetchSupabaseFriendRequestsResult(
+  uid: string
+): Promise<{ ok: boolean; data: FriendRequest[] }> {
+  if (!isSupabaseConfigured || !supabase || !uid) return { ok: false, data: [] };
   try {
     const { data, error } = await supabase
       .from('friend_requests')
       .select('*')
       .or(`sender_id.eq.${uid},receiver_id.eq.${uid}`);
-    if (error || !Array.isArray(data)) return [];
-    return data.map((r: any) => ({
-      id: r.id,
-      senderId: r.sender_id,
-      receiverId: r.receiver_id,
-      senderName: r.sender_name,
-      senderUsername: r.sender_username,
-      senderPhoto: r.sender_photo || '',
-      status: r.status,
-      createdAt: r.created_at
-    }));
+    if (error || !Array.isArray(data)) {
+      if (error) console.warn('[Supabase] fetch friend_requests notice:', error.message);
+      return { ok: false, data: [] };
+    }
+    return {
+      ok: true,
+      data: data.map((r: any) => ({
+        id: r.id,
+        senderId: r.sender_id,
+        receiverId: r.receiver_id,
+        senderName: r.sender_name,
+        senderUsername: r.sender_username,
+        senderPhoto: r.sender_photo || '',
+        status: r.status,
+        createdAt: r.created_at
+      }))
+    };
   } catch {
-    return [];
+    return { ok: false, data: [] };
   }
+}
+
+export async function fetchSupabaseFriendRequests(uid: string): Promise<FriendRequest[]> {
+  const res = await fetchSupabaseFriendRequestsResult(uid);
+  return res.data;
 }
 
 // --- Friendships ---
@@ -651,8 +720,8 @@ export async function upsertSupabaseFriendship(f: Friendship): Promise<boolean> 
       .upsert(payload, { onConflict: 'user_a,user_b' });
 
     if (error) {
-      // Fallback if unique constraint on (user_a, user_b) isn't present yet
-      if (error.code === '42P10') {
+      // Fallback if unique constraint on (user_a, user_b) isn't present or duplicate exists
+      if (error.code === '42P10' || error.code === '23505') {
         const { data: existing } = await supabase
           .from('friendships')
           .select('id')
@@ -672,24 +741,37 @@ export async function upsertSupabaseFriendship(f: Friendship): Promise<boolean> 
   }
 }
 
-export async function fetchSupabaseFriendships(uid: string): Promise<Friendship[]> {
-  if (!isSupabaseConfigured || !supabase || !uid) return [];
+export async function fetchSupabaseFriendshipsResult(
+  uid: string
+): Promise<{ ok: boolean; data: Friendship[] }> {
+  if (!isSupabaseConfigured || !supabase || !uid) return { ok: false, data: [] };
   try {
     const { data, error } = await supabase
       .from('friendships')
       .select('*')
       .or(`user_a.eq.${uid},user_b.eq.${uid}`);
-    if (error || !Array.isArray(data)) return [];
-    return data.map((f: any) => ({
-      id: f.id,
-      user1Id: f.user_a,
-      user2Id: f.user_b,
-      users: [f.user_a, f.user_b],
-      createdAt: f.created_at
-    }));
+    if (error || !Array.isArray(data)) {
+      if (error) console.warn('[Supabase] fetch friendships notice:', error.message);
+      return { ok: false, data: [] };
+    }
+    return {
+      ok: true,
+      data: data.map((f: any) => ({
+        id: f.id,
+        user1Id: f.user_a,
+        user2Id: f.user_b,
+        users: [f.user_a, f.user_b],
+        createdAt: f.created_at
+      }))
+    };
   } catch {
-    return [];
+    return { ok: false, data: [] };
   }
+}
+
+export async function fetchSupabaseFriendships(uid: string): Promise<Friendship[]> {
+  const res = await fetchSupabaseFriendshipsResult(uid);
+  return res.data;
 }
 
 // --- Conversations & Messages (FK-Safe Ordered Sync) ---
@@ -924,8 +1006,8 @@ export async function upsertSupabaseStatus(st: UserStatus): Promise<boolean> {
   }
 }
 
-export async function fetchSupabaseStatuses(): Promise<UserStatus[]> {
-  if (!isSupabaseConfigured || !supabase) return [];
+export async function fetchSupabaseStatusesResult(): Promise<{ ok: boolean; data: UserStatus[] }> {
+  if (!isSupabaseConfigured || !supabase) return { ok: false, data: [] };
   try {
     const nowIso = new Date().toISOString();
     const { data, error } = await supabase
@@ -933,24 +1015,32 @@ export async function fetchSupabaseStatuses(): Promise<UserStatus[]> {
       .select('*')
       .gt('expires_at', nowIso)
       .order('created_at', { ascending: false });
-    if (error || !Array.isArray(data)) return [];
-    return data.map((s: any) => ({
-      id: s.id,
-      userId: s.user_id,
-      userName: s.user_name,
-      userPhoto: s.user_photo || '',
-      type: s.type || s.status_type || 'text',
-      text: s.text || '',
-      mediaUrl: s.media_url || '',
-      bgColor: s.bg_color || '#0F172A',
-      caption: s.caption || '',
-      viewers: Array.isArray(s.viewers) ? s.viewers : [],
-      createdAt: s.created_at,
-      expiresAt: s.expires_at
-    }));
+    if (error || !Array.isArray(data)) return { ok: false, data: [] };
+    return {
+      ok: true,
+      data: data.map((s: any) => ({
+        id: s.id,
+        userId: s.user_id,
+        userName: s.user_name,
+        userPhoto: s.user_photo || '',
+        type: s.type || s.status_type || 'text',
+        text: s.text || '',
+        mediaUrl: s.media_url || '',
+        bgColor: s.bg_color || '#0F172A',
+        caption: s.caption || '',
+        viewers: Array.isArray(s.viewers) ? s.viewers : [],
+        createdAt: s.created_at,
+        expiresAt: s.expires_at
+      }))
+    };
   } catch {
-    return [];
+    return { ok: false, data: [] };
   }
+}
+
+export async function fetchSupabaseStatuses(): Promise<UserStatus[]> {
+  const res = await fetchSupabaseStatusesResult();
+  return res.data;
 }
 
 export async function deleteSupabaseUserAccount(uid: string): Promise<boolean> {

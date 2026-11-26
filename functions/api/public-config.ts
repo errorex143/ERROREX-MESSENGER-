@@ -13,19 +13,34 @@ function readEnvVar(env: Record<string, string | undefined> | undefined, name: s
 }
 
 export const onRequest = async (context: CloudflarePagesContext): Promise<Response> => {
+  if (context.request?.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type'
+      }
+    });
+  }
+
   const supabaseUrl =
     readEnvVar(context.env, 'VITE_SUPABASE_URL') ||
     readEnvVar(context.env, 'SUPABASE_URL') ||
-    readEnvVar(context.env, 'NEXT_PUBLIC_SUPABASE_URL');
+    readEnvVar(context.env, 'NEXT_PUBLIC_SUPABASE_URL') ||
+    readEnvVar(context.env, 'PUBLIC_SUPABASE_URL');
   const supabaseAnonKey =
     readEnvVar(context.env, 'VITE_SUPABASE_ANON_KEY') ||
     readEnvVar(context.env, 'SUPABASE_ANON_KEY') ||
-    readEnvVar(context.env, 'NEXT_PUBLIC_SUPABASE_ANON_KEY');
+    readEnvVar(context.env, 'SUPABASE_KEY') ||
+    readEnvVar(context.env, 'NEXT_PUBLIC_SUPABASE_ANON_KEY') ||
+    readEnvVar(context.env, 'PUBLIC_SUPABASE_ANON_KEY');
 
   return new Response(
     JSON.stringify({
       supabaseUrl,
       supabaseAnonKey,
+      platform: 'cloudflare',
       configured: Boolean(
         supabaseUrl &&
           supabaseAnonKey &&

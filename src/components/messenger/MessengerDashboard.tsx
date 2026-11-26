@@ -180,7 +180,7 @@ export const MessengerDashboard: React.FC = () => {
   };
 
   // Start direct conversation ONLY with an accepted friend (strict request -> accept -> message rule)
-  const handleStartChatWithUser = (
+  const handleStartChatWithUser = async (
     targetUser: UserProfile | { displayName: string; uid?: string; username?: string; photoURL?: string; bio?: string }
   ) => {
     if (!isUserAcceptedFriend(targetUser.uid, targetUser.username)) {
@@ -197,14 +197,22 @@ export const MessengerDashboard: React.FC = () => {
     setFriendGateNotice(null);
     setNewChatGateInfo(null);
 
+    const cleanTargetUsername = targetUser.username?.replace(/^@/, '').toLowerCase();
+    const resolvedTargetUid =
+      targetUser.uid ||
+      friends.find(f => cleanTargetUsername && f.username?.toLowerCase() === cleanTargetUsername)?.uid ||
+      getCollectionData<UserProfile>('userProfiles').find(
+        p => p.uid !== currentUserId && cleanTargetUsername && p.username?.toLowerCase() === cleanTargetUsername
+      )?.uid;
+
     const existing = conversations.find(
       c =>
         !c.isGroup &&
-        ((targetUser.uid && c.participants.includes(targetUser.uid)) ||
-          (targetUser.username &&
+        ((resolvedTargetUid && c.participants.includes(resolvedTargetUid)) ||
+          (cleanTargetUsername &&
             c.participantDetails &&
             Object.values(c.participantDetails).some(
-              p => p.username?.toLowerCase() === targetUser.username?.toLowerCase()
+              p => p.username?.toLowerCase() === cleanTargetUsername
             )))
     );
 
@@ -213,6 +221,16 @@ export const MessengerDashboard: React.FC = () => {
       setActiveTab('chats');
       setIsNewChatModalOpen(false);
       return;
+    }
+
+    if (resolvedTargetUid) {
+      const remoteExisting = await chatStore.findExistingDirectConversation(currentUserId, resolvedTargetUid);
+      if (remoteExisting) {
+        setActiveConversationId(remoteExisting.id);
+        setActiveTab('chats');
+        setIsNewChatModalOpen(false);
+        return;
+      }
     }
 
     const newConv = chatStore.createConversation(
@@ -227,7 +245,7 @@ export const MessengerDashboard: React.FC = () => {
         username: userProfile?.username || storedProfile.username || 'user',
         photoURL: userProfile?.photoURL || storedProfile.photoURL || ''
       },
-      targetUser.uid
+      resolvedTargetUid
     );
     setActiveConversationId(newConv.id);
     setActiveTab('chats');
@@ -353,7 +371,7 @@ export const MessengerDashboard: React.FC = () => {
         users: [targetMember.uid, currentUserId],
         createdAt: new Date().toISOString()
       });
-      handleStartChatWithUser(targetMember);
+      await handleStartChatWithUser(targetMember);
       setNewChatNameInput('');
       setNewChatUsernameInput('');
     } catch (err) {

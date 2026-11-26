@@ -29,21 +29,26 @@ function readStoredRuntimeConfig(): { url: string; anonKey: string } {
   }
 }
 
-function resolveInitialCredentials(): { url: string; anonKey: string } {
+type CredentialSource = 'env' | 'storage' | 'runtime' | 'none';
+
+function resolveInitialCredentials(): { url: string; anonKey: string; source: CredentialSource } {
   const viteEnv = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
   const envUrl = (viteEnv.VITE_SUPABASE_URL || '').trim();
   const envKey = (viteEnv.VITE_SUPABASE_ANON_KEY || '').trim();
   if (isValidSupabaseConfig(envUrl, envKey)) {
-    return { url: envUrl, anonKey: envKey };
+    return { url: envUrl, anonKey: envKey, source: 'env' };
   }
   const stored = readStoredRuntimeConfig();
   if (isValidSupabaseConfig(stored.url, stored.anonKey)) {
-    return stored;
+    return { ...stored, source: 'storage' };
   }
-  return { url: '', anonKey: '' };
+  return { url: '', anonKey: '', source: 'none' };
 }
 
-let activeCredentials = resolveInitialCredentials();
+const initialCreds = resolveInitialCredentials();
+let activeCredentials = { url: initialCreds.url, anonKey: initialCreds.anonKey };
+let credentialSource: CredentialSource = initialCreds.source;
+let runtimeRefreshedThisLoad = credentialSource === 'env';
 
 function buildClient(url: string, anonKey: string): SupabaseClient {
   return createClient(url, anonKey, {
@@ -82,6 +87,7 @@ export function setRuntimeSupabaseConfig(url: string, anonKey: string, persist =
   const changed =
     activeCredentials.url !== cleanUrl || activeCredentials.anonKey !== cleanKey || !supabase;
   activeCredentials = { url: cleanUrl, anonKey: cleanKey };
+  credentialSource = 'runtime';
   isSupabaseConfigured = true;
   if (changed) {
     supabase = buildClient(cleanUrl, cleanKey);
@@ -112,10 +118,14 @@ export function clearRuntimeSupabaseConfig(): void {
   const envKey = (viteEnv.VITE_SUPABASE_ANON_KEY || '').trim();
   if (isValidSupabaseConfig(envUrl, envKey)) {
     activeCredentials = { url: envUrl, anonKey: envKey };
+    credentialSource = 'env';
+    runtimeRefreshedThisLoad = true;
     isSupabaseConfigured = true;
     supabase = buildClient(envUrl, envKey);
   } else {
     activeCredentials = { url: '', anonKey: '' };
+    credentialSource = 'none';
+    runtimeRefreshedThisLoad = false;
     isSupabaseConfigured = false;
     supabase = null;
   }
@@ -124,11 +134,11 @@ export function clearRuntimeSupabaseConfig(): void {
 let runtimeInitPromise: Promise<boolean> | null = null;
 
 /**
- * Ensures Supabase is initialized even if Netlify env vars were added after Vite build
- * or configured under SUPABASE_URL / SUPABASE_ANON_KEY (via /api/public-config).
+ * Ensures Supabase is initialized and synced with host env vars (/api/public-config)
+ * across both Netlify Functions and Cloudflare Pages Functions.
  */
 export async function initSupabaseRuntime(): Promise<boolean> {
-  if (isSupabaseConfigured && supabase) return true;
+  if (isSupabaseConfigured && supabase && runtimeRefreshedThisLoad) return true;
   if (runtimeInitPromise) return runtimeInitPromise;
 
   runtimeInitPromise = (async () => {
@@ -139,11 +149,15 @@ export async function initSupabaseRuntime(): Promise<boolean> {
         const data = await res.json();
         if (isValidSupabaseConfig(data?.supabaseUrl, data?.supabaseAnonKey)) {
           setRuntimeSupabaseConfig(data.supabaseUrl, data.supabaseAnonKey, true);
+          runtimeRefreshedThisLoad = true;
           return true;
         }
       }
     } catch {
       // quiet if offline or endpoint unavailable
+    }
+    if (isSupabaseConfigured && supabase) {
+      runtimeRefreshedThisLoad = true;
     }
     return isSupabaseConfigured;
   })();
