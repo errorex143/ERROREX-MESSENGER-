@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChatMessage, Conversation, Friendship, PrivacySettings, ThemeName, ColorMode, UserProfile } from '../../types';
+import { ChatMessage, Conversation, FriendRequest, Friendship, PrivacySettings, ThemeName, ColorMode, UserProfile } from '../../types';
 import { chatStore } from '../../lib/chatStore';
-import { db, collection, onSnapshot } from '../../lib/firebase';
+import { db, collection, onSnapshot, addDoc, updateDoc, doc } from '../../lib/firebase';
 import { getCollectionData } from '../../lib/standaloneApi';
 import { isUserCurrentlyOnline } from '../../lib/supabaseSync';
 import {
@@ -48,7 +48,9 @@ import {
   BellOff,
   Sparkles,
   MessageSquare,
-  AlertTriangle
+  AlertTriangle,
+  UserPlus,
+  Clock
 } from 'lucide-react';
 
 const HERALDIC_AVATARS = [
@@ -294,16 +296,33 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [directoryProfiles, setDirectoryProfiles] = useState<UserProfile[]>(() =>
     getCollectionData('userProfiles') as UserProfile[]
   );
+  const [friendshipsList, setFriendshipsList] = useState<Friendship[]>(() =>
+    getCollectionData<Friendship>('friendships')
+  );
+  const [friendRequestsList, setFriendRequestsList] = useState<FriendRequest[]>(() =>
+    getCollectionData<FriendRequest>('friendRequests')
+  );
+  const [requestSending, setRequestSending] = useState(false);
   const [isBrowserOnline, setIsBrowserOnline] = useState<boolean>(() =>
     typeof navigator !== 'undefined' ? navigator.onLine : true
   );
   const [, setPresenceTick] = useState(0);
 
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'userProfiles'), snap => {
+    const unsubProfiles = onSnapshot(collection(db, 'userProfiles'), snap => {
       const list: UserProfile[] = [];
       snap.forEach((d: any) => list.push(d.data() as UserProfile));
       setDirectoryProfiles(list);
+    });
+    const unsubFriendships = onSnapshot(collection(db, 'friendships'), snap => {
+      const list: Friendship[] = [];
+      snap.forEach((d: any) => list.push({ id: d.id, ...(d.data() as Omit<Friendship, 'id'>) }));
+      setFriendshipsList(list);
+    });
+    const unsubRequests = onSnapshot(collection(db, 'friendRequests'), snap => {
+      const list: FriendRequest[] = [];
+      snap.forEach((d: any) => list.push({ id: d.id, ...(d.data() as Omit<FriendRequest, 'id'>) }));
+      setFriendRequestsList(list);
     });
     const onOnline = () => setIsBrowserOnline(true);
     const onOffline = () => setIsBrowserOnline(false);
@@ -311,7 +330,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     window.addEventListener('offline', onOffline);
     const tick = setInterval(() => setPresenceTick(t => t + 1), 20000);
     return () => {
-      unsub();
+      unsubProfiles();
+      unsubFriendships();
+      unsubRequests();
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
       clearInterval(tick);
@@ -343,8 +364,52 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       conversation.groupName ||
       'Private Contact';
 
-  const friendships = getCollectionData<Friendship>('friendships');
+  const friendships = friendshipsList;
   const otherDetail = otherParticipantId ? conversation.participantDetails?.[otherParticipantId] : undefined;
+
+  const resolvedOtherUid =
+    otherParticipantId &&
+    otherParticipantId !== currentUserId &&
+    !otherParticipantId.startsWith('contact_')
+      ? otherParticipantId
+      : liveProfile?.uid || '';
+
+  const isVaultOrGroup =
+    Boolean(conversation.isGroup) ||
+    conversation.id === 'conv_vault' ||
+    otherParticipantId === 'vault_secure';
+
+  const isAcceptedFriend =
+    isVaultOrGroup ||
+    Boolean(
+      resolvedOtherUid &&
+        friendshipsList.some(
+          f =>
+            Array.isArray(f.users) &&
+            f.users.includes(currentUserId) &&
+            f.users.includes(resolvedOtherUid)
+        )
+    );
+
+  const pendingIncomingReq =
+    !isAcceptedFriend && resolvedOtherUid
+      ? friendRequestsList.find(
+          r =>
+            r.senderId === resolvedOtherUid &&
+            r.receiverId === currentUserId &&
+            r.status === 'pending'
+        )
+      : undefined;
+
+  const pendingOutgoingReq =
+    !isAcceptedFriend && resolvedOtherUid
+      ? friendRequestsList.find(
+          r =>
+            r.senderId === currentUserId &&
+            r.receiverId === resolvedOtherUid &&
+            r.status === 'pending'
+        )
+      : undefined;
 
   const allowPhoto =
     conversation.isGroup ||
@@ -408,7 +473,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   // Send Text Message
   const handleSendMessage = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (conversation.isBlocked) return;
+    if (conversation.isBlocked || !isAcceptedFriend) return;
     if (!inputText.trim()) return;
 
     if (editingMessage) {
@@ -438,7 +503,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   // Start Voice Recording
   const startRecording = async () => {
-    if (conversation.isBlocked) return;
+    if (conversation.isBlocked || !isAcceptedFriend) return;
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
         throw new Error('getUserMedia not supported');
@@ -490,6 +555,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   // Stop Recording & Send Voice Memo
   const stopRecording = () => {
+    if (conversation.isBlocked || !isAcceptedFriend) {
+      cancelRecording();
+      return;
+    }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
     } else {
@@ -521,7 +590,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   // File Upload (Image / Video / Attachment)
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (conversation.isBlocked) return;
+    if (conversation.isBlocked || !isAcceptedFriend) return;
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -551,6 +620,46 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   // Delete message
   const handleDeleteMessage = (messageId: string) => {
     chatStore.deleteMessage(conversation.id, messageId);
+  };
+
+  const handleSendInChatFriendRequest = async () => {
+    if (!resolvedOtherUid || requestSending) return;
+    setRequestSending(true);
+    try {
+      await addDoc(collection(db, 'friendRequests'), {
+        senderId: currentUserId,
+        senderName: userProfile?.displayName || currentUserName || 'User',
+        senderUsername: userProfile?.username || storedProfile.username || 'member',
+        senderPhoto: userProfile?.photoURL || storedProfile.photoURL || '',
+        receiverId: resolvedOtherUid,
+        status: 'pending',
+        createdAt: new Date().toISOString()
+      });
+    } catch (err) {
+      console.warn('Friend request send notice:', err);
+    } finally {
+      setRequestSending(false);
+    }
+  };
+
+  const handleAcceptInChatFriendRequest = async () => {
+    if (!pendingIncomingReq || !resolvedOtherUid || requestSending) return;
+    setRequestSending(true);
+    try {
+      await updateDoc(doc(db, 'friendRequests', pendingIncomingReq.id), {
+        status: 'accepted'
+      });
+      await addDoc(collection(db, 'friendships'), {
+        user1Id: pendingIncomingReq.senderId,
+        user2Id: pendingIncomingReq.receiverId,
+        users: [pendingIncomingReq.senderId, pendingIncomingReq.receiverId],
+        createdAt: new Date().toISOString()
+      });
+    } catch (err) {
+      console.warn('Friend request accept notice:', err);
+    } finally {
+      setRequestSending(false);
+    }
   };
 
   return (
@@ -932,7 +1041,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         />
       )}
 
-      {/* Input Bar: Text, Voice Note, Emojis, Attachments OR Blocked Notice */}
+      {/* Input Bar: Text, Voice Note, Emojis, Attachments OR Blocked / Friend-Request Lock Notice */}
       {conversation.isBlocked ? (
         <div className="p-4 bg-rose-950/40 border-t border-rose-500/30 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0 shadow-lg">
           <div className="flex items-center gap-2.5 text-rose-300 text-xs font-semibold">
@@ -948,6 +1057,55 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           >
             Unblock Contact
           </button>
+        </div>
+      ) : !isAcceptedFriend ? (
+        <div className="px-3.5 sm:px-4 py-3.5 pb-[max(0.9rem,env(safe-area-inset-bottom))] bg-[var(--bg-card)] text-[var(--text-main)] border-t border-[var(--accent-border)] flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0 shadow-lg">
+          {pendingIncomingReq ? (
+            <>
+              <div className="flex items-center gap-2.5 text-xs font-medium text-[var(--text-main)]">
+                <UserPlus className="w-4 h-4 text-emerald-500 shrink-0" />
+                <span>
+                  <strong className="font-bold">@{chatUsername}</strong> sent you a friend request. Accept to start messaging.
+                </span>
+              </div>
+              <button
+                type="button"
+                disabled={requestSending}
+                onClick={handleAcceptInChatFriendRequest}
+                className="min-h-[40px] px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs uppercase tracking-wider transition-all shadow-md cursor-pointer shrink-0 flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <Check className="w-4 h-4" />
+                <span>Accept Request</span>
+              </button>
+            </>
+          ) : pendingOutgoingReq ? (
+            <div className="w-full flex items-center justify-center sm:justify-start gap-2.5 text-xs font-medium text-amber-600 dark:text-amber-300">
+              <Clock className="w-4 h-4 shrink-0" />
+              <span>
+                Friend request sent to <strong>@{chatUsername}</strong>. You can message once they accept your request.
+              </span>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-2.5 text-xs font-medium text-[var(--text-muted)]">
+                <Lock className="w-4 h-4 text-[var(--accent-primary)] shrink-0" />
+                <span>
+                  You cannot message <strong className="text-[var(--text-main)]">@{chatUsername}</strong> yet. Send a friend request and wait for acceptance first.
+                </span>
+              </div>
+              {resolvedOtherUid && (
+                <button
+                  type="button"
+                  disabled={requestSending}
+                  onClick={handleSendInChatFriendRequest}
+                  className="min-h-[40px] px-4 py-2 rounded-xl gold-button-accent text-black font-bold text-xs uppercase tracking-wider transition-all shadow-md cursor-pointer shrink-0 flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span>Send Friend Request</span>
+                </button>
+              )}
+            </>
+          )}
         </div>
       ) : (
         <form

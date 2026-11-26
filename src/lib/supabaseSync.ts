@@ -313,10 +313,17 @@ export async function upsertSupabaseUserProfile(
 export async function fetchSupabaseUserProfiles(): Promise<Array<UserProfile & { email?: string }>> {
   if (!isSupabaseConfigured || !supabase) return [];
   try {
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('user_profiles')
       .select('*')
       .order('updated_at', { ascending: false });
+
+    if (error) {
+      console.warn('[Supabase] fetch user_profiles ordered notice, retrying unordered:', error.message);
+      const fallback = await supabase.from('user_profiles').select('*');
+      data = fallback.data;
+      error = fallback.error;
+    }
 
     if (error || !Array.isArray(data)) {
       if (error) console.warn('[Supabase] fetch user_profiles notice:', error.message);

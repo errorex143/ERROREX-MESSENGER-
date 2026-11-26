@@ -197,12 +197,12 @@ async function pullSocialFromSupabase(uid: string): Promise<void> {
     ]);
 
     if (profiles.length > 0) {
-      mergeCollectionByKey(
-        'userProfiles',
-        profiles.map(p => ({ ...p, id: p.uid })),
-        'uid',
-        false
-      );
+      const localCurrent = getCollectionData<any>('userProfiles').find(p => p.uid === uid);
+      const mergedIncoming = profiles.map(p => ({ ...p, id: p.uid }));
+      if (localCurrent && !mergedIncoming.some(p => p.uid === uid)) {
+        mergedIncoming.push({ ...localCurrent, id: uid });
+      }
+      mergeCollectionByKey('userProfiles', mergedIncoming, 'uid', true);
     }
     // Reconcile requests, friendships, statuses with authoritative Supabase data
     mergeCollectionByKey('friendRequests', requests, 'id', true);
@@ -241,12 +241,12 @@ export async function hydrateStandaloneFromSupabase(uid: string): Promise<void> 
         .on('postgres_changes', { event: '*', schema: 'public', table: 'user_profiles' }, async () => {
           const profiles = await fetchSupabaseUserProfiles();
           if (profiles.length > 0) {
-            mergeCollectionByKey(
-              'userProfiles',
-              profiles.map(p => ({ ...p, id: p.uid })),
-              'uid',
-              false
-            );
+            const localCurrent = getCollectionData<any>('userProfiles').find(p => p.uid === uid);
+            const mergedIncoming = profiles.map(p => ({ ...p, id: p.uid }));
+            if (localCurrent && !mergedIncoming.some(p => p.uid === uid)) {
+              mergedIncoming.push({ ...localCurrent, id: uid });
+            }
+            mergeCollectionByKey('userProfiles', mergedIncoming, 'uid', true);
           }
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'friend_requests' }, async () => {

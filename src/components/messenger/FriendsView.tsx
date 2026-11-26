@@ -28,7 +28,8 @@ import {
   MessageSquare,
   UserCheck,
   Users,
-  RefreshCw
+  RefreshCw,
+  Clock
 } from 'lucide-react';
 
 interface FriendsViewProps {
@@ -121,17 +122,31 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
         return;
       }
 
-      // Fetch profiles of friends
+      // Fetch profiles of friends (local + Supabase fallback)
       try {
         const userProfilesSnap = await getDocs(collection(db, 'userProfiles'));
-        const profiles: UserProfile[] = [];
+        const profileMap = new Map<string, UserProfile>();
         userProfilesSnap.forEach(d => {
           const pData = d.data() as UserProfile;
+          const key = pData?.uid || d.id;
           if (friendIds.includes(d.id) || (pData?.uid && friendIds.includes(pData.uid))) {
-            profiles.push(pData);
+            profileMap.set(key, pData);
           }
         });
-        setFriends(profiles);
+
+        if (profileMap.size < friendIds.length) {
+          await initSupabaseRuntime();
+          if (isSupabaseConfigured) {
+            const suUsers = await fetchSupabaseUserProfiles();
+            suUsers.forEach(u => {
+              if (friendIds.includes(u.uid) && !profileMap.has(u.uid)) {
+                profileMap.set(u.uid, u);
+              }
+            });
+          }
+        }
+
+        setFriends(Array.from(profileMap.values()));
       } catch (err) {
         console.error('Error loading friend profiles:', err);
       }
@@ -141,8 +156,8 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
   }, [currentUserId]);
 
   // Fetch ALL website users from Shared Server Directory + Local Store + Supabase
-  const loadAllWebsiteMembers = useCallback(async () => {
-    setIsSearching(true);
+  const loadAllWebsiteMembers = useCallback(async (showSpinner = false) => {
+    if (showSpinner) setIsSearching(true);
     try {
       const mergedMap = new Map<string, UserProfile>();
 
@@ -172,7 +187,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
           }
         }
       } catch {
-        // quiet on Netlify static hosting
+        // quiet on static hosting (Netlify / Cloudflare)
       }
 
       // 2. Fetch from local userProfiles collection
@@ -183,7 +198,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
         console.warn('Local userProfiles fetch notice:', e);
       }
 
-      // 3. Fetch from Supabase user_profiles (primary global directory across Netlify & all devices)
+      // 3. Fetch from Supabase user_profiles (primary global directory across Netlify, Cloudflare & all devices)
       await initSupabaseRuntime();
       if (isSupabaseConfigured) {
         try {
@@ -205,15 +220,15 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
     } catch (err) {
       console.error('Load members error:', err);
     } finally {
-      setIsSearching(false);
+      if (showSpinner) setIsSearching(false);
     }
   }, [currentUserId]);
 
   // Automatically load all website users when FriendsView opens or userProfiles changes
   useEffect(() => {
-    loadAllWebsiteMembers();
+    loadAllWebsiteMembers(true);
     const unsub = onSnapshot(collection(db, 'userProfiles'), () => {
-      loadAllWebsiteMembers();
+      loadAllWebsiteMembers(false);
     });
     return () => unsub();
   }, [loadAllWebsiteMembers]);
@@ -221,9 +236,9 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
   // Refresh when switching to Find Members tab
   useEffect(() => {
     if (activeSubTab === 'directory') {
-      loadAllWebsiteMembers();
+      hydrateStandaloneFromSupabase(currentUserId).then(() => loadAllWebsiteMembers(false));
     }
-  }, [activeSubTab, loadAllWebsiteMembers]);
+  }, [activeSubTab, currentUserId, loadAllWebsiteMembers]);
 
   // Live filtered members list (shows ALL members when search is empty)
   const searchResults = useMemo(() => {
@@ -241,7 +256,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
     e.preventDefault();
     setActionNotice(null);
     await hydrateStandaloneFromSupabase(currentUserId);
-    await loadAllWebsiteMembers();
+    await loadAllWebsiteMembers(true);
   };
 
   // Send Friend Request
@@ -577,23 +592,31 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
               <p className="text-xs text-[var(--text-muted)]">No sent requests</p>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {outgoingRequests.map(req => (
-                  <div
-                    key={req.id}
-                    className="p-3.5 rounded-2xl bg-[var(--bg-card)] border border-[var(--accent-border)] flex items-center justify-between gap-3"
-                  >
-                    <span className="text-xs text-[var(--text-main)] truncate min-w-0">
-                      Request sent to member ID: {req.receiverId.slice(0, 8)}...
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleCancelRequest(req.id)}
-                      className="min-h-[40px] text-xs text-[var(--text-muted)] hover:text-rose-400 py-2 px-3.5 rounded-xl border border-neutral-300 dark:border-neutral-700 shrink-0 cursor-pointer"
+                {outgoingRequests.map(req => {
+                  const targetMember = allMembers.find(m => m.uid === req.receiverId);
+                  return (
+                    <div
+                      key={req.id}
+                      className="p-3.5 rounded-2xl bg-[var(--bg-card)] border border-[var(--accent-border)] flex items-center justify-between gap-3"
                     >
-                      Cancel
-                    </button>
-                  </div>
-                ))}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-bold text-[var(--text-main)] truncate">
+                          {targetMember?.displayName || `Member ${req.receiverId.slice(0, 8)}`}
+                        </p>
+                        <p className="text-[10px] font-mono text-[var(--accent-primary)] truncate">
+                          {targetMember?.username ? `@${targetMember.username} · ` : ''}Awaiting acceptance
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleCancelRequest(req.id)}
+                        className="min-h-[40px] text-xs text-[var(--text-muted)] hover:text-rose-400 py-2 px-3.5 rounded-xl border border-neutral-300 dark:border-neutral-700 shrink-0 cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -751,41 +774,47 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => onStartChatWithUser(member)}
-                        title="Start Private Chat"
-                        aria-label={`Message ${member.displayName}`}
-                        className="min-w-[40px] min-h-[40px] rounded-xl gold-button border border-[var(--accent-border)] text-[var(--accent-primary)] hover:gold-glow-sm flex items-center justify-center transition-all cursor-pointer"
-                      >
-                        <MessageSquare className="w-4 h-4" />
-                      </button>
-
                       {isAlreadyFriend ? (
-                        <span className="min-h-[40px] inline-flex items-center text-[11px] font-semibold text-emerald-500 dark:text-emerald-400 bg-emerald-500/10 px-2.5 rounded-xl border border-emerald-500/30">
-                          Friends
-                        </span>
+                        <button
+                          type="button"
+                          onClick={() => onStartChatWithUser(member)}
+                          title="Send Encrypted Message"
+                          className="min-h-[40px] py-2 px-3.5 rounded-xl gold-button border border-[var(--accent-border)] text-xs font-semibold text-[var(--accent-primary)] hover:gold-glow-sm flex items-center gap-1.5 transition-all cursor-pointer"
+                        >
+                          <MessageSquare className="w-4 h-4" />
+                          <span>Chat</span>
+                        </button>
                       ) : incomingReq ? (
                         <button
                           type="button"
                           onClick={() => handleAcceptRequest(incomingReq)}
-                          className="min-h-[40px] py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                          className="min-h-[40px] py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
                         >
                           <Check className="w-3.5 h-3.5" />
                           <span>Accept</span>
                         </button>
                       ) : isPending ? (
-                        <span className="min-h-[40px] inline-flex items-center text-[11px] text-[var(--text-muted)] bg-neutral-200 dark:bg-neutral-800 px-2.5 rounded-xl">
-                          Pending
-                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setActionNotice(
+                              `Request pending — you can message ${member.displayName} once they accept your friend request.`
+                            )
+                          }
+                          title="Waiting for friend request acceptance"
+                          className="min-h-[40px] inline-flex items-center gap-1.5 text-[11px] font-medium text-[var(--text-muted)] bg-neutral-200/80 dark:bg-neutral-800/80 px-3 rounded-xl cursor-pointer"
+                        >
+                          <Clock className="w-3.5 h-3.5 shrink-0" />
+                          <span>Pending</span>
+                        </button>
                       ) : (
                         <button
                           type="button"
                           onClick={() => handleSendFriendRequest(member)}
-                          className="min-h-[40px] py-2 px-3 rounded-xl gold-button border border-[var(--accent-border)] text-xs font-semibold text-[var(--accent-primary)] flex items-center gap-1 hover:gold-glow-sm cursor-pointer"
+                          className="min-h-[40px] py-2 px-3 rounded-xl gold-button border border-[var(--accent-border)] text-xs font-semibold text-[var(--accent-primary)] flex items-center gap-1.5 hover:gold-glow-sm cursor-pointer"
                         >
                           <UserPlus className="w-3.5 h-3.5" />
-                          <span>Add</span>
+                          <span>Add Friend</span>
                         </button>
                       )}
                     </div>

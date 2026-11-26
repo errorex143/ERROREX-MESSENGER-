@@ -18,10 +18,17 @@ import {
   query,
   where,
   onSnapshot,
-  getDocs
+  getDocs,
+  addDoc,
+  updateDoc,
+  doc
 } from '../../lib/firebase';
+import { isSupabaseConfigured, initSupabaseRuntime } from '../../lib/supabase';
+import { fetchSupabaseUserProfiles, isLegacyTestAccount } from '../../lib/supabaseSync';
+import { getCollectionData } from '../../lib/standaloneApi';
+import { FriendRequest, Friendship } from '../../types';
 import { CrownLogo } from '../common/CrownLogo';
-import { MessageSquare, X, UserPlus, Plus, AtSign, Users, ShieldCheck, Settings, Lock } from 'lucide-react';
+import { MessageSquare, X, UserPlus, AtSign, Users, Lock, Clock, Check } from 'lucide-react';
 
 export const MessengerDashboard: React.FC = () => {
   const { user, userProfile, lockMessenger } = useAuth();
@@ -41,11 +48,18 @@ export const MessengerDashboard: React.FC = () => {
   // Friends & Requests state
   const [friends, setFriends] = useState<UserProfile[]>([]);
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+  const [friendGateNotice, setFriendGateNotice] = useState<string | null>(null);
 
   // New Chat modal state
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
   const [newChatNameInput, setNewChatNameInput] = useState('');
   const [newChatUsernameInput, setNewChatUsernameInput] = useState('');
+  const [newChatGateInfo, setNewChatGateInfo] = useState<{
+    message: string;
+    targetMember?: UserProfile;
+    incomingReqId?: string;
+    isPendingOutgoing?: boolean;
+  } | null>(null);
 
   // Settings function modal state (from sidebar Settings button)
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -85,7 +99,7 @@ export const MessengerDashboard: React.FC = () => {
     }
   }, [currentUserId]);
 
-  // 3. Load friends list for direct chat launch
+  // 3. Load friends list for direct chat launch (local + Supabase fallback)
   useEffect(() => {
     if (!currentUserId) return;
     try {
@@ -103,14 +117,28 @@ export const MessengerDashboard: React.FC = () => {
 
         if (friendIds.length > 0) {
           const uSnap = await getDocs(collection(db, 'userProfiles'));
-          const list: UserProfile[] = [];
+          const profileMap = new Map<string, UserProfile>();
           uSnap.forEach((d: any) => {
             const pData = d.data() as UserProfile;
+            const key = pData?.uid || d.id;
             if (friendIds.includes(d.id) || (pData?.uid && friendIds.includes(pData.uid))) {
-              list.push(pData);
+              profileMap.set(key, pData);
             }
           });
-          setFriends(list);
+
+          if (profileMap.size < friendIds.length) {
+            await initSupabaseRuntime();
+            if (isSupabaseConfigured) {
+              const suUsers = await fetchSupabaseUserProfiles();
+              suUsers.forEach(u => {
+                if (friendIds.includes(u.uid) && !profileMap.has(u.uid)) {
+                  profileMap.set(u.uid, u);
+                }
+              });
+            }
+          }
+
+          setFriends(Array.from(profileMap.values()));
         } else {
           setFriends([]);
         }
@@ -122,8 +150,53 @@ export const MessengerDashboard: React.FC = () => {
     }
   }, [currentUserId]);
 
-  // Start direct conversation with a friend or contact
-  const handleStartChatWithUser = (targetUser: UserProfile | { displayName: string; uid?: string; username?: string; photoURL?: string; bio?: string }) => {
+  // Verify whether target user has an accepted friendship with currentUserId
+  const isUserAcceptedFriend = (targetUid?: string, targetUsername?: string): boolean => {
+    if (targetUid === 'vault_secure') return true;
+    const cleanTargetUsername = targetUsername?.replace(/^@/, '').toLowerCase();
+
+    if (
+      friends.some(
+        f =>
+          (targetUid && f.uid === targetUid) ||
+          (cleanTargetUsername && f.username?.toLowerCase() === cleanTargetUsername)
+      )
+    ) {
+      return true;
+    }
+
+    const allFriendships = getCollectionData<Friendship>('friendships');
+    const allProfiles = getCollectionData<UserProfile>('userProfiles');
+
+    let resolvedUid = targetUid;
+    if (!resolvedUid && cleanTargetUsername) {
+      resolvedUid = allProfiles.find(p => p.username?.toLowerCase() === cleanTargetUsername)?.uid;
+    }
+
+    if (!resolvedUid) return false;
+    return allFriendships.some(
+      f => Array.isArray(f.users) && f.users.includes(currentUserId) && f.users.includes(resolvedUid!)
+    );
+  };
+
+  // Start direct conversation ONLY with an accepted friend (strict request -> accept -> message rule)
+  const handleStartChatWithUser = (
+    targetUser: UserProfile | { displayName: string; uid?: string; username?: string; photoURL?: string; bio?: string }
+  ) => {
+    if (!isUserAcceptedFriend(targetUser.uid, targetUser.username)) {
+      const msg = `Send a friend request first! You can only message ${targetUser.displayName} after they accept your request.`;
+      setFriendGateNotice(msg);
+      if (isNewChatModalOpen) {
+        setNewChatGateInfo({ message: msg });
+      } else {
+        setActiveTab('directory');
+      }
+      return;
+    }
+
+    setFriendGateNotice(null);
+    setNewChatGateInfo(null);
+
     const existing = conversations.find(
       c =>
         !c.isGroup &&
@@ -161,10 +234,11 @@ export const MessengerDashboard: React.FC = () => {
     setIsNewChatModalOpen(false);
   };
 
-  // Create chat by custom name and username (resolves real registered website member UID if matched)
+  // Look up registered member by name or username and enforce accepted friendship before opening chat
   const handleCreateCustomChat = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newChatNameInput.trim()) return;
+    setNewChatGateInfo(null);
 
     const cleanName = newChatNameInput.trim();
     const customUsername = newChatUsernameInput.trim()
@@ -174,8 +248,29 @@ export const MessengerDashboard: React.FC = () => {
     let matchedMember: UserProfile | undefined;
     try {
       const uSnap = await getDocs(collection(db, 'userProfiles'));
-      const members: UserProfile[] = [];
-      uSnap.forEach((d: any) => members.push(d.data() as UserProfile));
+      const memberMap = new Map<string, UserProfile>();
+      uSnap.forEach((d: any) => {
+        const p = d.data() as UserProfile;
+        if (p?.uid && !isLegacyTestAccount(p.uid, p.username, p.displayName)) {
+          memberMap.set(p.uid, p);
+        }
+      });
+
+      await initSupabaseRuntime();
+      if (isSupabaseConfigured) {
+        const suUsers = await fetchSupabaseUserProfiles();
+        suUsers.forEach(p => {
+          if (
+            p?.uid &&
+            !isLegacyTestAccount(p.uid, p.username, p.displayName) &&
+            !memberMap.has(p.uid)
+          ) {
+            memberMap.set(p.uid, p);
+          }
+        });
+      }
+
+      const members = Array.from(memberMap.values());
       matchedMember = members.find(
         m =>
           m.uid !== currentUserId &&
@@ -186,31 +281,84 @@ export const MessengerDashboard: React.FC = () => {
       // ignore lookup error
     }
 
-    if (matchedMember) {
+    if (!matchedMember) {
+      setNewChatGateInfo({
+        message: 'No accepted friend found with that name or @username. Open Find Members to send a friend request first.'
+      });
+      return;
+    }
+
+    if (isUserAcceptedFriend(matchedMember.uid, matchedMember.username)) {
       handleStartChatWithUser(matchedMember);
       setNewChatNameInput('');
       setNewChatUsernameInput('');
       return;
     }
 
-    const newConv = chatStore.createConversation(
-      cleanName,
-      false,
-      customUsername,
-      undefined,
-      undefined,
-      currentUserId,
-      {
-        displayName: currentUserName,
-        username: userProfile?.username || storedProfile.username || 'user',
-        photoURL: userProfile?.photoURL || storedProfile.photoURL || ''
-      }
+    const allReqs = getCollectionData<FriendRequest>('friendRequests');
+    const outgoingPending = allReqs.find(
+      r => r.senderId === currentUserId && r.receiverId === matchedMember!.uid && r.status === 'pending'
     );
-    setNewChatNameInput('');
-    setNewChatUsernameInput('');
-    setActiveConversationId(newConv.id);
-    setActiveTab('chats');
-    setIsNewChatModalOpen(false);
+    const incomingPending = allReqs.find(
+      r => r.senderId === matchedMember!.uid && r.receiverId === currentUserId && r.status === 'pending'
+    );
+
+    if (incomingPending) {
+      setNewChatGateInfo({
+        message: `${matchedMember.displayName} (@${matchedMember.username}) sent you a friend request. Accept it first to start messaging.`,
+        targetMember: matchedMember,
+        incomingReqId: incomingPending.id
+      });
+    } else if (outgoingPending) {
+      setNewChatGateInfo({
+        message: `Friend request already sent to ${matchedMember.displayName}. You can message once they accept your request.`,
+        targetMember: matchedMember,
+        isPendingOutgoing: true
+      });
+    } else {
+      setNewChatGateInfo({
+        message: `You cannot message ${matchedMember.displayName} yet. Send a friend request and wait for acceptance first.`,
+        targetMember: matchedMember
+      });
+    }
+  };
+
+  const handleSendRequestFromModal = async (targetMember: UserProfile) => {
+    try {
+      await addDoc(collection(db, 'friendRequests'), {
+        senderId: currentUserId,
+        senderName: currentUserName,
+        senderUsername: userProfile?.username || storedProfile.username || 'member',
+        senderPhoto: userProfile?.photoURL || storedProfile.photoURL || '',
+        receiverId: targetMember.uid,
+        status: 'pending',
+        createdAt: new Date().toISOString()
+      });
+      setNewChatGateInfo({
+        message: `Friend request sent to ${targetMember.displayName}! Messaging unlocks once they accept.`,
+        targetMember,
+        isPendingOutgoing: true
+      });
+    } catch (err) {
+      console.warn('Error sending friend request:', err);
+    }
+  };
+
+  const handleAcceptRequestFromModal = async (reqId: string, targetMember: UserProfile) => {
+    try {
+      await updateDoc(doc(db, 'friendRequests', reqId), { status: 'accepted' });
+      await addDoc(collection(db, 'friendships'), {
+        user1Id: targetMember.uid,
+        user2Id: currentUserId,
+        users: [targetMember.uid, currentUserId],
+        createdAt: new Date().toISOString()
+      });
+      handleStartChatWithUser(targetMember);
+      setNewChatNameInput('');
+      setNewChatUsernameInput('');
+    } catch (err) {
+      console.warn('Error accepting friend request:', err);
+    }
   };
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
@@ -278,7 +426,36 @@ export const MessengerDashboard: React.FC = () => {
         />
 
         {/* Content Container */}
-        <div className="flex-1 min-w-0 h-full flex overflow-hidden">
+        <div className="flex-1 min-w-0 h-full flex flex-col overflow-hidden">
+        {friendGateNotice && (
+          <div className="px-3.5 py-2.5 bg-amber-500/10 border-b border-amber-500/30 flex items-center justify-between gap-2 text-xs text-amber-600 dark:text-amber-300 shrink-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <Lock className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate font-medium">{friendGateNotice}</span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('directory');
+                  setFriendGateNotice(null);
+                }}
+                className="px-2.5 py-1 rounded-lg bg-[var(--accent-primary)] text-black font-bold text-[11px] cursor-pointer"
+              >
+                Find Members
+              </button>
+              <button
+                type="button"
+                onClick={() => setFriendGateNotice(null)}
+                className="p-1 text-[var(--text-muted)] hover:text-[var(--text-main)] cursor-pointer"
+                aria-label="Dismiss notice"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+        <div className="flex-1 min-h-0 min-w-0 w-full flex overflow-hidden">
         {/* Chats Tab: Split Screen */}
         {activeTab === 'chats' && (
           <div className="w-full h-full flex overflow-hidden">
@@ -420,6 +597,7 @@ export const MessengerDashboard: React.FC = () => {
         {/* Settings View (3 modes, 8 luxury colors, WhatsApp privacy, Secret PIN) */}
         {activeTab === 'settings' && <SettingsView />}
         </div>
+        </div>
       </div>
 
       {/* Mobile Bottom Navigation Bar (hidden inside active chat so keyboard & chat get 100% height) */}
@@ -501,44 +679,148 @@ export const MessengerDashboard: React.FC = () => {
               >
                 Open Encrypted Dialogue
               </button>
+
+              {newChatGateInfo && (
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-700 dark:text-amber-300 space-y-2.5">
+                  <div className="flex items-start gap-2">
+                    <Lock className="w-4 h-4 shrink-0 mt-0.5 text-[var(--accent-primary)]" />
+                    <p className="leading-relaxed font-medium">{newChatGateInfo.message}</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {newChatGateInfo.targetMember && newChatGateInfo.incomingReqId && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleAcceptRequestFromModal(
+                            newChatGateInfo.incomingReqId!,
+                            newChatGateInfo.targetMember!
+                          )
+                        }
+                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] flex items-center gap-1 cursor-pointer"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Accept & Start Chat</span>
+                      </button>
+                    )}
+                    {newChatGateInfo.targetMember &&
+                      !newChatGateInfo.incomingReqId &&
+                      !newChatGateInfo.isPendingOutgoing && (
+                        <button
+                          type="button"
+                          onClick={() => handleSendRequestFromModal(newChatGateInfo.targetMember!)}
+                          className="px-3 py-1.5 rounded-lg gold-button-accent text-black font-bold text-[11px] flex items-center gap-1 cursor-pointer"
+                        >
+                          <UserPlus className="w-3.5 h-3.5" />
+                          <span>Send Friend Request</span>
+                        </button>
+                      )}
+                    {newChatGateInfo.isPendingOutgoing && (
+                      <span className="px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-[11px] font-semibold flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5" />
+                        <span>Request Pending</span>
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsNewChatModalOpen(false);
+                        setNewChatGateInfo(null);
+                        setActiveTab('directory');
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--accent-border)] text-[var(--text-main)] font-semibold text-[11px] cursor-pointer"
+                    >
+                      Go to Find Members
+                    </button>
+                  </div>
+                </div>
+              )}
             </form>
 
-            {/* Saved Contacts List */}
+            {/* Accepted Friends & Saved Contacts List */}
             <div>
               <p className="text-[11px] font-semibold text-[var(--text-muted)] mb-2 flex items-center justify-between">
-                <span>Select from Saved Contacts:</span>
-                <span className="text-[10px] font-mono text-[var(--accent-primary)]">{contacts.length} saved</span>
+                <span>Accepted Friends (Ready to Chat):</span>
+                <span className="text-[10px] font-mono text-[var(--accent-primary)]">{friends.length} friends</span>
               </p>
               <div className="max-h-48 overflow-y-auto space-y-1.5 scrollbar-none">
-                {contacts.map(c => (
-                  <button
-                    key={c.id}
-                    onClick={() => {
-                      handleStartChatWithUser({
-                        displayName: c.name,
-                        username: c.username,
-                        photoURL: c.photoURL,
-                        bio: c.bio
-                      });
-                    }}
-                    className="w-full p-2.5 rounded-xl bg-[var(--bg-card)] border border-[var(--accent-border)] hover:border-[var(--accent-primary)] text-left flex items-center justify-between transition-colors group"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-8 h-8 rounded-full bg-[var(--accent-surface)] text-[var(--accent-primary)] flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden">
-                        {c.photoURL ? (
-                          <img src={c.photoURL} alt={c.name} className="w-full h-full object-cover" />
-                        ) : (
-                          c.name.slice(0, 1).toUpperCase()
-                        )}
+                {friends.length === 0 ? (
+                  <div className="p-3 rounded-xl bg-[var(--bg-card)] border border-[var(--accent-border)] text-center space-y-2">
+                    <p className="text-[11px] text-[var(--text-muted)]">
+                      No accepted friends yet. Send a friend request in Find Members and wait for approval before messaging.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsNewChatModalOpen(false);
+                        setNewChatGateInfo(null);
+                        setActiveTab('directory');
+                      }}
+                      className="px-3 py-1.5 rounded-lg gold-button-accent text-black font-bold text-[11px] inline-flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <UserPlus className="w-3.5 h-3.5" />
+                      <span>Find Members</span>
+                    </button>
+                  </div>
+                ) : (
+                  friends.map(f => (
+                    <button
+                      key={f.uid}
+                      type="button"
+                      onClick={() => handleStartChatWithUser(f)}
+                      className="w-full p-2.5 rounded-xl bg-[var(--bg-card)] border border-[var(--accent-border)] hover:border-[var(--accent-primary)] text-left flex items-center justify-between transition-colors group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-full bg-[var(--accent-surface)] text-[var(--accent-primary)] flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden">
+                          {f.photoURL ? (
+                            <img src={f.photoURL} alt={f.displayName} className="w-full h-full object-cover" />
+                          ) : (
+                            f.displayName.slice(0, 1).toUpperCase()
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-[var(--text-main)] truncate">{f.displayName}</p>
+                          <p className="text-[10px] font-mono text-[var(--accent-primary)] truncate">@{f.username}</p>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-[var(--text-main)] truncate">{c.name}</p>
-                        <p className="text-[10px] font-mono text-[var(--accent-primary)] truncate">@{c.username}</p>
+                      <MessageSquare className="w-4 h-4 text-neutral-400 group-hover:text-[var(--accent-primary)] shrink-0 transition-colors" />
+                    </button>
+                  ))
+                )}
+
+                {contacts
+                  .filter(c => !isUserAcceptedFriend(undefined, c.username))
+                  .map(c => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() =>
+                        handleStartChatWithUser({
+                          displayName: c.name,
+                          username: c.username,
+                          photoURL: c.photoURL,
+                          bio: c.bio
+                        })
+                      }
+                      className="w-full p-2.5 rounded-xl bg-[var(--bg-card)]/60 border border-[var(--accent-border)]/60 text-left flex items-center justify-between transition-colors opacity-80 cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-full bg-[var(--accent-surface)] text-[var(--accent-primary)] flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden">
+                          {c.photoURL ? (
+                            <img src={c.photoURL} alt={c.name} className="w-full h-full object-cover" />
+                          ) : (
+                            c.name.slice(0, 1).toUpperCase()
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-[var(--text-main)] truncate">{c.name}</p>
+                          <p className="text-[10px] font-mono text-[var(--text-muted)] truncate">
+                            @{c.username} • Request required
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                    <MessageSquare className="w-4 h-4 text-neutral-400 group-hover:text-[var(--accent-primary)] shrink-0 transition-colors" />
-                  </button>
-                ))}
+                      <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    </button>
+                  ))}
               </div>
             </div>
           </div>
