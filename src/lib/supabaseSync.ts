@@ -218,6 +218,8 @@ function mapRowToMessage(m: any): ChatMessage {
   };
 }
 
+let supportsPrivacySettingsColumn = true;
+
 // --- User Profiles ---
 export async function upsertSupabaseUserProfile(
   profile: Partial<UserProfile> & { uid: string; email?: string | null }
@@ -242,7 +244,7 @@ export async function upsertSupabaseUserProfile(
     updated_at: new Date().toISOString()
   };
 
-  if (profile.privacySettings) {
+  if (profile.privacySettings && supportsPrivacySettingsColumn) {
     payload.privacy_settings = normalizePrivacySettings(profile.privacySettings);
   }
 
@@ -263,6 +265,7 @@ export async function upsertSupabaseUserProfile(
     if (error.code === '42P10' || (error.code === '23505' && error.message?.includes('pkey'))) {
       const { error: idErr } = await supabase!.from('user_profiles').upsert(dataObj, { onConflict: conflictCol });
       if (!idErr) return { ok: true };
+      return { ok: false, error: idErr };
     }
     return { ok: false, error };
   };
@@ -275,9 +278,10 @@ export async function upsertSupabaseUserProfile(
     let err = res.error;
 
     // Handle missing optional columns on older Supabase schemas (privacy_settings / email)
-    for (let i = 0; i < 2 && err; i++) {
+    for (let i = 0; i < 3 && err; i++) {
       const msgLower = (err.message || '').toLowerCase();
       if (msgLower.includes('privacy_settings') && 'privacy_settings' in currentPayload) {
+        supportsPrivacySettingsColumn = false;
         const { privacy_settings: _p, ...rest } = currentPayload;
         currentPayload = rest;
         res = await attemptUpsert(currentPayload);

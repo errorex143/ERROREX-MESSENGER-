@@ -1,6 +1,8 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const RUNTIME_CONFIG_STORAGE_KEY = 'errorex_supabase_runtime_config';
+const DEFAULT_PUBLIC_SUPABASE_URL = 'https://vdjwuymrmqgcwmlhtgvm.supabase.co';
+const DEFAULT_PUBLIC_SUPABASE_ANON_KEY = 'sb_publishable_1I48ahxZVdKhgUwsS2Qrrg_JNH5Fwj8';
 
 function isValidSupabaseConfig(url?: string | null, anonKey?: string | null): boolean {
   const cleanUrl = (url || '').trim();
@@ -29,7 +31,7 @@ function readStoredRuntimeConfig(): { url: string; anonKey: string } {
   }
 }
 
-type CredentialSource = 'env' | 'storage' | 'runtime' | 'none';
+type CredentialSource = 'env' | 'storage' | 'runtime' | 'fallback' | 'none';
 
 function resolveInitialCredentials(): { url: string; anonKey: string; source: CredentialSource } {
   const viteEnv = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
@@ -41,6 +43,13 @@ function resolveInitialCredentials(): { url: string; anonKey: string; source: Cr
   const stored = readStoredRuntimeConfig();
   if (isValidSupabaseConfig(stored.url, stored.anonKey)) {
     return { ...stored, source: 'storage' };
+  }
+  if (isValidSupabaseConfig(DEFAULT_PUBLIC_SUPABASE_URL, DEFAULT_PUBLIC_SUPABASE_ANON_KEY)) {
+    return {
+      url: DEFAULT_PUBLIC_SUPABASE_URL,
+      anonKey: DEFAULT_PUBLIC_SUPABASE_ANON_KEY,
+      source: 'fallback'
+    };
   }
   return { url: '', anonKey: '', source: 'none' };
 }
@@ -122,6 +131,15 @@ export function clearRuntimeSupabaseConfig(): void {
     runtimeRefreshedThisLoad = true;
     isSupabaseConfigured = true;
     supabase = buildClient(envUrl, envKey);
+  } else if (isValidSupabaseConfig(DEFAULT_PUBLIC_SUPABASE_URL, DEFAULT_PUBLIC_SUPABASE_ANON_KEY)) {
+    activeCredentials = {
+      url: DEFAULT_PUBLIC_SUPABASE_URL,
+      anonKey: DEFAULT_PUBLIC_SUPABASE_ANON_KEY
+    };
+    credentialSource = 'fallback';
+    runtimeRefreshedThisLoad = false;
+    isSupabaseConfigured = true;
+    supabase = buildClient(DEFAULT_PUBLIC_SUPABASE_URL, DEFAULT_PUBLIC_SUPABASE_ANON_KEY);
   } else {
     activeCredentials = { url: '', anonKey: '' };
     credentialSource = 'none';

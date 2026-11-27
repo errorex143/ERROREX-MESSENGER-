@@ -12,6 +12,9 @@ function readEnvVar(env: Record<string, string | undefined> | undefined, name: s
   return String(fromCf || fromProc || '').trim();
 }
 
+const DEFAULT_PUBLIC_SUPABASE_URL = 'https://vdjwuymrmqgcwmlhtgvm.supabase.co';
+const DEFAULT_PUBLIC_SUPABASE_ANON_KEY = 'sb_publishable_1I48ahxZVdKhgUwsS2Qrrg_JNH5Fwj8';
+
 export const onRequest = async (context: CloudflarePagesContext): Promise<Response> => {
   if (context.request?.method === 'OPTIONS') {
     return new Response(null, {
@@ -28,13 +31,15 @@ export const onRequest = async (context: CloudflarePagesContext): Promise<Respon
     readEnvVar(context.env, 'VITE_SUPABASE_URL') ||
     readEnvVar(context.env, 'SUPABASE_URL') ||
     readEnvVar(context.env, 'NEXT_PUBLIC_SUPABASE_URL') ||
-    readEnvVar(context.env, 'PUBLIC_SUPABASE_URL');
+    readEnvVar(context.env, 'PUBLIC_SUPABASE_URL') ||
+    DEFAULT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey =
     readEnvVar(context.env, 'VITE_SUPABASE_ANON_KEY') ||
     readEnvVar(context.env, 'SUPABASE_ANON_KEY') ||
     readEnvVar(context.env, 'SUPABASE_KEY') ||
     readEnvVar(context.env, 'NEXT_PUBLIC_SUPABASE_ANON_KEY') ||
-    readEnvVar(context.env, 'PUBLIC_SUPABASE_ANON_KEY');
+    readEnvVar(context.env, 'PUBLIC_SUPABASE_ANON_KEY') ||
+    DEFAULT_PUBLIC_SUPABASE_ANON_KEY;
 
   return new Response(
     JSON.stringify({
