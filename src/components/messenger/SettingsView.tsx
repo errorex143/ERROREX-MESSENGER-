@@ -4,10 +4,12 @@ import { useTheme } from '../../context/ThemeContext';
 import { THEMES } from '../../context/ThemeContext';
 import { PrivacySettings } from '../../types';
 import { chatStore } from '../../lib/chatStore';
+import { AvatarCropModal } from '../common/AvatarCropModal';
 import {
   Palette,
   KeyRound,
   Eye,
+  EyeOff,
   Check,
   AlertCircle,
   Sun,
@@ -18,7 +20,10 @@ import {
   ShieldCheck,
   Sparkles,
   Camera,
-  RefreshCw
+  RefreshCw,
+  Crop,
+  Trash2,
+  Mail
 } from 'lucide-react';
 import { updatePassword } from '../../lib/firebase';
 
@@ -41,7 +46,15 @@ const STATUS_PRESETS = [
 ];
 
 export const SettingsView: React.FC = () => {
-  const { user, verifyPin, setupPin, lockMessenger, updateUserProfile } = useAuth();
+  const {
+    user,
+    verifyPin,
+    setupPin,
+    lockMessenger,
+    updateUserProfile,
+    verifyAccountForDeletion,
+    permanentlyDeleteAccount
+  } = useAuth();
   const {
     theme,
     setTheme,
@@ -66,16 +79,26 @@ export const SettingsView: React.FC = () => {
   const [username, setUsername] = useState(storedProfile.username || user?.email?.split('@')[0] || 'user');
   const [bio, setBio] = useState(storedProfile.bio || 'Sovereign Account • Encrypted Vault Active');
   const [photoURL, setPhotoURL] = useState(user?.photoURL || storedProfile.photoURL || '');
+  const [cropSourceUrl, setCropSourceUrl] = useState<string | null>(null);
   const [profileSavedNotice, setProfileSavedNotice] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Permanent Remove Account State (Secret section only)
+  const [deleteStep, setDeleteStep] = useState<'idle' | 'credentials' | 'confirm'>('idle');
+  const [deleteEmail, setDeleteEmail] = useState(user?.email || '');
+  const [deletePassword, setDeletePassword] = useState('');
+  const [showDeletePassword, setShowDeletePassword] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
     const reader = new FileReader();
     reader.readAsDataURL(file);
     reader.onloadend = () => {
-      setPhotoURL(reader.result as string);
+      setCropSourceUrl(reader.result as string);
     };
   };
 
@@ -193,6 +216,39 @@ export const SettingsView: React.FC = () => {
       setPasswordError(err.message || 'Failed to update password.');
     } finally {
       setPasswordLoading(false);
+    }
+  };
+
+  const resetDeleteAccountFlow = () => {
+    setDeleteStep('idle');
+    setDeletePassword('');
+    setDeleteError(null);
+    setShowDeletePassword(false);
+  };
+
+  const handleVerifyDeleteCredentials = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setDeleteError(null);
+    setDeleteLoading(true);
+    try {
+      await verifyAccountForDeletion(deleteEmail, deletePassword);
+      setDeleteStep('confirm');
+    } catch (err: any) {
+      setDeleteError(err?.message || 'Could not verify your Gmail and password.');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const handleConfirmPermanentDelete = async () => {
+    setDeleteError(null);
+    setDeleteLoading(true);
+    try {
+      await permanentlyDeleteAccount(deleteEmail, deletePassword);
+    } catch (err: any) {
+      setDeleteError(err?.message || 'Failed to permanently delete account.');
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -325,7 +381,7 @@ export const SettingsView: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <h3 className="text-xs font-bold text-[var(--text-main)]">Auto Color System (10 Minutes)</h3>
                   {autoCycleEnabled && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 animate-pulse">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono tabular-nums font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                       ACTIVE: {formattedCountdown}
                     </span>
                   )}
@@ -341,7 +397,7 @@ export const SettingsView: React.FC = () => {
                 <button
                   type="button"
                   onClick={cycleNextTheme}
-                  className="py-1.5 px-3 rounded-xl gold-button text-xs font-semibold text-[var(--accent-primary)] hover:border-[var(--accent-primary)] shadow-sm transition-all"
+                  className="py-1.5 px-3 rounded-xl gold-button text-xs font-semibold text-[var(--accent-primary)] hover:border-[var(--accent-primary)] shadow-sm transition-all cursor-pointer"
                   title="Immediately advance to next color"
                 >
                   Cycle Now (Test)
@@ -350,7 +406,7 @@ export const SettingsView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setAutoCycleEnabled(!autoCycleEnabled)}
-                className={`py-2 px-4 rounded-xl text-xs font-bold transition-all shadow-sm ${
+                className={`py-2 px-4 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer ${
                   autoCycleEnabled
                     ? 'gold-button-accent text-black'
                     : 'bg-neutral-800 text-neutral-300 border border-neutral-700 hover:text-white'
@@ -361,69 +417,49 @@ export const SettingsView: React.FC = () => {
             </div>
           </div>
 
-          {/* 14 Unique Luxury Color Palettes */}
+          {/* Theme Colors (Swatches only, no written color names) */}
           <div>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
-                <span>14 Luxury Colors (Active with both Dark & Light)</span>
+                <span>Theme Colors</span>
               </h2>
-              <span className="text-[10px] font-mono text-[var(--accent-primary)] font-bold">
-                {THEMES.find(t => t.id === theme)?.name}
-              </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-5 sm:grid-cols-5 md:grid-cols-8 gap-2.5 sm:gap-3">
               {THEMES.map(th => {
                 const isSelected = theme === th.id;
-                const colorNames: Record<string, string> = {
-                  rainbow: '🌈 Rainbow Prism (Multi-Color Spectrum)',
-                  gold: 'Imperial Gold',
-                  white: 'Platinum White',
-                  black: 'Obsidian Black',
-                  crimson: 'Blood Crimson',
-                  midnight: 'Midnight Indigo',
-                  forest: 'Dark Forest',
-                  bronze: 'Dark Bronze',
-                  emerald: 'Emerald Green',
-                  ocean: 'Sapphire Blue',
-                  purple: 'Royal Purple',
-                  rose: 'Ruby Red',
-                  sunset: 'Amber Orange',
-                  electric: 'Cyan Blue',
-                  teal: 'Midnight Teal'
-                };
-                const displayName = colorNames[th.id] || th.name;
+                const swatchBg =
+                  th.id === 'rainbow'
+                    ? 'linear-gradient(135deg, #FF0055 0%, #FF7700 25%, #FFDD00 50%, #00CC66 75%, #0099FF 100%)'
+                    : th.primaryHex;
 
                 return (
-                  <div
+                  <button
                     key={th.id}
+                    type="button"
                     onClick={() => setTheme(th.id)}
-                    className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center justify-between shadow-sm ${
+                    aria-label={`Select color ${th.id}`}
+                    aria-pressed={isSelected}
+                    className={`aspect-square min-h-[48px] rounded-2xl border cursor-pointer transition-all flex items-center justify-center shadow-sm ${
                       isSelected
-                        ? 'bg-[var(--accent-surface)] border-[var(--accent-primary)] shadow-md'
-                        : 'bg-[var(--bg-card)] border-neutral-200 dark:border-neutral-800 hover:border-[var(--accent-border)]'
+                        ? 'bg-[var(--accent-surface)] border-2 border-[var(--accent-primary)] scale-105 shadow-md'
+                        : 'bg-[var(--bg-card)] border-neutral-200 dark:border-neutral-800 hover:border-[var(--accent-border)] hover:scale-105'
                     }`}
                   >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className="w-8 h-8 rounded-full border-2 border-white/20 shadow-sm shrink-0"
-                        style={{
-                          background: th.id === 'rainbow'
-                            ? 'linear-gradient(135deg, #FF0055 0%, #FF7700 25%, #FFDD00 50%, #00CC66 75%, #0099FF 100%)'
-                            : th.primaryHex
-                        }}
-                      />
-                      <div>
-                        <h3 className="text-xs font-bold text-[var(--text-main)]">{displayName}</h3>
-                      </div>
+                    <div
+                      className="w-8 h-8 sm:w-9 sm:h-9 rounded-full border-2 border-white/30 shadow-inner flex items-center justify-center"
+                      style={{ background: swatchBg }}
+                    >
+                      {isSelected && (
+                        <Check
+                          className={`w-4 h-4 stroke-[3] ${
+                            th.id === 'white' ? 'text-black' : th.id === 'black' ? 'text-white' : 'text-black'
+                          }`}
+                        />
+                      )}
                     </div>
-                    {isSelected && (
-                      <div className="w-5 h-5 rounded-full bg-[var(--accent-primary)] text-black flex items-center justify-center shrink-0">
-                        <Check className="w-3 h-3 stroke-[3]" />
-                      </div>
-                    )}
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -613,13 +649,23 @@ export const SettingsView: React.FC = () => {
                     Upload New DP
                   </button>
                   {photoURL && (
-                    <button
-                      type="button"
-                      onClick={() => setPhotoURL('')}
-                      className="py-1 px-2.5 rounded-lg border border-neutral-700 text-xs text-neutral-400 hover:text-rose-400 transition-colors"
-                    >
-                      Remove Photo
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setCropSourceUrl(photoURL)}
+                        className="py-1.5 px-3 rounded-lg border border-[var(--accent-border)] hover:border-[var(--accent-primary)] text-xs font-semibold text-[var(--text-main)] flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Crop className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
+                        <span>Crop DP</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPhotoURL('')}
+                        className="py-1.5 px-2.5 rounded-lg border border-neutral-700 text-xs text-neutral-400 hover:text-rose-400 transition-colors cursor-pointer"
+                      >
+                        Remove Photo
+                      </button>
+                    </>
                   )}
                 </div>
 
@@ -866,9 +912,156 @@ export const SettingsView: React.FC = () => {
               <span>Lock Now</span>
             </button>
           </div>
+
+          {/* Permanent Remove Account (Only inside Secret section) */}
+          <div className="p-4 sm:p-5 rounded-2xl bg-[var(--bg-card)] border border-rose-500/35 space-y-3 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h4 className="text-xs font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
+                  <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                  <span>Permanent Remove Account</span>
+                </h4>
+                <p className="text-[10px] text-[var(--text-muted)] mt-0.5 leading-relaxed">
+                  Verify your Gmail and account password to permanently remove your entire account and data.
+                </p>
+              </div>
+
+              {deleteStep === 'idle' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteEmail(user?.email || '');
+                    setDeletePassword('');
+                    setDeleteError(null);
+                    setDeleteStep('credentials');
+                  }}
+                  className="min-h-[44px] py-2 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-xs text-white font-bold flex items-center justify-center gap-1.5 cursor-pointer w-full sm:w-auto shrink-0 shadow-sm transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Remove Account</span>
+                </button>
+              )}
+            </div>
+
+            {deleteError && (
+              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/35 text-rose-600 dark:text-rose-300 text-xs flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                <span>{deleteError}</span>
+              </div>
+            )}
+
+            {deleteStep === 'credentials' && (
+              <form onSubmit={handleVerifyDeleteCredentials} className="space-y-3 pt-1 border-t border-rose-500/20">
+                <div>
+                  <label className="block text-xs font-medium text-[var(--text-main)] mb-1">
+                    Account Gmail / Email
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="email"
+                      required
+                      value={deleteEmail}
+                      onChange={e => setDeleteEmail(e.target.value)}
+                      placeholder="yourname@gmail.com"
+                      className="w-full pl-9 pr-3.5 py-2.5 sm:py-2 text-base sm:text-xs rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-rose-500 text-[var(--text-main)] focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-[var(--text-main)] mb-1">
+                    Current Account Password
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type={showDeletePassword ? 'text' : 'password'}
+                      required
+                      value={deletePassword}
+                      onChange={e => setDeletePassword(e.target.value)}
+                      placeholder="Enter your password"
+                      className="w-full pl-9 pr-10 py-2.5 sm:py-2 text-base sm:text-xs rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-rose-500 text-[var(--text-main)] focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowDeletePassword(prev => !prev)}
+                      aria-label={showDeletePassword ? 'Hide password' : 'Show password'}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-main)] cursor-pointer"
+                    >
+                      {showDeletePassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-col-reverse sm:flex-row gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={resetDeleteAccountFlow}
+                    disabled={deleteLoading}
+                    className="flex-1 min-h-[44px] py-2 px-3 rounded-xl border border-[var(--accent-border)] text-xs font-semibold text-[var(--text-main)] hover:bg-white/5 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={deleteLoading}
+                    className="flex-1 min-h-[44px] py-2 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-xs font-bold text-white flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>{deleteLoading ? 'Verifying...' : 'Delete Account'}</span>
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {deleteStep === 'confirm' && (
+              <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/40 space-y-3">
+                <div className="space-y-1">
+                  <h5 className="text-xs font-bold text-rose-600 dark:text-rose-300">
+                    Confirm Permanent Deletion
+                  </h5>
+                  <p className="text-[11px] text-[var(--text-main)] leading-relaxed">
+                    Gmail <span className="font-mono font-semibold">{deleteEmail}</span> verified. Clicking{' '}
+                    <strong>Permanent Delete</strong> will permanently remove your profile, DP, bio, messages,
+                    contacts, statuses, and 8-digit PIN from ERROREX. This cannot be undone.
+                  </p>
+                </div>
+
+                <div className="flex flex-col-reverse sm:flex-row gap-2">
+                  <button
+                    type="button"
+                    onClick={resetDeleteAccountFlow}
+                    disabled={deleteLoading}
+                    className="flex-1 min-h-[44px] py-2 px-3 rounded-xl border border-[var(--accent-border)] bg-[var(--bg-sidebar)] text-xs font-semibold text-[var(--text-main)] cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmPermanentDelete}
+                    disabled={deleteLoading}
+                    className="flex-1 min-h-[44px] py-2 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-xs font-bold text-white uppercase tracking-wide flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-md transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>{deleteLoading ? 'Removing Account...' : 'Permanent Delete'}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
       </div>
+
+      <AvatarCropModal
+        imageSrc={cropSourceUrl}
+        onConfirm={cropped => {
+          setPhotoURL(cropped);
+          setCropSourceUrl(null);
+        }}
+        onCancel={() => setCropSourceUrl(null)}
+      />
     </div>
   );
 };

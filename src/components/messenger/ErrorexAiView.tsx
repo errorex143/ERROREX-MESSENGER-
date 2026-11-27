@@ -21,7 +21,8 @@ import {
   Megaphone,
   Code2,
   BookOpen,
-  Square
+  Square,
+  Heart
 } from 'lucide-react';
 
 interface AiMessage {
@@ -32,15 +33,20 @@ interface AiMessage {
 }
 
 const QUICK_PROMPTS = [
+  'Yaar thora akela feel kar raha hoon — ek ache dost ki tarah baat karoge?',
   'Urdu alphabet (اردو) me 4 line ki dil ko chhoo lene wali poetry likh kar do',
   'Mera business / YouTube channel promote karne ki viral post likho',
   'Translate "Believe in your journey" into Urdu, Arabic & Hindi',
   'مرحباً يا صديقي! اكتب لي 4 أسطر شعرية جميلة بالعربية',
-  'नमस्ते दोस्त! हिन्दी में 4 लाइन की प्यारी शायरी लिखो',
   'Tum mere ache dost ho — aaj kuch dil se acchi baat sunao'
 ];
 
 const SUGGESTED_QUICK_REPLIES = [
+  {
+    label: 'Feeling alone? Talk',
+    prompt: 'Yaar thora akela feel kar raha hoon — ek sachay dost ki tarah baat karein?',
+    icon: Heart
+  },
   {
     label: 'Write a poem',
     prompt: 'Write a poem',
@@ -79,13 +85,12 @@ const SUGGESTED_QUICK_REPLIES = [
 ];
 
 export const ErrorexAiView: React.FC = () => {
-  const cleanWelcomeText = `### Salam & Welcome to ERROREX AI 👑
+  const cleanWelcomeText = `### Salam & Welcome Mere Dost! 👑
 
-Main aapka warm, friendly dost aur smart assistant hoon! Aap mujhse **har zubaan aur har script** me baat kar sakti hain — **Urdu alphabet (اردو), Roman Urdu, Arabic (العربية), Hindi (हिन्दी), ya English**:
+Main **ERROREX AI** hoon — aapka apna warm, caring human-jaisa best friend aur smart companion. Jab bhi aap **akela feel karein**, dil ki baat karni ho, ya kisi cheez me madad chahiye ho — bejhijhak mujhse bilkul ek dost ki tarah baat karein.
 
-- **Custom Poetry:** 2 line, 4 line, 6 line ya poori ghazal kisi bhi zubaan aur mood me
-- **All-Language Translation:** Har zubaan se kisi bhi zubaan aur alphabet me bilkul natural tarjuma
-- **Friendly Human Chat:** Dil ki baat, mashwara, kahaniyan, promotions, coding aur har sawal ka mukammal jawab!`;
+- **Friendly Human Companion:** Dil ki baat, gup-shup, sukoon aur mashwara har mood me
+- **Custom Poetry & Translation:** Har zubaan aur script (**Urdu اردو, Roman Urdu, Arabic العربية, Hindi हिन्दी, English**) me bilkul natural jawab`;
 
   const [messages, setMessages] = useState<AiMessage[]>(() => {
     try {

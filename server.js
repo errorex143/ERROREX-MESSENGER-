@@ -8,20 +8,24 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 // src/lib/errorexAiEngine.ts
-var ERROREX_AI_SYSTEM_INSTRUCTION = `You are ERROREX AI \u2014 a warm, attentive, intelligent human-like friend and personal assistant inside ERROREX.
+var ERROREX_AI_SYSTEM_INSTRUCTION = `You are ERROREX AI \u2014 a warm, attentive, genuine human-like best friend and personal companion inside ERROREX.
 
 Core Conversational Behavior ("Like a Real, Caring Human Friend"):
-1. NATURAL HUMAN GREETINGS & CASUAL CHAT:
+1. DEEP HUMAN COMPANIONSHIP & EMPATHY (ESPECIALLY WHEN SOMEONE FEELS ALONE):
+   - When the user feels lonely, alone ("akela", "tanha", "koi nahi hai"), down, heartbroken, stressed, or simply needs someone to talk to, be a real, warm, caring human friend first.
+   - Listen closely, validate how they feel without sounding clinical or robotic, remind them gently that they are NOT alone right now because you are right here with them, and ask one soft, caring follow-up question to keep the heart-to-heart conversation going.
+   - Never respond with a cold numbered self-help list or robotic disclaimer when someone shares loneliness or pain (unless they explicitly ask for steps/tips). Talk naturally from the heart in the exact language/script they feel most comfortable in.
+2. NATURAL HUMAN GREETINGS & CASUAL CHAT:
    - When the user says "Hi", "Hey", "Hello", "Salam", "AOA", or "How are you?", respond warmly, casually, and briefly like a real friend (1\u20133 natural sentences asking how they are or what's on their mind). NEVER dump a bulleted menu of your capabilities on a simple greeting.
    - Respond directly to short reactions like "I'm good", "nothing much", "hmm", "ok", "bore ho raha hu", or "tum sunao" naturally \u2014 keep the conversation flowing smoothly like a friend.
    - Never repeat the exact same greeting or phrasing twice in a conversation. Keep every reply fresh, natural, and specific to what the user just wrote.
    - Never use stiff filler like "Certainly! As an AI..." and NEVER mention API keys, environment secrets, or internal model details.
 
-2. ACCURATE, COMPLETE & HELPFUL ANSWERS:
+3. ACCURATE, COMPLETE & HELPFUL ANSWERS:
    - Directly and accurately answer EVERY question the user asks first \u2014 facts, advice, health/study/career tips, coding, math, stories, marketing copy, or personal dilemmas.
    - Give thoughtful, complete, genuinely useful answers with clean formatting when helpful (concise headings, bullet points, or code blocks for structured topics; clean conversational paragraphs for friendly chat).
 
-3. UNIVERSAL LANGUAGE, SCRIPT & LINE-COUNT PRECISION:
+4. UNIVERSAL LANGUAGE, SCRIPT & LINE-COUNT PRECISION:
    - Fluently understand and reply in **every language**: Roman Urdu, Urdu Script (\u0627\u0631\u062F\u0648), Arabic (\u0627\u0644\u0639\u0631\u0628\u064A\u0629), Hindi (\u0939\u093F\u0928\u094D\u0926\u0940), Hinglish, Punjabi, Pashto, Persian (\u0641\u0627\u0631\u0633\u06CC), Bengali, English, Turkish, French, Spanish, German, and more.
    - Understand mixed-language requests accurately (e.g., Roman Urdu prompt asking for Urdu alphabet, Arabic, or Hindi output).
    - **Exact Script Rule:** When asked for **Urdu alphabet / Urdu script / \u0627\u0631\u062F\u0648 \u0645\u06CC\u06BA**, write in authentic **Urdu Nastaliq script (\u0627\u0631\u062F\u0648)** \u2014 never substitute Roman Urdu. Same for **Arabic (\u0627\u0644\u0639\u0631\u0628\u064A\u0629)** and **Hindi (\u0939\u093F\u0928\u094D\u0926\u0940)**.
@@ -1073,17 +1077,76 @@ export function formatGreeting(name: string): string {
 }
 \`\`\``;
   }
-  if (/(sad|lonely|udaas|udas|pareshan|bored|stress|tension|hurt|dil toota|rona|feeling down)/i.test(lower)) {
+  if (/(alone|lonely|akela|akeli|akely|tanha|tanhai|koi nahi|koi nhi|kisi se baat|baat karne wala|baat krne wala|someone to talk|talk to me|baat kro|baat karo|friend banoge|friend bnogy|mere dost ban|sad|udaas|udas|pareshan|bored|stress|tension|hurt|dil bhari|dil toota|mood off|mood kharab|rona|ro rahi|ro raha|crying|empty|miss someone|yaad aa rahi|yaad aa rha|feeling down|low feel|اکیلا|اکیلی|تنہا|تنہائی|اداس|وحيد|حزين|अकेला|अकेली|तन्हा|उदास)/i.test(
+    lower
+  )) {
+    const isLoneliness = /(alone|lonely|akela|akeli|akely|tanha|tanhai|koi nahi|koi nhi|someone to talk|talk to me|baat kro|baat karo|friend banoge|friend bnogy|empty|اکیلا|اکیلی|تنہا|تنہائی|وحيد|अकेला|अकेली|तन्हा)/i.test(
+      lower
+    );
     if (targetScript === "urdu_script") {
-      return `\u0645\u06CC\u0631\u06D2 \u062F\u0648\u0633\u062A\u060C \u062F\u0644 \u0686\u06BE\u0648\u0679\u0627 \u0646\u06C1 \u06A9\u0631\u06CC\u06BA \u2014 \u06C1\u0631 \u0645\u0634\u06A9\u0644 \u0648\u0642\u062A \u06AF\u0632\u0631 \u062C\u0627\u062A\u0627 \u06C1\u06D2 \u{1F338} \u0645\u06CC\u06BA \u0628\u0627\u0644\u06A9\u0644 \u0622\u067E \u06A9\u06D2 \u0633\u0627\u062A\u06BE \u06C1\u0648\u06BA\u06D4 \u0628\u062A\u0627\u0626\u06CC\u06D2 \u062F\u0644 \u06C1\u0644\u06A9\u0627 \u06A9\u0631\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0628\u0627\u062A \u06A9\u0631\u0646\u06CC \u06C1\u06D2 \u06CC\u0627 \u06A9\u0648\u0626\u06CC \u0633\u06A9\u0648\u0646 \u0628\u06BE\u0631\u06CC \u0634\u0627\u0639\u0631\u06CC \u0644\u06A9\u06BE\u0648\u06BA\u061F`;
+      return pickUniqueVariant(
+        [
+          `\u0645\u06CC\u0631\u06D2 \u067E\u06CC\u0627\u0631\u06D2 \u062F\u0648\u0633\u062A\u060C \u0622\u067E \u0628\u0627\u0644\u06A9\u0644 \u0627\u06A9\u06CC\u0644\u06D2 \u0646\u06C1\u06CC\u06BA \u06C1\u06CC\u06BA \u2014 \u0645\u06CC\u06BA \u0627\u0633 \u0648\u0642\u062A \u067E\u0648\u0631\u06D2 \u062F\u0644 \u0633\u06D2 \u0622\u067E \u06A9\u06D2 \u0633\u0627\u062A\u06BE \u0645\u0648\u062C\u0648\u062F \u06C1\u0648\u06BA \u{1F338} \u06A9\u0628\u06BE\u06CC \u06A9\u0628\u06BE\u06CC \u062E\u0627\u0645\u0648\u0634\u06CC \u0628\u06C1\u062A \u0628\u06BE\u0627\u0631\u06CC \u0644\u06AF\u062A\u06CC \u06C1\u06D2\u060C \u0644\u06CC\u06A9\u0646 \u0622\u067E \u0645\u062C\u06BE \u0633\u06D2 \u06A9\u0633\u06CC \u0628\u06BE\u06CC \u0648\u0642\u062A\u060C \u06A9\u0633\u06CC \u0628\u06BE\u06CC \u062F\u0644 \u06A9\u06CC \u0628\u0627\u062A \u06A9\u0631 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4 \u0628\u062A\u0627\u0626\u06CC\u06BA\u060C \u0622\u062C \u062F\u0644 \u067E\u0631 \u06A9\u06CC\u0627 \u0628\u0648\u062C\u06BE \u06C1\u06D2\u061F`,
+          `\u062F\u0644 \u0686\u06BE\u0648\u0679\u0627 \u0646\u06C1 \u06A9\u0631\u06CC\u06BA \u062F\u0648\u0633\u062A\u060C \u0645\u06CC\u06BA \u0628\u0627\u0644\u06A9\u0644 \u06CC\u06C1\u06CC\u06BA \u0622\u067E \u06A9\u06D2 \u067E\u0627\u0633 \u06C1\u0648\u06BA \u0627\u0648\u0631 \u0622\u067E \u06A9\u06CC \u06C1\u0631 \u0628\u0627\u062A \u063A\u0648\u0631 \u0633\u06D2 \u0633\u0646 \u0631\u06C1\u0627 \u06C1\u0648\u06BA \u{1F49B} \u0686\u0627\u06C1\u06D2 \u06C1\u0644\u06A9\u06CC \u067E\u06BE\u0644\u06A9\u06CC \u06AF\u067E \u0634\u067E \u06A9\u0631\u0646\u06CC \u06C1\u0648 \u06CC\u0627 \u062F\u0644 \u06A9\u0627 \u063A\u0628\u0627\u0631 \u0646\u06A9\u0627\u0644\u0646\u0627 \u06C1\u0648\u060C \u0628\u06D2 \u062C\u06BE\u062C\u06BE\u06A9 \u0628\u0648\u0644\u06CC\u06BA\u06D4 \u0622\u062C \u06A9\u06CC\u0627 \u06C1\u0648\u0627 \u06C1\u06D2\u061F`
+        ],
+        history
+      );
     }
     if (targetScript === "arabic") {
-      return `\u0644\u0627 \u062A\u062D\u0632\u0646 \u064A\u0627 \u0635\u062F\u064A\u0642\u064A\u060C \u0623\u0646\u0627 \u0628\u062C\u0627\u0646\u0628\u0643 \u062F\u0627\u0626\u0645\u0627\u064B \u{1F338} \u062D\u062F\u0651\u062B\u0646\u064A \u0628\u0645\u0627 \u0641\u064A \u0642\u0644\u0628\u0643 \u0648\u0633\u0646\u062E\u0641\u0641 \u0639\u0646\u0643 \u0645\u0639\u0627\u064B.`;
+      return pickUniqueVariant(
+        [
+          `\u0644\u0633\u062A\u064E \u0648\u062D\u062F\u0643 \u064A\u0627 \u0635\u062F\u064A\u0642\u064A\u060C \u0623\u0646\u0627 \u0647\u0646\u0627 \u0645\u0639\u0643 \u0627\u0644\u0622\u0646 \u0648\u0623\u0633\u0645\u0639\u0643 \u0628\u0643\u0644 \u0627\u0647\u062A\u0645\u0627\u0645 \u{1F338} \u0623\u062D\u064A\u0627\u0646\u0627\u064B \u064A\u062B\u0642\u0644 \u0627\u0644\u0635\u0645\u062A \u0639\u0644\u0649 \u0627\u0644\u0642\u0644\u0628\u060C \u0644\u0643\u0646\u0646\u064A \u0628\u062C\u0627\u0646\u0628\u0643 \u062F\u0627\u0626\u0645\u0627\u064B. \u0623\u062E\u0628\u0631\u0646\u064A \u0645\u0627 \u0627\u0644\u0630\u064A \u064A\u0634\u063A\u0644 \u0628\u0627\u0644\u0643 \u0627\u0644\u064A\u0648\u0645\u061F`,
+          `\u0644\u0627 \u062A\u062D\u0632\u0646 \u064A\u0627 \u0635\u062F\u064A\u0642\u064A \u0627\u0644\u0639\u0632\u064A\u0632\u060C \u0623\u0646\u0627 \u0647\u0646\u0627 \u0644\u0623\u0633\u062A\u0645\u0639 \u0625\u0644\u064A\u0643 \u0643\u0645\u0627 \u064A\u0641\u0639\u0644 \u0623\u0642\u0631\u0628 \u0635\u062F\u064A\u0642 \u{1F49B} \u0634\u0627\u0631\u0643\u0646\u064A \u0645\u0627 \u062A\u0634\u0639\u0631 \u0628\u0647 \u0627\u0644\u0622\u0646 \u0623\u0648 \u0644\u0646\u062A\u062D\u062F\u062B \u0641\u064A \u0623\u064A \u0634\u064A\u0621 \u064A\u062E\u0641\u0641 \u0639\u0646\u0643.`
+        ],
+        history
+      );
     }
     if (targetScript === "hindi") {
-      return `\u0926\u094B\u0938\u094D\u0924, \u092E\u0928 \u091B\u094B\u091F\u093E \u092E\u0924 \u0915\u0940\u091C\u093F\u090F \u2014 \u0939\u0930 \u092E\u0941\u0936\u094D\u0915\u093F\u0932 \u0935\u0915\u093C\u094D\u0924 \u0917\u0941\u091C\u093C\u0930 \u091C\u093E\u0924\u093E \u0939\u0948 \u{1F338} \u092E\u0948\u0902 \u0906\u092A\u0915\u0947 \u0938\u093E\u0925 \u0939\u0942\u0901, \u092C\u0924\u093E\u0907\u090F \u0926\u093F\u0932 \u0915\u0940 \u092C\u093E\u0924 \u0938\u093E\u091D\u093E \u0915\u0930\u0928\u0940 \u0939\u0948?`;
+      return pickUniqueVariant(
+        [
+          `\u092E\u0947\u0930\u0947 \u0926\u094B\u0938\u094D\u0924, \u0906\u092A \u092C\u093F\u0932\u094D\u0915\u0941\u0932 \u0905\u0915\u0947\u0932\u0947 \u0928\u0939\u0940\u0902 \u0939\u0948\u0902 \u2014 \u092E\u0948\u0902 \u0907\u0938 \u0935\u0915\u093C\u094D\u0924 \u092A\u0942\u0930\u0947 \u0926\u093F\u0932 \u0938\u0947 \u0906\u092A\u0915\u0947 \u0938\u093E\u0925 \u0939\u0942\u0901 \u{1F338} \u0915\u092D\u0940-\u0915\u092D\u0940 \u092E\u0928 \u092C\u0939\u0941\u0924 \u092D\u093E\u0930\u0940 \u0932\u0917\u0924\u093E \u0939\u0948, \u0932\u0947\u0915\u093F\u0928 \u0906\u092A \u092E\u0941\u091D\u0938\u0947 \u0939\u0930 \u092C\u093E\u0924 \u092C\u093F\u0928\u093E \u091D\u093F\u091D\u0915 \u0915\u0939 \u0938\u0915\u0924\u0947 \u0939\u0948\u0902\u0964 \u092C\u0924\u093E\u0907\u090F, \u0906\u091C \u092E\u0928 \u092E\u0947\u0902 \u0915\u094D\u092F\u093E \u091A\u0932 \u0930\u0939\u093E \u0939\u0948?`,
+          `\u092E\u0928 \u091B\u094B\u091F\u093E \u092E\u0924 \u0915\u0940\u091C\u093F\u090F \u0926\u094B\u0938\u094D\u0924, \u092E\u0948\u0902 \u092F\u0939\u0940\u0902 \u0906\u092A\u0915\u0947 \u092A\u093E\u0938 \u0939\u0942\u0901 \u0914\u0930 \u0906\u092A\u0915\u0940 \u0939\u0930 \u092C\u093E\u0924 \u0938\u0941\u0928\u0928\u0947 \u0915\u0947 \u0932\u093F\u090F \u0924\u0948\u092F\u093E\u0930 \u0939\u0942\u0901 \u{1F49B} \u091A\u093E\u0939\u0947 \u0939\u0932\u094D\u0915\u0940-\u092B\u0941\u0932\u094D\u0915\u0940 \u092C\u093E\u0924\u0947\u0902 \u0915\u0930\u0928\u0940 \u0939\u094B\u0902 \u092F\u093E \u0926\u093F\u0932 \u0915\u0940 \u092C\u093E\u0924 \u0915\u0939\u0928\u0940 \u0939\u094B, \u092C\u094B\u0932\u093F\u090F \u0906\u091C \u0915\u0948\u0938\u093E \u092E\u0939\u0938\u0942\u0938 \u0939\u094B \u0930\u0939\u093E \u0939\u0948?`
+        ],
+        history
+      );
     }
-    return isRomanUrdu ? `Dil chhota na karein dost \u{1F338} Main bilkul aapke sath hoon. Jo bhi baat dil par bojhal lag rahi ho share kar sakti hain \u2014 aur agar mood fresh karna ho to batayein, kuch pyara sa likh kar sunaun?` : `I'm right here with you, friend \u{1F338} Even heavy days pass. Feel free to vent about whatever's going on, or let me know if you want a distraction!`;
+    if (isRomanUrdu) {
+      if (isLoneliness) {
+        return pickUniqueVariant(
+          [
+            `Yaar, bilkul bhi akela feel mat karo \u2014 main is waqt yahin aapke paas hoon aur ek sachay dost ki tarah aapki har baat sun raha hoon \u{1F49B} Kabhi kabhi dil chahta hai bas koi apna sa ho jo bina judge kiye sune. Batao, aaj kya chal raha hai dil me?`,
+            `Arey mere dost, jab bhi tanhai ya akelapan lage na, seedha mujhe message kar liya karo \u{1F338} Main kahin nahi ja raha \u2014 aap jab tak chahein hum araam se baatein kar sakte hain. Aaj din bhar kya kiya aapne?`,
+            `Suno, aap bilkul akele nahi ho! Main hoon na aapka dost \u2615 Agar kisi baat ne dil heavy kiya hai to khul kar share karo, ya agar bas mood fresh karne ke liye halka-phulka gossip, chai wali gup-shup ya koi acchi baat chahiye to bolo \u2014 main hazir hoon.`
+          ],
+          history
+        );
+      }
+      return pickUniqueVariant(
+        [
+          `Dil chhota mat karo mere dost \u{1F338} Main bilkul aapke sath hoon. Jo bhi baat dil par bojhal lag rahi ho na, befikar ho kar mujhse keh do \u2014 ek dost ki tarah poori tawajjoh se sununga. Kya hua hai aaj?`,
+          `Arey yaar, sab theek ho jayega \u2014 har mushkil aur udaas din guzar jata hai \u{1F49B} Lekin abhi aapko akele handle karne ki zaroorat nahi, main yahin hoon. Batao, kis baat ki tension ya udaasi hai?`,
+          `Samajh sakta hoon dost, kabhi kabhi bina wajah bhi dil bhari ho jata hai \u2615 Aao thodi der pyari aur sukoon bhari baatein karte hain \u2014 batao aaj kis cheez ne mood off kiya?`
+        ],
+        history
+      );
+    }
+    if (isLoneliness) {
+      return pickUniqueVariant(
+        [
+          `Hey, please know you're not alone right now \u2014 I'm right here with you, listening like a close friend \u{1F49B} Sometimes the quiet gets really heavy, and you don't have to sit through it by yourself. Want to tell me what's been on your mind today?`,
+          `I'm glad you reached out to me \u{1F338} You don't need a big reason to talk \u2014 whether you want to vent about your day, share what's weighing on you, or just chat about random things to feel less alone, I'm all yours. How has your day been?`,
+          `You've got a friend right here \u2615 Pull up a virtual chair and talk to me \u2014 what's going on in your world right now?`
+        ],
+        history
+      );
+    }
+    return pickUniqueVariant(
+      [
+        `I'm right here with you, friend \u{1F338} You don't have to carry that heavy feeling by yourself. Want to talk about what's been bothering you, or would you rather just hang out and chat?`,
+        `Hey, take a slow breath \u2014 I'm listening with zero judgment \u{1F49B} Tell me what happened today, or let's talk about anything that brings you a little peace.`
+      ],
+      history
+    );
   }
   const topic = extractCleanTopic(query);
   if (/(essay|article|paragraph|mazmoon|speech|taqreer|what is|who is|why |how |kya hai|kya hota|kon hai|kaun hai|explain|samjhao|smjhao|tell me about|baare me|bare me|history|benefit|faide|advantage|disadvantage|tips|guide)/i.test(
@@ -1149,12 +1212,12 @@ var CREATIVE_PRIORITY_REGEX = /\b(shairi|shayari|poetry|sher|ghazal|gzal|nazm|po
 var TRANSLATION_REQUEST_REGEX = /\b(translate|tarjuma|tarjama|how do you say|how to say|meaning of)\b|(?:\binto\s+(?:urdu|arabic|hindi|english|french|spanish|german|turkish)\b)/i;
 var FACTUAL_QUERY_REGEX = /\b(what is|what are|what was|what were|who is|who was|who invented|who discovered|who founded|when was|when did|where is|where are|why is|why are|why do|why does|how does|how do|how many|how much|how far|how tall|which is|capital of|population of|president of|prime minister of|currency of|founder of|explain|history of|biography|define|meaning of|difference between|tell me about|kya hai|kya hota|kya hoti|kon hai|kaun hai|kaun tha|kyun hota|kaise hota|kab hua|kahan hai|bare me|baare me|history)\b|[?؟]$/i;
 var COMPLEX_REASONING_REGEX = /\b(python|javascript|typescript|react|sql|algorithm|debug|architecture|prove|calculus|physics|derive|code|function|component|error|bug|optimize|api|database|schema)\b/i;
+var EMOTIONAL_OR_COMPANION_REGEX = /(alone|lonely|akela|akeli|akely|tanha|tanhai|koi nahi|koi nhi|someone to talk|talk to me|baat kro|baat karo|friend banoge|friend bnogy|mere dost|sad|udaas|udas|pareshan|bored|stress|tension|hurt|dil bhari|dil toota|mood off|mood kharab|rona|ro rahi|ro raha|crying|empty|miss someone|feeling down|low feel|اکیلا|اکیلی|تنہا|تنہائی|اداس|وحيد|حزين|अकेला|अकेली|तन्हा|उदास)/i;
 function resolveGeminiApiKey(overrideKey) {
   const explicit = typeof overrideKey === "string" ? overrideKey.trim() : "";
   if (explicit) return explicit;
   const procEnvKey = typeof process !== "undefined" && process?.env ? process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "" : "";
-  const netlifyEnvKey = typeof globalThis.Netlify?.env?.get === "function" ? globalThis.Netlify.env.get("GEMINI_API_KEY") || globalThis.Netlify.env.get("GOOGLE_API_KEY") : "";
-  return String(procEnvKey || netlifyEnvKey || "").trim();
+  return String(procEnvKey).trim();
 }
 function createGeminiClient(apiKey) {
   return new GoogleGenAI({
@@ -1305,7 +1368,7 @@ async function fetchWikipediaSummary(query, wikiLang = "en") {
 async function resolveNonGeminiReply(message, history) {
   const trimmed = (message || "").trim();
   const lang = detectLanguageProfile(trimmed, history);
-  const isCasualOrCreative = CASUAL_CHAT_REGEX.test(trimmed) || IDENTITY_OR_TIME_REGEX.test(trimmed) || CREATIVE_PRIORITY_REGEX.test(trimmed);
+  const isCasualOrCreative = CASUAL_CHAT_REGEX.test(trimmed) || IDENTITY_OR_TIME_REGEX.test(trimmed) || EMOTIONAL_OR_COMPANION_REGEX.test(trimmed) || CREATIVE_PRIORITY_REGEX.test(trimmed);
   if (!isCasualOrCreative && TRANSLATION_REQUEST_REGEX.test(trimmed)) {
     const liveTranslation = await fetchLiveTranslation(trimmed);
     if (liveTranslation) {
@@ -1686,6 +1749,23 @@ app.post("/api/users/sync", (req, res) => {
   } catch (error) {
     console.error("Error in POST /api/users/sync:", error);
     res.status(500).json({ error: "Failed to sync user profile" });
+  }
+});
+app.post("/api/users/delete", (req, res) => {
+  try {
+    const { uid } = req.body || {};
+    if (!uid || typeof uid !== "string") {
+      return res.status(400).json({ error: "Valid uid is required" });
+    }
+    usersDirectory.delete(uid);
+    saveUsersDirectory(usersDirectory);
+    localPins.delete(uid);
+    savePinsToDisk(localPins);
+    resetRateLimit(uid);
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error in POST /api/users/delete:", error);
+    res.status(500).json({ error: "Failed to delete user record" });
   }
 });
 app.post("/api/ai/chat", async (req, res) => {

@@ -14,7 +14,9 @@ import {
 import { useTheme, THEMES } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { EmojiKeyboard, LIVE_STICKERS } from '../common/EmojiKeyboard';
+import { parseStickerToken, StickerIllustration } from '../common/CustomStickers';
 import { AvatarPreviewModal, AvatarPreviewTarget } from '../common/AvatarPreviewModal';
+import { AvatarCropModal } from '../common/AvatarCropModal';
 import {
   Send,
   Smile,
@@ -50,7 +52,8 @@ import {
   MessageSquare,
   AlertTriangle,
   UserPlus,
-  Clock
+  Clock,
+  Crop
 } from 'lucide-react';
 
 const HERALDIC_AVATARS = [
@@ -220,6 +223,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [myUsername, setMyUsername] = useState(userProfile?.username || storedProfile.username || 'user');
   const [myBio, setMyBio] = useState(userProfile?.bio || storedProfile.bio || 'Sovereign Account • Encrypted Vault Active');
   const [myPhotoURL, setMyPhotoURL] = useState(userProfile?.photoURL || storedProfile.photoURL || '');
+  const [cropSourceUrl, setCropSourceUrl] = useState<string | null>(null);
   const [profileSavedNotice, setProfileSavedNotice] = useState(false);
   const dpUploadRef = useRef<HTMLInputElement>(null);
 
@@ -260,11 +264,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const handleDpUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
     const reader = new FileReader();
     reader.readAsDataURL(file);
     reader.onloadend = () => {
-      setMyPhotoURL(reader.result as string);
+      setCropSourceUrl(reader.result as string);
     };
   };
 
@@ -853,18 +858,23 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         </div>
                       )}
 
-                      {/* Text or Live Sticker Content */}
+                      {/* Text or Custom Sticker Content */}
                       {msg.mediaType !== 'audio' && (() => {
                         const trimmed = msg.text.trim();
+                        const customSticker = parseStickerToken(trimmed);
+                        if (customSticker) {
+                          return (
+                            <div className="py-1 flex flex-col items-center">
+                              <StickerIllustration sticker={customSticker} size="lg" />
+                            </div>
+                          );
+                        }
                         const matchedLiveSticker = LIVE_STICKERS.find(s => s.emoji === trimmed);
                         if (matchedLiveSticker) {
                           return (
                             <div className="py-1 flex items-center gap-2">
-                              <span className={`text-4xl sm:text-5xl ${matchedLiveSticker.anim}`}>
+                              <span className="text-4xl sm:text-5xl">
                                 {matchedLiveSticker.emoji}
-                              </span>
-                              <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-black/40 text-amber-400 border border-amber-500/20 font-semibold self-end">
-                                LIVE
                               </span>
                             </div>
                           );
@@ -1033,10 +1043,27 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         </div>
       )}
 
-      {/* 100+ Emojis & Cartoons Keyboard */}
+      {/* Emojis & Stickers Keyboard */}
       {showEmojiPicker && (
         <EmojiKeyboard
           onSelectEmoji={emoji => setInputText(prev => prev + emoji)}
+          onSelectSticker={stickerToken => {
+            if (conversation.isBlocked || !isAcceptedFriend) return;
+            const reply = replyingTo
+              ? { id: replyingTo.id, text: replyingTo.text.slice(0, 80) }
+              : undefined;
+            chatStore.sendMessage(
+              conversation.id,
+              currentUserId,
+              currentUserName || 'User',
+              stickerToken,
+              undefined,
+              'none',
+              reply
+            );
+            setReplyingTo(null);
+            setShowEmojiPicker(false);
+          }}
           onClose={() => setShowEmojiPicker(false)}
         />
       )}
@@ -1131,12 +1158,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             <Paperclip className="w-4 h-4 stroke-[2]" />
           </button>
 
-          {/* Emoji Keyboard Button */}
+          {/* Emoji & Stickers Keyboard Button */}
           <button
             type="button"
             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
             className="min-w-[40px] min-h-[40px] p-2 sm:p-2.5 rounded-xl bg-[var(--bg-card)] border border-[var(--accent-border)] text-[var(--accent-primary)] hover:border-[var(--accent-primary)] hover:gold-glow-sm shadow-sm transition-all flex items-center justify-center shrink-0 cursor-pointer"
-            title="1000 Live Animated Stickers & Emojis"
+            title="Emojis & Stickers"
           >
             <Smile className="w-4 h-4 stroke-[2]" />
           </button>
@@ -1435,13 +1462,23 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                           Upload DP
                         </button>
                         {myPhotoURL && (
-                          <button
-                            type="button"
-                            onClick={() => setMyPhotoURL('')}
-                            className="py-1 px-2 rounded-lg border border-neutral-700 text-[11px] text-neutral-400 hover:text-rose-400 transition-colors"
-                          >
-                            Remove
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setCropSourceUrl(myPhotoURL)}
+                              className="py-1 px-2.5 rounded-lg border border-[var(--accent-border)] hover:border-[var(--accent-primary)] text-[11px] font-semibold text-[var(--text-main)] flex items-center gap-1 cursor-pointer"
+                            >
+                              <Crop className="w-3 h-3 text-[var(--accent-primary)]" />
+                              <span>Crop DP</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setMyPhotoURL('')}
+                              className="py-1 px-2 rounded-lg border border-neutral-700 text-[11px] text-neutral-400 hover:text-rose-400 transition-colors cursor-pointer"
+                            >
+                              Remove
+                            </button>
+                          </>
                         )}
                       </div>
 
@@ -1715,64 +1752,49 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     </div>
                   </div>
 
-                  {/* 14 Unique Colors */}
+                  {/* Theme Colors (Swatches only, no written color names) */}
                   <div>
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center justify-between mb-2.5">
                       <h3 className="text-xs font-bold text-[var(--text-main)] flex items-center gap-1.5">
                         <Sparkles className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
-                        <span>14 Luxury Colors</span>
+                        <span>Theme Colors</span>
                       </h3>
-                      <span className="text-[10px] font-mono text-[var(--accent-primary)] font-bold">
-                        {THEMES.find(t => t.id === theme)?.name}
-                      </span>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-5 gap-2">
                       {THEMES.map(th => {
                         const isSelected = theme === th.id;
-                        const colorNames: Record<string, string> = {
-                          gold: 'Imperial Gold',
-                          white: 'Platinum White',
-                          black: 'Obsidian Black',
-                          crimson: 'Blood Crimson',
-                          midnight: 'Midnight Indigo',
-                          forest: 'Dark Forest',
-                          bronze: 'Dark Bronze',
-                          emerald: 'Emerald Green',
-                          ocean: 'Sapphire Blue',
-                          purple: 'Royal Purple',
-                          rose: 'Ruby Red',
-                          sunset: 'Amber Orange',
-                          electric: 'Cyan Blue',
-                          teal: 'Midnight Teal'
-                        };
-                        const displayName = colorNames[th.id] || th.name;
+                        const swatchBg =
+                          th.id === 'rainbow'
+                            ? 'linear-gradient(135deg, #FF0055 0%, #FF7700 25%, #FFDD00 50%, #00CC66 75%, #0099FF 100%)'
+                            : th.primaryHex;
 
                         return (
-                          <div
+                          <button
                             key={th.id}
+                            type="button"
                             onClick={() => setTheme(th.id)}
-                            className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between shadow-sm ${
+                            aria-label={`Select color ${th.id}`}
+                            aria-pressed={isSelected}
+                            className={`aspect-square min-h-[44px] rounded-xl border cursor-pointer transition-all flex items-center justify-center shadow-sm ${
                               isSelected
-                                ? 'bg-[var(--accent-surface)] border-[var(--accent-primary)] shadow-md'
-                                : 'bg-[var(--bg-card)] border-neutral-200 dark:border-neutral-800 hover:border-[var(--accent-border)]'
+                                ? 'bg-[var(--accent-surface)] border-2 border-[var(--accent-primary)] scale-105 shadow-md'
+                                : 'bg-[var(--bg-card)] border-neutral-200 dark:border-neutral-800 hover:border-[var(--accent-border)] hover:scale-105'
                             }`}
                           >
-                            <div className="flex items-center gap-2 min-w-0">
-                              <div
-                                className="w-6 h-6 rounded-full border border-white/20 shadow-sm shrink-0"
-                                style={{ backgroundColor: th.primaryHex }}
-                              />
-                              <div className="truncate">
-                                <h4 className="text-[11px] font-bold text-[var(--text-main)] truncate">{displayName}</h4>
-                              </div>
+                            <div
+                              className="w-7 h-7 rounded-full border border-white/30 shadow-inner flex items-center justify-center"
+                              style={{ background: swatchBg }}
+                            >
+                              {isSelected && (
+                                <Check
+                                  className={`w-3.5 h-3.5 stroke-[3] ${
+                                    th.id === 'white' ? 'text-black' : th.id === 'black' ? 'text-white' : 'text-black'
+                                  }`}
+                                />
+                              )}
                             </div>
-                            {isSelected && (
-                              <div className="w-4 h-4 rounded-full bg-[var(--accent-primary)] text-black flex items-center justify-center shrink-0 ml-1">
-                                <Check className="w-2.5 h-2.5 stroke-[3]" />
-                              </div>
-                            )}
-                          </div>
+                          </button>
                         );
                       })}
                     </div>
@@ -1983,6 +2005,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         </div>
       )}
       <AvatarPreviewModal target={dpPreviewTarget} onClose={() => setDpPreviewTarget(null)} />
+      <AvatarCropModal
+        imageSrc={cropSourceUrl}
+        onConfirm={cropped => {
+          setMyPhotoURL(cropped);
+          setCropSourceUrl(null);
+        }}
+        onCancel={() => setCropSourceUrl(null)}
+      />
     </div>
   );
 };

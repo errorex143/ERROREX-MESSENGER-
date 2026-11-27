@@ -672,6 +672,21 @@ export const chatStore = {
     }
   },
 
+  markAsUnread(conversationId: string) {
+    const convs = this.getAllConversations();
+    const conv = convs.find(c => c.id === conversationId);
+    if (!conv) return;
+    conv.unreadCount = Math.max(conv.unreadCount || 0, 1);
+    try {
+      const map = getLocalReadAtMap();
+      delete map[conversationId];
+      localStorage.setItem(LOCAL_READ_AT_STORAGE_KEY, JSON.stringify(map));
+    } catch {
+      // quiet
+    }
+    this.saveConversations([...convs]);
+  },
+
   deleteMessage(conversationId: string, messageId: string) {
     this.deleteMessageForEveryone(conversationId, messageId);
   },

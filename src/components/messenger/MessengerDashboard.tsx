@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Sidebar, MobileBottomNav, MessengerTab } from './Sidebar';
 import { ChatList } from './ChatList';
@@ -28,7 +28,8 @@ import { fetchSupabaseUserProfiles, isLegacyTestAccount } from '../../lib/supaba
 import { getCollectionData } from '../../lib/standaloneApi';
 import { FriendRequest, Friendship } from '../../types';
 import { CrownLogo } from '../common/CrownLogo';
-import { MessageSquare, X, UserPlus, AtSign, Users, Lock, Clock, Check } from 'lucide-react';
+import { formatChatPreviewText } from '../common/CustomStickers';
+import { MessageSquare, X, UserPlus, AtSign, Users, Lock, Clock, Check, Bell } from 'lucide-react';
 
 export const MessengerDashboard: React.FC = () => {
   const { user, userProfile, lockMessenger } = useAuth();
@@ -383,6 +384,53 @@ export const MessengerDashboard: React.FC = () => {
   const contacts = chatStore.getContacts();
   const isMobileFullScreenChat = activeTab === 'chats' && Boolean(activeConversationId);
   const unreadTotal = conversations.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
+  const unmutedUnreadTotal = conversations.reduce(
+    (acc, c) => acc + (c.isMuted ? 0 : c.unreadCount || 0),
+    0
+  );
+  const unreadConversations = conversations.filter(c => (c.unreadCount || 0) > 0);
+  const totalAlertsCount = unreadTotal + pendingRequestsCount;
+  const prevUnmutedUnreadRef = useRef<number | null>(null);
+
+  // Sync browser tab title with live unread count
+  useEffect(() => {
+    const baseTitle = 'ERROREX';
+    document.title = unreadTotal > 0 ? `(${unreadTotal}) ${baseTitle}` : baseTitle;
+    return () => {
+      document.title = baseTitle;
+    };
+  }, [unreadTotal]);
+
+  // Subtle chime when new unread messages arrive in non-muted chats
+  useEffect(() => {
+    if (prevUnmutedUnreadRef.current === null) {
+      prevUnmutedUnreadRef.current = unmutedUnreadTotal;
+      return;
+    }
+    if (unmutedUnreadTotal > prevUnmutedUnreadRef.current) {
+      try {
+        const AudioCtx =
+          window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        if (AudioCtx) {
+          const ctx = new AudioCtx();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(740, ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(980, ctx.currentTime + 0.09);
+          gain.gain.setValueAtTime(0.05, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.19);
+        }
+      } catch {
+        // Ignore audio autoplay restriction when user hasn't interacted yet
+      }
+    }
+    prevUnmutedUnreadRef.current = unmutedUnreadTotal;
+  }, [unmutedUnreadTotal]);
 
   return (
     <div className="h-[100dvh] w-full flex flex-col bg-[var(--bg-page)] text-[var(--text-main)] overflow-hidden relative font-sans transition-colors">
@@ -399,34 +447,55 @@ export const MessengerDashboard: React.FC = () => {
           </span>
         </div>
 
-        {/* Mobile Quick Controls (visible on < md when sidebar is at bottom) */}
-        <div className="flex md:hidden items-center gap-2 shrink-0">
+        {/* Desktop & Mobile Header Quick Controls + Unread Notification Bell */}
+        <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
-            onClick={() => setActiveTab('profile')}
-            className="w-10 h-10 rounded-xl bg-[var(--bg-card)] border border-[var(--accent-border)] hover:border-[var(--accent-primary)] text-[var(--accent-primary)] flex items-center justify-center overflow-hidden cursor-pointer active:scale-95 transition-transform"
-            title="Profile"
-            aria-label="Open Profile"
+            onClick={() => setActiveTab('notifications')}
+            className={`relative min-w-[40px] min-h-[40px] px-2.5 rounded-xl border flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition-all ${
+              activeTab === 'notifications' || totalAlertsCount > 0
+                ? 'bg-[var(--accent-surface)] border-[var(--accent-primary)]/60 text-[var(--accent-primary)]'
+                : 'bg-[var(--bg-card)] border-[var(--accent-border)] text-[var(--text-muted)] hover:text-[var(--accent-primary)]'
+            }`}
+            title="Message & Friend Notifications"
+            aria-label={`Notifications (${totalAlertsCount} unread)`}
           >
-            {userProfile?.photoURL ? (
-              <img
-                src={userProfile.photoURL}
-                alt={userProfile.displayName}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <Users className="w-4 h-4" />
+            <Bell className="w-4 h-4 shrink-0" />
+            {totalAlertsCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full bg-[var(--accent-primary)] text-black text-[10px] font-mono tabular-nums font-bold leading-none">
+                {totalAlertsCount > 99 ? '99+' : totalAlertsCount}
+              </span>
             )}
           </button>
-          <button
-            type="button"
-            onClick={lockMessenger}
-            className="min-h-[40px] py-2 px-3 rounded-xl bg-[var(--accent-surface)] border border-[var(--accent-border)] text-xs font-semibold text-[var(--accent-primary)] flex items-center gap-1.5 cursor-pointer active:scale-95 transition-transform whitespace-nowrap"
-            title="Lock to Calculator"
-          >
-            <Lock className="w-3.5 h-3.5 shrink-0" />
-            <span>Lock</span>
-          </button>
+
+          <div className="flex md:hidden items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setActiveTab('profile')}
+              className="w-10 h-10 rounded-xl bg-[var(--bg-card)] border border-[var(--accent-border)] hover:border-[var(--accent-primary)] text-[var(--accent-primary)] flex items-center justify-center overflow-hidden cursor-pointer active:scale-95 transition-transform"
+              title="Profile"
+              aria-label="Open Profile"
+            >
+              {userProfile?.photoURL ? (
+                <img
+                  src={userProfile.photoURL}
+                  alt={userProfile.displayName}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <Users className="w-4 h-4" />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={lockMessenger}
+              className="min-h-[40px] py-2 px-3 rounded-xl bg-[var(--accent-surface)] border border-[var(--accent-border)] text-xs font-semibold text-[var(--accent-primary)] flex items-center gap-1.5 cursor-pointer active:scale-95 transition-transform whitespace-nowrap"
+              title="Lock to Calculator"
+            >
+              <Lock className="w-3.5 h-3.5 shrink-0" />
+              <span>Lock</span>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -580,30 +649,97 @@ export const MessengerDashboard: React.FC = () => {
 
         {/* Notifications View */}
         {activeTab === 'notifications' && (
-          <div className="flex-1 h-full p-6 bg-[var(--bg-window)] overflow-y-auto">
-            <h1 className="text-lg font-display font-bold gold-gradient-text mb-4">
-              Alerts & Notifications
-            </h1>
-            <div className="max-w-md space-y-3">
-              {pendingRequestsCount > 0 && (
-                <div
-                  onClick={() => setActiveTab('requests')}
-                  className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--accent-border)] hover:border-[var(--accent-primary)] cursor-pointer flex items-center justify-between shadow-sm"
-                >
-                  <div className="flex items-center gap-3">
-                    <UserPlus className="w-5 h-5 text-[var(--accent-primary)]" />
-                    <div>
-                      <p className="text-xs font-bold text-[var(--text-main)]">Pending Friend Requests</p>
-                      <p className="text-[10px] text-[var(--text-muted)]">
-                        You have {pendingRequestsCount} request awaiting your approval.
-                      </p>
+          <div className="flex-1 h-full p-4 sm:p-6 bg-[var(--bg-window)] overflow-y-auto">
+            <div className="max-w-lg mx-auto space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <h1 className="text-lg font-display font-bold gold-gradient-text flex items-center gap-2">
+                  <Bell className="w-5 h-5 text-[var(--accent-primary)]" />
+                  <span>Alerts & Unread Messages</span>
+                </h1>
+                {unreadConversations.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      unreadConversations.forEach(c => chatStore.markAsRead(c.id, currentUserId));
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-[var(--accent-surface)] border border-[var(--accent-border)] hover:border-[var(--accent-primary)] text-[11px] font-semibold text-[var(--accent-primary)] cursor-pointer"
+                  >
+                    Mark all read
+                  </button>
+                )}
+              </div>
+
+              <div className="space-y-2.5">
+                {pendingRequestsCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('requests')}
+                    className="w-full p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--accent-border)] hover:border-[var(--accent-primary)] cursor-pointer flex items-center justify-between shadow-sm text-left"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-full bg-[var(--accent-surface)] flex items-center justify-center text-[var(--accent-primary)] shrink-0">
+                        <UserPlus className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-[var(--text-main)]">Pending Friend Requests</p>
+                        <p className="text-[11px] text-[var(--text-muted)]">
+                          {pendingRequestsCount} request awaiting your approval.
+                        </p>
+                      </div>
                     </div>
+                    <span className="text-xs font-bold text-[var(--accent-primary)] shrink-0">Review →</span>
+                  </button>
+                )}
+
+                {unreadConversations.map(conv => {
+                  const otherId = conv.participants.find(p => p !== currentUserId) || conv.participants[0];
+                  const details = otherId ? conv.participantDetails?.[otherId] : undefined;
+                  const chatName = conv.isGroup
+                    ? conv.groupName || 'Group Conversation'
+                    : details?.displayName || conv.groupName || 'Private Chat';
+                  const chatPhoto = conv.isGroup ? conv.groupPhoto : details?.photoURL;
+
+                  return (
+                    <button
+                      key={conv.id}
+                      type="button"
+                      onClick={() => {
+                        chatStore.markAsRead(conv.id, currentUserId);
+                        setActiveConversationId(conv.id);
+                        setActiveTab('chats');
+                      }}
+                      className="w-full p-3.5 rounded-2xl bg-[var(--bg-card)] border border-[var(--accent-primary)]/40 hover:border-[var(--accent-primary)] cursor-pointer flex items-center justify-between gap-3 shadow-sm text-left"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="relative w-10 h-10 rounded-full bg-[var(--accent-surface)] border border-[var(--accent-border)] flex items-center justify-center text-[var(--accent-primary)] font-bold text-xs shrink-0 overflow-hidden">
+                          {chatPhoto ? (
+                            <img src={chatPhoto} alt={chatName} className="w-full h-full object-cover" />
+                          ) : (
+                            chatName.slice(0, 1).toUpperCase()
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs font-bold text-[var(--text-main)] truncate">{chatName}</p>
+                            <span className="px-1.5 py-0.5 rounded-full bg-[var(--accent-primary)] text-black text-[10px] font-mono font-bold">
+                              {conv.unreadCount} new
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-[var(--text-muted)] truncate mt-0.5">
+                            {conv.lastMessageText ? formatChatPreviewText(conv.lastMessageText) : 'New message'}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="text-xs font-bold text-[var(--accent-primary)] shrink-0">Open →</span>
+                    </button>
+                  );
+                })}
+
+                {pendingRequestsCount === 0 && unreadConversations.length === 0 && (
+                  <div className="p-6 rounded-2xl bg-[var(--bg-card)] border border-[var(--accent-border)] text-center text-[var(--text-muted)] text-xs">
+                    All caught up — no unread messages or pending requests.
                   </div>
-                  <span className="text-xs font-bold text-[var(--accent-primary)]">Review →</span>
-                </div>
-              )}
-              <div className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--accent-border)] text-[var(--text-muted)] text-xs">
-                No new unread system notifications.
+                )}
               </div>
             </div>
           </div>

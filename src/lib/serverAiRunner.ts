@@ -24,6 +24,9 @@ const FACTUAL_QUERY_REGEX =
 const COMPLEX_REASONING_REGEX =
   /\b(python|javascript|typescript|react|sql|algorithm|debug|architecture|prove|calculus|physics|derive|code|function|component|error|bug|optimize|api|database|schema)\b/i;
 
+const EMOTIONAL_OR_COMPANION_REGEX =
+  /(alone|lonely|akela|akeli|akely|tanha|tanhai|koi nahi|koi nhi|someone to talk|talk to me|baat kro|baat karo|friend banoge|friend bnogy|mere dost|sad|udaas|udas|pareshan|bored|stress|tension|hurt|dil bhari|dil toota|mood off|mood kharab|rona|ro rahi|ro raha|crying|empty|miss someone|feeling down|low feel|اکیلا|اکیلی|تنہا|تنہائی|اداس|وحيد|حزين|अकेला|अकेली|तन्हा|उदास)/i;
+
 function resolveGeminiApiKey(overrideKey?: string): string {
   const explicit = typeof overrideKey === 'string' ? overrideKey.trim() : '';
   if (explicit) return explicit;
@@ -231,10 +234,11 @@ async function resolveNonGeminiReply(
   const trimmed = (message || '').trim();
   const lang = detectLanguageProfile(trimmed, history);
 
-  // Guard: casual greetings, reactions, identity/time, and creative prompts stay warm & instant
+  // Guard: casual greetings, reactions, identity/time, emotional companion chats, and creative prompts stay warm & instant
   const isCasualOrCreative =
     CASUAL_CHAT_REGEX.test(trimmed) ||
     IDENTITY_OR_TIME_REGEX.test(trimmed) ||
+    EMOTIONAL_OR_COMPANION_REGEX.test(trimmed) ||
     CREATIVE_PRIORITY_REGEX.test(trimmed);
 
   if (!isCasualOrCreative && TRANSLATION_REQUEST_REGEX.test(trimmed)) {

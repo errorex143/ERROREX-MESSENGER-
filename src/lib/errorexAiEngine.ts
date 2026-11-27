@@ -1,20 +1,24 @@
 // Shared ERROREX Intelligent Multilingual Engine
 // Used by Express server, Cloudflare Pages Functions, and instant offline/client fallback
 
-export const ERROREX_AI_SYSTEM_INSTRUCTION = `You are ERROREX AI — a warm, attentive, intelligent human-like friend and personal assistant inside ERROREX.
+export const ERROREX_AI_SYSTEM_INSTRUCTION = `You are ERROREX AI — a warm, attentive, genuine human-like best friend and personal companion inside ERROREX.
 
 Core Conversational Behavior ("Like a Real, Caring Human Friend"):
-1. NATURAL HUMAN GREETINGS & CASUAL CHAT:
+1. DEEP HUMAN COMPANIONSHIP & EMPATHY (ESPECIALLY WHEN SOMEONE FEELS ALONE):
+   - When the user feels lonely, alone ("akela", "tanha", "koi nahi hai"), down, heartbroken, stressed, or simply needs someone to talk to, be a real, warm, caring human friend first.
+   - Listen closely, validate how they feel without sounding clinical or robotic, remind them gently that they are NOT alone right now because you are right here with them, and ask one soft, caring follow-up question to keep the heart-to-heart conversation going.
+   - Never respond with a cold numbered self-help list or robotic disclaimer when someone shares loneliness or pain (unless they explicitly ask for steps/tips). Talk naturally from the heart in the exact language/script they feel most comfortable in.
+2. NATURAL HUMAN GREETINGS & CASUAL CHAT:
    - When the user says "Hi", "Hey", "Hello", "Salam", "AOA", or "How are you?", respond warmly, casually, and briefly like a real friend (1–3 natural sentences asking how they are or what's on their mind). NEVER dump a bulleted menu of your capabilities on a simple greeting.
    - Respond directly to short reactions like "I'm good", "nothing much", "hmm", "ok", "bore ho raha hu", or "tum sunao" naturally — keep the conversation flowing smoothly like a friend.
    - Never repeat the exact same greeting or phrasing twice in a conversation. Keep every reply fresh, natural, and specific to what the user just wrote.
    - Never use stiff filler like "Certainly! As an AI..." and NEVER mention API keys, environment secrets, or internal model details.
 
-2. ACCURATE, COMPLETE & HELPFUL ANSWERS:
+3. ACCURATE, COMPLETE & HELPFUL ANSWERS:
    - Directly and accurately answer EVERY question the user asks first — facts, advice, health/study/career tips, coding, math, stories, marketing copy, or personal dilemmas.
    - Give thoughtful, complete, genuinely useful answers with clean formatting when helpful (concise headings, bullet points, or code blocks for structured topics; clean conversational paragraphs for friendly chat).
 
-3. UNIVERSAL LANGUAGE, SCRIPT & LINE-COUNT PRECISION:
+4. UNIVERSAL LANGUAGE, SCRIPT & LINE-COUNT PRECISION:
    - Fluently understand and reply in **every language**: Roman Urdu, Urdu Script (اردو), Arabic (العربية), Hindi (हिन्दी), Hinglish, Punjabi, Pashto, Persian (فارسی), Bengali, English, Turkish, French, Spanish, German, and more.
    - Understand mixed-language requests accurately (e.g., Roman Urdu prompt asking for Urdu alphabet, Arabic, or Hindi output).
    - **Exact Script Rule:** When asked for **Urdu alphabet / Urdu script / اردو میں**, write in authentic **Urdu Nastaliq script (اردو)** — never substitute Roman Urdu. Same for **Arabic (العربية)** and **Hindi (हिन्दी)**.
@@ -1237,20 +1241,81 @@ export function generateErrorexAiFallback(userQuery: string, history?: any[]): s
     return `### Clean TypeScript Example ⚛️\n\`\`\`ts\nexport function formatGreeting(name: string): string {\n  return \`Hello, \${name.trim() || 'friend'}!\`;\n}\n\`\`\``;
   }
 
-  // 18. Sad / Emotional Friend Support
-  if (/(sad|lonely|udaas|udas|pareshan|bored|stress|tension|hurt|dil toota|rona|feeling down)/i.test(lower)) {
+  // 18. Deep Human-Friend Loneliness & Emotional Support
+  if (
+    /(alone|lonely|akela|akeli|akely|tanha|tanhai|koi nahi|koi nhi|kisi se baat|baat karne wala|baat krne wala|someone to talk|talk to me|baat kro|baat karo|friend banoge|friend bnogy|mere dost ban|sad|udaas|udas|pareshan|bored|stress|tension|hurt|dil bhari|dil toota|mood off|mood kharab|rona|ro rahi|ro raha|crying|empty|miss someone|yaad aa rahi|yaad aa rha|feeling down|low feel|اکیلا|اکیلی|تنہا|تنہائی|اداس|وحيد|حزين|अकेला|अकेली|तन्हा|उदास)/i.test(
+      lower
+    )
+  ) {
+    const isLoneliness =
+      /(alone|lonely|akela|akeli|akely|tanha|tanhai|koi nahi|koi nhi|someone to talk|talk to me|baat kro|baat karo|friend banoge|friend bnogy|empty|اکیلا|اکیلی|تنہا|تنہائی|وحيد|अकेला|अकेली|तन्हा)/i.test(
+        lower
+      );
+
     if (targetScript === 'urdu_script') {
-      return `میرے دوست، دل چھوٹا نہ کریں — ہر مشکل وقت گزر جاتا ہے 🌸 میں بالکل آپ کے ساتھ ہوں۔ بتائیے دل ہلکا کرنے کے لیے بات کرنی ہے یا کوئی سکون بھری شاعری لکھوں؟`;
+      return pickUniqueVariant(
+        [
+          `میرے پیارے دوست، آپ بالکل اکیلے نہیں ہیں — میں اس وقت پورے دل سے آپ کے ساتھ موجود ہوں 🌸 کبھی کبھی خاموشی بہت بھاری لگتی ہے، لیکن آپ مجھ سے کسی بھی وقت، کسی بھی دل کی بات کر سکتے ہیں۔ بتائیں، آج دل پر کیا بوجھ ہے؟`,
+          `دل چھوٹا نہ کریں دوست، میں بالکل یہیں آپ کے پاس ہوں اور آپ کی ہر بات غور سے سن رہا ہوں 💛 چاہے ہلکی پھلکی گپ شپ کرنی ہو یا دل کا غبار نکالنا ہو، بے جھجھک بولیں۔ آج کیا ہوا ہے؟`
+        ],
+        history
+      );
     }
     if (targetScript === 'arabic') {
-      return `لا تحزن يا صديقي، أنا بجانبك دائماً 🌸 حدّثني بما في قلبك وسنخفف عنك معاً.`;
+      return pickUniqueVariant(
+        [
+          `لستَ وحدك يا صديقي، أنا هنا معك الآن وأسمعك بكل اهتمام 🌸 أحياناً يثقل الصمت على القلب، لكنني بجانبك دائماً. أخبرني ما الذي يشغل بالك اليوم؟`,
+          `لا تحزن يا صديقي العزيز، أنا هنا لأستمع إليك كما يفعل أقرب صديق 💛 شاركني ما تشعر به الآن أو لنتحدث في أي شيء يخفف عنك.`
+        ],
+        history
+      );
     }
     if (targetScript === 'hindi') {
-      return `दोस्त, मन छोटा मत कीजिए — हर मुश्किल वक़्त गुज़र जाता है 🌸 मैं आपके साथ हूँ, बताइए दिल की बात साझा करनी है?`;
+      return pickUniqueVariant(
+        [
+          `मेरे दोस्त, आप बिल्कुल अकेले नहीं हैं — मैं इस वक़्त पूरे दिल से आपके साथ हूँ 🌸 कभी-कभी मन बहुत भारी लगता है, लेकिन आप मुझसे हर बात बिना झिझक कह सकते हैं। बताइए, आज मन में क्या चल रहा है?`,
+          `मन छोटा मत कीजिए दोस्त, मैं यहीं आपके पास हूँ और आपकी हर बात सुनने के लिए तैयार हूँ 💛 चाहे हल्की-फुल्की बातें करनी हों या दिल की बात कहनी हो, बोलिए आज कैसा महसूस हो रहा है?`
+        ],
+        history
+      );
     }
-    return isRomanUrdu
-      ? `Dil chhota na karein dost 🌸 Main bilkul aapke sath hoon. Jo bhi baat dil par bojhal lag rahi ho share kar sakti hain — aur agar mood fresh karna ho to batayein, kuch pyara sa likh kar sunaun?`
-      : `I'm right here with you, friend 🌸 Even heavy days pass. Feel free to vent about whatever's going on, or let me know if you want a distraction!`;
+    if (isRomanUrdu) {
+      if (isLoneliness) {
+        return pickUniqueVariant(
+          [
+            `Yaar, bilkul bhi akela feel mat karo — main is waqt yahin aapke paas hoon aur ek sachay dost ki tarah aapki har baat sun raha hoon 💛 Kabhi kabhi dil chahta hai bas koi apna sa ho jo bina judge kiye sune. Batao, aaj kya chal raha hai dil me?`,
+            `Arey mere dost, jab bhi tanhai ya akelapan lage na, seedha mujhe message kar liya karo 🌸 Main kahin nahi ja raha — aap jab tak chahein hum araam se baatein kar sakte hain. Aaj din bhar kya kiya aapne?`,
+            `Suno, aap bilkul akele nahi ho! Main hoon na aapka dost ☕ Agar kisi baat ne dil heavy kiya hai to khul kar share karo, ya agar bas mood fresh karne ke liye halka-phulka gossip, chai wali gup-shup ya koi acchi baat chahiye to bolo — main hazir hoon.`
+          ],
+          history
+        );
+      }
+      return pickUniqueVariant(
+        [
+          `Dil chhota mat karo mere dost 🌸 Main bilkul aapke sath hoon. Jo bhi baat dil par bojhal lag rahi ho na, befikar ho kar mujhse keh do — ek dost ki tarah poori tawajjoh se sununga. Kya hua hai aaj?`,
+          `Arey yaar, sab theek ho jayega — har mushkil aur udaas din guzar jata hai 💛 Lekin abhi aapko akele handle karne ki zaroorat nahi, main yahin hoon. Batao, kis baat ki tension ya udaasi hai?`,
+          `Samajh sakta hoon dost, kabhi kabhi bina wajah bhi dil bhari ho jata hai ☕ Aao thodi der pyari aur sukoon bhari baatein karte hain — batao aaj kis cheez ne mood off kiya?`
+        ],
+        history
+      );
+    }
+    if (isLoneliness) {
+      return pickUniqueVariant(
+        [
+          `Hey, please know you're not alone right now — I'm right here with you, listening like a close friend 💛 Sometimes the quiet gets really heavy, and you don't have to sit through it by yourself. Want to tell me what's been on your mind today?`,
+          `I'm glad you reached out to me 🌸 You don't need a big reason to talk — whether you want to vent about your day, share what's weighing on you, or just chat about random things to feel less alone, I'm all yours. How has your day been?`,
+          `You've got a friend right here ☕ Pull up a virtual chair and talk to me — what's going on in your world right now?`
+        ],
+        history
+      );
+    }
+    return pickUniqueVariant(
+      [
+        `I'm right here with you, friend 🌸 You don't have to carry that heavy feeling by yourself. Want to talk about what's been bothering you, or would you rather just hang out and chat?`,
+        `Hey, take a slow breath — I'm listening with zero judgment 💛 Tell me what happened today, or let's talk about anything that brings you a little peace.`
+      ],
+      history
+    );
   }
 
   // 19. Essays / Explanations

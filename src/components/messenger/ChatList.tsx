@@ -12,6 +12,7 @@ import {
   resolveTargetPrivacy
 } from '../../lib/privacyUtils';
 import { AvatarPreviewModal, AvatarPreviewTarget } from '../common/AvatarPreviewModal';
+import { formatChatPreviewText } from '../common/CustomStickers';
 import {
   Search,
   Plus,
@@ -306,18 +307,34 @@ export const ChatList: React.FC<ChatListProps> = ({
     }
   };
 
+  const unreadChatsCount = conversations.filter(c => !c.isArchived && c.unreadCount && c.unreadCount > 0).length;
+  const totalUnreadMessages = conversations
+    .filter(c => !c.isArchived && c.unreadCount && c.unreadCount > 0)
+    .reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+
   return (
     <div className="w-full h-full bg-[var(--bg-list)] border-r border-[var(--accent-border)] flex flex-col shrink-0 select-none transition-colors relative">
-      {/* Top Header: All Chats Details & Count */}
+      {/* Top Header: All Chats Details, Unread Notification Mark & Count */}
       <div className="p-3.5 border-b border-neutral-200 dark:border-white/5 space-y-3 shrink-0">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-baseline gap-1.5 min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0">
             <h1 className="text-sm sm:text-base font-display font-bold gold-gradient-text truncate">
               Messages & Chats
             </h1>
             <span className="text-xs font-mono text-[var(--accent-primary)] font-semibold tabular-nums shrink-0">
               ({conversations.length})
             </span>
+            {totalUnreadMessages > 0 && (
+              <button
+                type="button"
+                onClick={() => setFilter(prev => (prev === 'unread' ? 'all' : 'unread'))}
+                title="Tap to filter unread messages"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[var(--accent-primary)] text-black text-[10px] font-mono tabular-nums font-bold shadow-sm cursor-pointer shrink-0 hover:opacity-90 transition-opacity"
+              >
+                <Bell className="w-2.5 h-2.5 fill-current" />
+                <span>{totalUnreadMessages}</span>
+              </button>
+            )}
           </div>
 
           <button
@@ -369,14 +386,17 @@ export const ChatList: React.FC<ChatListProps> = ({
           <button
             type="button"
             onClick={() => setFilter('unread')}
-            className={`min-h-[34px] py-1.5 px-3 rounded-xl text-[11px] font-semibold whitespace-nowrap transition-all flex items-center gap-1 shadow-sm cursor-pointer shrink-0 tabular-nums ${
+            className={`min-h-[34px] py-1.5 px-3 rounded-xl text-[11px] font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 shadow-sm cursor-pointer shrink-0 tabular-nums ${
               filter === 'unread'
                 ? 'bg-[var(--accent-surface)] text-[var(--accent-primary)] border border-[var(--accent-primary)] font-bold'
                 : 'bg-[var(--bg-card)] text-[var(--text-muted)] border border-[var(--accent-border)] hover:text-[var(--text-main)] hover:border-[var(--accent-primary)]'
             }`}
           >
+            {unreadChatsCount > 0 && (
+              <span className="w-2 h-2 rounded-full bg-[var(--accent-primary)] shrink-0" />
+            )}
             <span>
-              Unread ({conversations.filter(c => !c.isArchived && c.unreadCount && c.unreadCount > 0).length})
+              Unread ({unreadChatsCount})
             </span>
           </button>
           <button
@@ -476,6 +496,7 @@ export const ChatList: React.FC<ChatListProps> = ({
                 lastMsg?.deliveryStatus === 'read' ||
                 (!lastMsg?.deliveryStatus && isContactNetActive));
 
+            const hasUnread = Boolean(conv.unreadCount && conv.unreadCount > 0);
             const isMenuOpen = openMenuConvId === conv.id;
 
             return (
@@ -484,11 +505,13 @@ export const ChatList: React.FC<ChatListProps> = ({
                 className={`w-full p-3.5 flex items-start gap-3 transition-colors text-left relative group cursor-pointer ${
                   isActive
                     ? 'bg-[var(--accent-surface)]'
+                    : hasUnread
+                    ? 'bg-[var(--accent-surface)]/45 border-l-[3px] border-l-[var(--accent-primary)] hover:bg-[var(--accent-surface)]/65'
                     : 'hover:bg-neutral-200/50 dark:hover:bg-neutral-900/50'
                 }`}
                 onClick={() => onSelectConversation(conv.id)}
               >
-                {/* Contact DP / Avatar with click-to-zoom lightbox & privacy-respecting online dot */}
+                {/* Contact DP / Avatar with click-to-zoom lightbox, unread mark & privacy-respecting online dot */}
                 <button
                   type="button"
                   onClick={e => {
@@ -507,7 +530,13 @@ export const ChatList: React.FC<ChatListProps> = ({
                   className="relative shrink-0 cursor-pointer group/dp"
                   title="Tap to view DP & Bio"
                 >
-                  <div className="w-12 h-12 rounded-full bg-neutral-200 dark:bg-neutral-900 border border-[var(--accent-border)] group-hover/dp:border-[var(--accent-primary)] flex items-center justify-center text-[var(--accent-primary)] font-bold text-sm overflow-hidden shadow-inner transition-colors">
+                  <div
+                    className={`w-12 h-12 rounded-full bg-neutral-200 dark:bg-neutral-900 border flex items-center justify-center text-[var(--accent-primary)] font-bold text-sm overflow-hidden shadow-inner transition-colors ${
+                      hasUnread
+                        ? 'border-2 border-[var(--accent-primary)]'
+                        : 'border-[var(--accent-border)] group-hover/dp:border-[var(--accent-primary)]'
+                    }`}
+                  >
                     {visibleAvatar ? (
                       <img src={visibleAvatar} alt={title} className="w-full h-full object-cover" />
                     ) : conv.isGroup ? (
@@ -516,6 +545,12 @@ export const ChatList: React.FC<ChatListProps> = ({
                       title.slice(0, 1).toUpperCase()
                     )}
                   </div>
+                  {hasUnread && (
+                    <span
+                      title="New unread message"
+                      className="w-3 h-3 rounded-full bg-[var(--accent-primary)] border-2 border-[var(--bg-list)] absolute -top-0.5 -right-0.5 shadow-sm"
+                    />
+                  )}
                   {allowOnline && (
                     <span
                       title={isContactNetActive ? 'Online' : 'Offline'}
@@ -553,13 +588,25 @@ export const ChatList: React.FC<ChatListProps> = ({
                       )}
                     </div>
 
-                    <span className="text-[10px] font-mono tabular-nums text-neutral-500 shrink-0">
+                    <span
+                      className={`text-[10px] font-mono tabular-nums shrink-0 ${
+                        hasUnread
+                          ? 'text-[var(--accent-primary)] font-bold'
+                          : 'text-neutral-500'
+                      }`}
+                    >
                       {formatTime(conv.lastMessageAt || conv.updatedAt)}
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1 min-w-0 text-xs text-[var(--text-muted)] truncate pr-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div
+                      className={`flex items-center gap-1 min-w-0 text-xs truncate pr-2 ${
+                        hasUnread
+                          ? 'text-[var(--text-main)] font-semibold'
+                          : 'text-[var(--text-muted)]'
+                      }`}
+                    >
                       {isFromMe && (
                         isSeen ? (
                           <span title="Seen (Double Blue Tick)" className="inline-flex items-center">
@@ -581,12 +628,15 @@ export const ChatList: React.FC<ChatListProps> = ({
                           <span>Voice memo</span>
                         </span>
                       ) : (
-                        <span className="truncate">{conv.lastMessageText || 'Tap to open chat'}</span>
+                        <span className="truncate">{formatChatPreviewText(conv.lastMessageText)}</span>
                       )}
                     </div>
 
-                    {Boolean(conv.unreadCount && conv.unreadCount > 0) && (
-                      <span className="min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-mono tabular-nums font-bold bg-[var(--accent-primary)] text-black flex items-center justify-center shrink-0 shadow-sm">
+                    {hasUnread && (
+                      <span
+                        title={`${conv.unreadCount} unread message${(conv.unreadCount || 0) > 1 ? 's' : ''}`}
+                        className="min-w-[22px] h-5 px-1.5 rounded-full text-[10px] font-mono tabular-nums font-bold bg-[var(--accent-primary)] text-black flex items-center justify-center shrink-0 shadow-sm"
+                      >
                         {conv.unreadCount}
                       </span>
                     )}
@@ -600,7 +650,7 @@ export const ChatList: React.FC<ChatListProps> = ({
                     onClick={e => handleOpenMenu(e, conv.id)}
                     aria-label="Chat options"
                     className="w-9 h-9 rounded-xl hover:bg-neutral-200/70 dark:hover:bg-black/40 text-neutral-500 dark:text-neutral-400 hover:text-[var(--accent-primary)] flex items-center justify-center transition-all cursor-pointer"
-                    title="Chat Options (Profile, Pin, Mute, Archive, Block, Delete)"
+                    title="Chat Options (Profile, Mark Unread/Read, Pin, Mute, Archive, Block, Delete)"
                   >
                     <MoreVertical className="w-4 h-4" />
                   </button>
@@ -619,6 +669,24 @@ export const ChatList: React.FC<ChatListProps> = ({
                       >
                         <User className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
                         <span className="font-medium">Profile View</span>
+                      </button>
+
+                      {/* Option: Mark as Read / Unread */}
+                      <button
+                        type="button"
+                        onClick={e => {
+                          e.stopPropagation();
+                          setOpenMenuConvId(null);
+                          if (hasUnread) {
+                            chatStore.markAsRead(conv.id, currentUserId);
+                          } else {
+                            chatStore.markAsUnread(conv.id);
+                          }
+                        }}
+                        className="w-full px-3.5 py-2 text-xs flex items-center gap-2.5 hover:bg-[var(--accent-surface)] hover:text-[var(--accent-primary)] text-left transition-colors cursor-pointer"
+                      >
+                        <Bell className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
+                        <span>{hasUnread ? 'Mark as Read' : 'Mark as Unread'}</span>
                       </button>
 
                       {/* Option 2: Pin / Unpin */}

@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme, THEMES } from '../../context/ThemeContext';
 import { ThemeName, ColorMode, PrivacySettings } from '../../types';
 import { chatStore } from '../../lib/chatStore';
+import { AvatarCropModal } from '../common/AvatarCropModal';
 import {
   X,
   Palette,
@@ -21,7 +22,8 @@ import {
   RefreshCw,
   Trash2,
   EyeOff,
-  Mail
+  Mail,
+  Crop
 } from 'lucide-react';
 import { updatePassword } from '../../lib/firebase';
 
@@ -112,6 +114,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [username, setUsername] = useState(userProfile?.username || storedProfile.username || user?.email?.split('@')[0] || 'user');
   const [bio, setBio] = useState(userProfile?.bio || storedProfile.bio || 'Sovereign Account • Encrypted Vault Active');
   const [photoURL, setPhotoURL] = useState(userProfile?.photoURL || storedProfile.photoURL || '');
+  const [cropSourceUrl, setCropSourceUrl] = useState<string | null>(null);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -139,14 +142,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Handle Profile Upload
+  // Handle Profile Upload (opens DP Cropper)
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
     const reader = new FileReader();
     reader.readAsDataURL(file);
     reader.onloadend = () => {
-      setPhotoURL(reader.result as string);
+      setCropSourceUrl(reader.result as string);
     };
   };
 
@@ -233,17 +237,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     } finally {
       setPinLoading(false);
     }
-  };
-
-  const openDeleteAccountFlow = () => {
-    setDeleteEmail(user?.email || '');
-    setDeletePassword('');
-    setDeleteError(null);
-    setDeleteStep('credentials');
-    setActiveTab('pin');
-    setTimeout(() => {
-      deleteSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 80);
   };
 
   const resetDeleteAccountFlow = () => {
@@ -477,69 +470,49 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </div>
 
-              {/* 14 Unique Luxury Colors */}
+              {/* Theme Colors (Swatches only, no written color names) */}
               <div>
-                <div className="flex items-center justify-between mb-2.5">
+                <div className="flex items-center justify-between mb-3">
                   <h3 className="text-xs font-bold text-[var(--text-main)] flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
-                    <span>14 Luxury Colors (Active in Dark & Light)</span>
+                    <span>Theme Colors</span>
                   </h3>
-                  <span className="text-[10px] font-mono text-[var(--accent-primary)] font-bold">
-                    {THEMES.find(t => t.id === theme)?.name}
-                  </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-5 gap-2.5 sm:gap-3">
                   {THEMES.map(th => {
                     const isSelected = theme === th.id;
-                    const colorNames: Record<string, string> = {
-                      rainbow: '🌈 Rainbow Prism (Multi-Color Spectrum)',
-                      gold: 'Imperial Gold',
-                      white: 'Platinum White',
-                      black: 'Obsidian Black',
-                      crimson: 'Blood Crimson',
-                      midnight: 'Midnight Indigo',
-                      forest: 'Dark Forest',
-                      bronze: 'Dark Bronze',
-                      emerald: 'Emerald Green',
-                      ocean: 'Sapphire Blue',
-                      purple: 'Royal Purple',
-                      rose: 'Ruby Red',
-                      sunset: 'Amber Orange',
-                      electric: 'Cyan Blue',
-                      teal: 'Midnight Teal'
-                    };
-                    const displayName = colorNames[th.id] || th.name;
+                    const swatchBg =
+                      th.id === 'rainbow'
+                        ? 'linear-gradient(135deg, #FF0055 0%, #FF7700 25%, #FFDD00 50%, #00CC66 75%, #0099FF 100%)'
+                        : th.primaryHex;
 
                     return (
-                      <div
+                      <button
                         key={th.id}
+                        type="button"
                         onClick={() => setTheme(th.id)}
-                        className={`p-3 rounded-2xl border cursor-pointer transition-all flex items-center justify-between shadow-sm ${
+                        aria-label={`Select color ${th.id}`}
+                        aria-pressed={isSelected}
+                        className={`aspect-square min-h-[48px] rounded-2xl border cursor-pointer transition-all flex items-center justify-center shadow-sm relative ${
                           isSelected
-                            ? 'bg-[var(--accent-surface)] border-[var(--accent-primary)] shadow-md'
-                            : 'bg-[var(--bg-card)] border-neutral-200 dark:border-neutral-800 hover:border-[var(--accent-border)]'
+                            ? 'bg-[var(--accent-surface)] border-2 border-[var(--accent-primary)] scale-105 shadow-md'
+                            : 'bg-[var(--bg-card)] border-neutral-200 dark:border-neutral-800 hover:border-[var(--accent-border)] hover:scale-105'
                         }`}
                       >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div
-                            className="w-7 h-7 rounded-full border-2 border-white/20 shadow-sm shrink-0"
-                            style={{
-                              background: th.id === 'rainbow'
-                                ? 'linear-gradient(135deg, #FF0055 0%, #FF7700 25%, #FFDD00 50%, #00CC66 75%, #0099FF 100%)'
-                                : th.primaryHex
-                            }}
-                          />
-                          <div className="truncate">
-                            <h4 className="text-xs font-bold text-[var(--text-main)] truncate">{displayName}</h4>
-                          </div>
+                        <div
+                          className="w-8 h-8 sm:w-9 sm:h-9 rounded-full border-2 border-white/30 shadow-inner flex items-center justify-center"
+                          style={{ background: swatchBg }}
+                        >
+                          {isSelected && (
+                            <Check
+                              className={`w-4 h-4 stroke-[3] ${
+                                th.id === 'white' ? 'text-black' : th.id === 'black' ? 'text-white' : 'text-black'
+                              }`}
+                            />
+                          )}
                         </div>
-                        {isSelected && (
-                          <div className="w-5 h-5 rounded-full bg-[var(--accent-primary)] text-black flex items-center justify-center shrink-0 ml-1">
-                            <Check className="w-3 h-3 stroke-[3]" />
-                          </div>
-                        )}
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -600,13 +573,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       Upload New DP
                     </button>
                     {photoURL && (
-                      <button
-                        type="button"
-                        onClick={() => setPhotoURL('')}
-                        className="min-h-[38px] py-1.5 px-3 rounded-xl border border-[var(--accent-border)] text-xs text-[var(--text-muted)] hover:text-rose-400 transition-colors"
-                      >
-                        Remove Photo
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setCropSourceUrl(photoURL)}
+                          className="min-h-[38px] py-1.5 px-3 rounded-xl border border-[var(--accent-border)] hover:border-[var(--accent-primary)] text-xs font-semibold text-[var(--text-main)] flex items-center gap-1.5 transition-colors cursor-pointer"
+                        >
+                          <Crop className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
+                          <span>Crop DP</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPhotoURL('')}
+                          className="min-h-[38px] py-1.5 px-3 rounded-xl border border-[var(--accent-border)] text-xs text-[var(--text-muted)] hover:text-rose-400 transition-colors cursor-pointer"
+                        >
+                          Remove Photo
+                        </button>
+                      </>
                     )}
                   </div>
 
@@ -725,24 +708,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   {profileSaving ? 'Saving...' : 'Save Profile Changes'}
                 </button>
               </form>
-
-              {/* Quick Danger Shortcut */}
-              <div className="p-3.5 rounded-2xl bg-[var(--bg-card)] border border-rose-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <h4 className="text-xs font-bold text-rose-600 dark:text-rose-400">Permanent Remove Account</h4>
-                  <p className="text-[10px] text-[var(--text-muted)]">
-                    Permanently delete your Gmail account, messages, and profile data.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={openDeleteAccountFlow}
-                  className="min-h-[40px] py-2 px-3.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/35 text-xs font-semibold text-rose-600 dark:text-rose-400 flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Remove Account</span>
-                </button>
-              </div>
             </div>
           )}
 
@@ -1153,6 +1118,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
         </div>
       </div>
+
+      <AvatarCropModal
+        imageSrc={cropSourceUrl}
+        onConfirm={cropped => {
+          setPhotoURL(cropped);
+          setCropSourceUrl(null);
+        }}
+        onCancel={() => setCropSourceUrl(null)}
+      />
     </div>
   );
 };

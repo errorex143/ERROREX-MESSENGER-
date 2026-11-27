@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { chatStore } from '../../lib/chatStore';
 import { AvatarPreviewModal } from '../common/AvatarPreviewModal';
+import { AvatarCropModal } from '../common/AvatarCropModal';
 import {
   Camera,
   Check,
@@ -13,7 +14,8 @@ import {
   Sparkles,
   Info,
   LogOut,
-  Eye
+  Eye,
+  Crop
 } from 'lucide-react';
 
 const HERALDIC_AVATARS = [
@@ -45,18 +47,20 @@ export const ProfileView: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [isDpPreviewOpen, setIsDpPreviewOpen] = useState(false);
+  const [cropSourceUrl, setCropSourceUrl] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
 
     const reader = new FileReader();
     reader.readAsDataURL(file);
     reader.onloadend = () => {
       const url = reader.result as string;
-      setPhotoURL(url);
+      setCropSourceUrl(url);
     };
   };
 
@@ -172,13 +176,23 @@ export const ProfileView: React.FC = () => {
                   <span>View DP</span>
                 </button>
                 {photoURL && (
-                  <button
-                    type="button"
-                    onClick={handleRemovePhoto}
-                    className="min-h-[40px] py-2 px-3 rounded-xl border border-[var(--accent-border)] text-xs text-[var(--text-muted)] hover:text-rose-400 transition-colors cursor-pointer"
-                  >
-                    Remove Photo
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setCropSourceUrl(photoURL)}
+                      className="min-h-[40px] py-2 px-3 rounded-xl border border-[var(--accent-border)] hover:border-[var(--accent-primary)] text-xs font-semibold text-[var(--text-main)] flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <Crop className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
+                      <span>Crop DP</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRemovePhoto}
+                      className="min-h-[40px] py-2 px-3 rounded-xl border border-[var(--accent-border)] text-xs text-[var(--text-muted)] hover:text-rose-400 transition-colors cursor-pointer"
+                    >
+                      Remove Photo
+                    </button>
+                  </>
                 )}
               </div>
 
@@ -354,6 +368,15 @@ export const ProfileView: React.FC = () => {
             : null
         }
         onClose={() => setIsDpPreviewOpen(false)}
+      />
+
+      <AvatarCropModal
+        imageSrc={cropSourceUrl}
+        onConfirm={cropped => {
+          setPhotoURL(cropped);
+          setCropSourceUrl(null);
+        }}
+        onCancel={() => setCropSourceUrl(null)}
       />
     </div>
   );
