@@ -18,24 +18,17 @@ import {
   Plus,
   Users,
   MessageSquare,
-  Lock,
   Mic,
-  Image as ImageIcon,
   Check,
   CheckCheck,
-  ShieldCheck,
   X,
-  Filter,
   MoreVertical,
   Pin,
   Bell,
   BellOff,
   Archive,
   Ban,
-  Trash2,
-  User,
-  Shield,
-  Sparkles
+  Trash2
 } from 'lucide-react';
 
 interface ChatListProps {
@@ -56,22 +49,9 @@ export const ChatList: React.FC<ChatListProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState<'all' | 'unread' | 'pinned' | 'archived'>('all');
 
-  // 3-dot dropdown menu state
+  // 3-dot dropdown menu & delete confirmation state
   const [openMenuConvId, setOpenMenuConvId] = useState<string | null>(null);
-
-  // Profile View Modal state
-  const [viewingProfileUser, setViewingProfileUser] = useState<{
-    displayName: string;
-    username: string;
-    photoURL?: string;
-    bio?: string;
-    isOnline?: boolean;
-    isGroup?: boolean;
-    conversationId?: string;
-    showOnlineStatus?: boolean;
-    photoHiddenByPrivacy?: boolean;
-    bioHiddenByPrivacy?: boolean;
-  } | null>(null);
+  const [chatToDeleteId, setChatToDeleteId] = useState<string | null>(null);
   const [dpPreviewTarget, setDpPreviewTarget] = useState<AvatarPreviewTarget | null>(null);
 
   const menuRef = useRef<HTMLDivElement>(null);
@@ -233,58 +213,10 @@ export const ChatList: React.FC<ChatListProps> = ({
     setOpenMenuConvId(prev => (prev === convId ? null : convId));
   };
 
-  const handleViewProfile = (e: React.MouseEvent, conv: Conversation) => {
-    e.stopPropagation();
-    setOpenMenuConvId(null);
-    const otherId = conv.participants.find(p => p !== currentUserId) || conv.participants[0];
-    const otherDetail = otherId ? conv.participantDetails?.[otherId] : undefined;
-    const username = getChatUsername(conv);
-    const liveProfile = directoryProfiles.find(
-      p => p.uid === otherId || (p.username && username && p.username.toLowerCase() === username.toLowerCase())
-    );
-    const matchedContact = savedContacts.find(
-      c => (c.username && username && c.username.toLowerCase() === username.toLowerCase()) || c.id === otherId
-    );
-    const allowPhoto =
-      conv.isGroup ||
-      canViewProfilePhoto(currentUserId, otherId, username, liveProfile, otherDetail, savedContacts, friendships);
-    const allowBio =
-      conv.isGroup ||
-      canViewBio(currentUserId, otherId, username, liveProfile, otherDetail, savedContacts, friendships);
-    const allowOnline =
-      conv.isGroup ||
-      canViewLastSeen(currentUserId, otherId, username, liveProfile, otherDetail, savedContacts, friendships);
-    const isOnlineNow = conv.isGroup
-      ? true
-      : liveProfile
-      ? isUserCurrentlyOnline(liveProfile)
-      : matchedContact
-      ? matchedContact.isOnline === true
-      : false;
-    setViewingProfileUser({
-      displayName: getChatTitle(conv),
-      username,
-      photoURL: allowPhoto ? getChatAvatar(conv) || undefined : undefined,
-      bio: allowBio ? getChatBio(conv) : undefined,
-      isOnline: allowOnline ? isOnlineNow : false,
-      isGroup: conv.isGroup,
-      conversationId: conv.id,
-      showOnlineStatus: allowOnline,
-      photoHiddenByPrivacy: !allowPhoto,
-      bioHiddenByPrivacy: !allowBio
-    });
-  };
-
   const handleTogglePin = (e: React.MouseEvent, convId: string) => {
     e.stopPropagation();
     setOpenMenuConvId(null);
     chatStore.togglePin(convId);
-  };
-
-  const handleToggleMute = (e: React.MouseEvent, convId: string) => {
-    e.stopPropagation();
-    setOpenMenuConvId(null);
-    chatStore.toggleMute(convId);
   };
 
   const handleToggleArchive = (e: React.MouseEvent, convId: string) => {
@@ -293,18 +225,16 @@ export const ChatList: React.FC<ChatListProps> = ({
     chatStore.toggleArchive(convId);
   };
 
-  const handleToggleBlock = (e: React.MouseEvent, convId: string) => {
+  const handleRequestDeleteChat = (e: React.MouseEvent, convId: string) => {
     e.stopPropagation();
     setOpenMenuConvId(null);
-    chatStore.toggleBlock(convId);
+    setChatToDeleteId(convId);
   };
 
-  const handleDeleteChat = (e: React.MouseEvent, convId: string) => {
-    e.stopPropagation();
-    setOpenMenuConvId(null);
-    if (window.confirm('Are you sure you want to delete this chat and all message history?')) {
-      chatStore.deleteConversation(convId);
-    }
+  const confirmDeleteChat = () => {
+    if (!chatToDeleteId) return;
+    chatStore.deleteConversation(chatToDeleteId);
+    setChatToDeleteId(null);
   };
 
   const unreadChatsCount = conversations.filter(c => !c.isArchived && c.unreadCount && c.unreadCount > 0).length;
@@ -429,7 +359,7 @@ export const ChatList: React.FC<ChatListProps> = ({
       </div>
 
       {/* Conversations List with 3-Dot Options on Every Chat User */}
-      <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-neutral-200/60 dark:divide-white/[0.03]">
+      <div className="flex-1 min-h-0 overflow-y-auto pb-28 divide-y divide-neutral-200/60 dark:divide-white/[0.03]">
         {sortedConversations.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-8 text-center text-neutral-500">
             <MessageSquare className="w-8 h-8 mb-2 opacity-30 text-[var(--accent-primary)]" />
@@ -503,6 +433,8 @@ export const ChatList: React.FC<ChatListProps> = ({
               <div
                 key={conv.id}
                 className={`w-full p-3.5 flex items-start gap-3 transition-colors text-left relative group cursor-pointer ${
+                  isMenuOpen ? 'z-40 ' : ''
+                }${
                   isActive
                     ? 'bg-[var(--accent-surface)]'
                     : hasUnread
@@ -643,14 +575,17 @@ export const ChatList: React.FC<ChatListProps> = ({
                   </div>
                 </div>
 
-                {/* 3-DOT ACTION BUTTON (Required: 3-dot on every chat user) */}
-                <div className="absolute right-2 top-3 z-10" ref={isMenuOpen ? menuRef : undefined}>
+                {/* 3-DOT ACTION BUTTON (Outer chat list: Archive Chat & Delete Chat + Pin/Unread) */}
+                <div
+                  className={`absolute right-2 top-3 ${isMenuOpen ? 'z-50' : 'z-10'}`}
+                  ref={isMenuOpen ? menuRef : undefined}
+                >
                   <button
                     type="button"
                     onClick={e => handleOpenMenu(e, conv.id)}
                     aria-label="Chat options"
                     className="w-9 h-9 rounded-xl hover:bg-neutral-200/70 dark:hover:bg-black/40 text-neutral-500 dark:text-neutral-400 hover:text-[var(--accent-primary)] flex items-center justify-center transition-all cursor-pointer"
-                    title="Chat Options (Profile, Mark Unread/Read, Pin, Mute, Archive, Block, Delete)"
+                    title="Archive or Delete Chat"
                   >
                     <MoreVertical className="w-4 h-4" />
                   </button>
@@ -661,17 +596,24 @@ export const ChatList: React.FC<ChatListProps> = ({
                       className="absolute right-0 top-9 w-48 max-w-[calc(100vw-2rem)] rounded-2xl bg-[var(--bg-sidebar)] border border-[var(--accent-border)] gold-glow shadow-2xl py-1.5 z-50 text-[var(--text-main)]"
                       onClick={e => e.stopPropagation()}
                     >
-                      {/* Option 1: Profile View */}
                       <button
                         type="button"
-                        onClick={e => handleViewProfile(e, conv)}
-                        className="w-full px-3.5 py-2 text-xs flex items-center gap-2.5 hover:bg-[var(--accent-surface)] hover:text-[var(--accent-primary)] text-left transition-colors cursor-pointer"
+                        onClick={e => handleToggleArchive(e, conv.id)}
+                        className="w-full px-3.5 py-2.5 text-xs flex items-center gap-2.5 hover:bg-[var(--accent-surface)] hover:text-[var(--accent-primary)] text-left transition-colors cursor-pointer font-medium"
                       >
-                        <User className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
-                        <span className="font-medium">Profile View</span>
+                        <Archive className="w-4 h-4 text-[var(--accent-primary)] shrink-0" />
+                        <span>{conv.isArchived ? 'Unarchive Chat' : 'Archive Chat'}</span>
                       </button>
 
-                      {/* Option: Mark as Read / Unread */}
+                      <button
+                        type="button"
+                        onClick={e => handleTogglePin(e, conv.id)}
+                        className="w-full px-3.5 py-2 text-xs flex items-center gap-2.5 hover:bg-[var(--accent-surface)] hover:text-[var(--accent-primary)] text-left transition-colors cursor-pointer"
+                      >
+                        <Pin className="w-3.5 h-3.5 text-[var(--accent-primary)] shrink-0" />
+                        <span>{conv.isPinned ? 'Unpin Chat' : 'Pin Chat'}</span>
+                      </button>
+
                       <button
                         type="button"
                         onClick={e => {
@@ -685,68 +627,18 @@ export const ChatList: React.FC<ChatListProps> = ({
                         }}
                         className="w-full px-3.5 py-2 text-xs flex items-center gap-2.5 hover:bg-[var(--accent-surface)] hover:text-[var(--accent-primary)] text-left transition-colors cursor-pointer"
                       >
-                        <Bell className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
+                        <Bell className="w-3.5 h-3.5 text-[var(--accent-primary)] shrink-0" />
                         <span>{hasUnread ? 'Mark as Read' : 'Mark as Unread'}</span>
                       </button>
 
-                      {/* Option 2: Pin / Unpin */}
+                      <div className="h-px bg-neutral-200 dark:bg-white/10 my-1" />
+
                       <button
                         type="button"
-                        onClick={e => handleTogglePin(e, conv.id)}
-                        className="w-full px-3.5 py-2 text-xs flex items-center gap-2.5 hover:bg-[var(--accent-surface)] hover:text-[var(--accent-primary)] text-left transition-colors cursor-pointer"
+                        onClick={e => handleRequestDeleteChat(e, conv.id)}
+                        className="w-full px-3.5 py-2.5 text-xs flex items-center gap-2.5 hover:bg-rose-500/15 text-rose-500 dark:text-rose-400 text-left transition-colors cursor-pointer font-semibold"
                       >
-                        <Pin className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
-                        <span>{conv.isPinned ? 'Unpin Chat' : 'Pin Chat'}</span>
-                      </button>
-
-                      {/* Option 3: Notification Mute / Unmute */}
-                      <button
-                        type="button"
-                        onClick={e => handleToggleMute(e, conv.id)}
-                        className="w-full px-3.5 py-2 text-xs flex items-center gap-2.5 hover:bg-[var(--accent-surface)] hover:text-[var(--accent-primary)] text-left transition-colors cursor-pointer"
-                      >
-                        {conv.isMuted ? (
-                          <>
-                            <Bell className="w-3.5 h-3.5 text-emerald-400" />
-                            <span>Unmute Notifications</span>
-                          </>
-                        ) : (
-                          <>
-                            <BellOff className="w-3.5 h-3.5 text-amber-400" />
-                            <span>Mute Notifications</span>
-                          </>
-                        )}
-                      </button>
-
-                      {/* Option 4: Archive / Unarchive */}
-                      <button
-                        type="button"
-                        onClick={e => handleToggleArchive(e, conv.id)}
-                        className="w-full px-3.5 py-2 text-xs flex items-center gap-2.5 hover:bg-[var(--accent-surface)] hover:text-[var(--accent-primary)] text-left transition-colors cursor-pointer"
-                      >
-                        <Archive className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
-                        <span>{conv.isArchived ? 'Unarchive Chat' : 'Archive Chat'}</span>
-                      </button>
-
-                      <div className="h-px bg-white/10 my-1" />
-
-                      {/* Option 5: Block / Unblock */}
-                      <button
-                        type="button"
-                        onClick={e => handleToggleBlock(e, conv.id)}
-                        className="w-full px-3.5 py-2 text-xs flex items-center gap-2.5 hover:bg-rose-950/40 text-rose-400 hover:text-rose-300 text-left transition-colors cursor-pointer"
-                      >
-                        <Ban className="w-3.5 h-3.5 text-rose-500" />
-                        <span>{conv.isBlocked ? 'Unblock User' : 'Block User'}</span>
-                      </button>
-
-                      {/* Option 6: Delete Chat */}
-                      <button
-                        type="button"
-                        onClick={e => handleDeleteChat(e, conv.id)}
-                        className="w-full px-3.5 py-2 text-xs flex items-center gap-2.5 hover:bg-rose-950/40 text-rose-400 hover:text-rose-300 text-left transition-colors cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                        <Trash2 className="w-4 h-4 shrink-0" />
                         <span>Delete Chat</span>
                       </button>
                     </div>
@@ -758,123 +650,43 @@ export const ChatList: React.FC<ChatListProps> = ({
         )}
       </div>
 
-      {/* USER PROFILE VIEW MODAL */}
-      {viewingProfileUser && (
+      {/* Delete Chat Confirmation Modal */}
+      {chatToDeleteId && (
         <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md overflow-y-auto"
-          onClick={() => setViewingProfileUser(null)}
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm"
+          onClick={() => setChatToDeleteId(null)}
         >
           <div
-            className="w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl bg-[var(--bg-sidebar)] border-t sm:border border-[var(--accent-border)] gold-glow shadow-2xl p-5 sm:p-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-[var(--text-main)] relative max-h-[92dvh] overflow-y-auto"
             onClick={e => e.stopPropagation()}
+            className="w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl bg-[var(--bg-sidebar)] border-t sm:border border-[var(--accent-border)] p-5 sm:p-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] gold-glow shadow-2xl space-y-4 text-[var(--text-main)]"
           >
-            <div className="sm:hidden w-10 h-1 rounded-full bg-neutral-400/40 mx-auto mb-3" />
-
-            {/* Close Button */}
-            <button
-              type="button"
-              onClick={() => setViewingProfileUser(null)}
-              aria-label="Close profile"
-              className="absolute right-4 top-4 w-9 h-9 rounded-full bg-neutral-200/60 dark:bg-white/5 hover:bg-neutral-300 dark:hover:bg-white/10 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            {/* Profile Avatar with Gold Aura (Clickable to open full-size DP) */}
-            <div className="flex flex-col items-center text-center">
+            <div className="sm:hidden w-10 h-1 rounded-full bg-neutral-400/40 mx-auto -mt-1" />
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-500 shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-[var(--text-main)]">Delete Chat?</h3>
+                <p className="text-xs text-[var(--text-muted)]">
+                  Delete this conversation and its message history from your device?
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2.5 pt-1">
               <button
                 type="button"
-                onClick={() =>
-                  setDpPreviewTarget({
-                    displayName: viewingProfileUser.displayName,
-                    username: viewingProfileUser.username,
-                    photoURL: viewingProfileUser.photoURL || null,
-                    bio: viewingProfileUser.bio || null,
-                    isOnline: viewingProfileUser.isOnline,
-                    showOnlineStatus: viewingProfileUser.showOnlineStatus,
-                    photoHiddenByPrivacy: viewingProfileUser.photoHiddenByPrivacy,
-                    bioHiddenByPrivacy: viewingProfileUser.bioHiddenByPrivacy
-                  })
-                }
-                className="relative mb-3 cursor-pointer hover:scale-105 transition-transform"
-                title="Tap to open full-size DP"
+                onClick={() => setChatToDeleteId(null)}
+                className="flex-1 min-h-[44px] py-2.5 rounded-xl border border-[var(--accent-border)] text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-main)] cursor-pointer"
               >
-                <div className="w-24 h-24 rounded-full bg-neutral-200 dark:bg-neutral-900 border-2 border-[var(--accent-primary)] flex items-center justify-center overflow-hidden shadow-xl gold-glow-sm">
-                  {viewingProfileUser.photoURL ? (
-                    <img
-                      src={viewingProfileUser.photoURL}
-                      alt={viewingProfileUser.displayName}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <span className="text-3xl font-bold font-display text-[var(--accent-primary)]">
-                      {viewingProfileUser.displayName.slice(0, 1).toUpperCase()}
-                    </span>
-                  )}
-                </div>
-                {viewingProfileUser.showOnlineStatus !== false && (
-                  <span
-                    className={`w-4 h-4 rounded-full border-2 border-[var(--bg-sidebar)] absolute bottom-1 right-1 shadow-md ${
-                      viewingProfileUser.isOnline ? 'bg-emerald-500' : 'bg-neutral-500'
-                    }`}
-                    title={viewingProfileUser.isOnline ? 'Online' : 'Offline'}
-                  />
-                )}
+                Cancel
               </button>
-
-              {/* Display Name & Badge */}
-              <h2 className="text-base font-bold text-[var(--text-main)] flex items-center gap-1.5">
-                <span>{viewingProfileUser.displayName}</span>
-                <Sparkles className="w-4 h-4 text-[var(--accent-primary)] inline" />
-              </h2>
-              <span className="text-xs font-mono text-[var(--accent-primary)] mt-0.5">
-                @{viewingProfileUser.username}
-              </span>
-
-              {/* Bio & Status */}
-              <div className="w-full mt-4 p-3.5 rounded-2xl bg-[var(--bg-card)] border border-[var(--accent-border)] text-left space-y-2">
-                <div>
-                  <span className="text-[10px] uppercase font-mono tracking-wider text-[var(--text-muted)]">
-                    Bio / Status
-                  </span>
-                  <p className={`text-xs mt-0.5 leading-relaxed ${viewingProfileUser.bioHiddenByPrivacy ? 'text-[var(--text-muted)] italic' : 'text-[var(--text-main)]'}`}>
-                    {viewingProfileUser.bioHiddenByPrivacy
-                      ? 'Bio hidden by privacy settings'
-                      : viewingProfileUser.bio || 'Available on ERROREX'}
-                  </p>
-                </div>
-
-                <div className="pt-2 border-t border-neutral-200/70 dark:border-white/5 flex items-center justify-between text-xs">
-                  <span className="text-[var(--text-muted)]">Security Protocol:</span>
-                  <span className="text-emerald-600 dark:text-emerald-400 font-mono font-semibold flex items-center gap-1">
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>AES-256 Verified</span>
-                  </span>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="w-full mt-5 flex gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (viewingProfileUser.conversationId) {
-                      onSelectConversation(viewingProfileUser.conversationId);
-                    }
-                    setViewingProfileUser(null);
-                  }}
-                  className="flex-1 min-h-[44px] py-2.5 rounded-xl gold-button-accent text-xs font-bold uppercase tracking-wider text-black cursor-pointer shadow-md"
-                >
-                  Send Message
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewingProfileUser(null)}
-                  className="min-h-[44px] py-2.5 px-4 rounded-xl bg-[var(--bg-card)] border border-[var(--accent-border)] hover:border-[var(--accent-primary)] text-xs font-semibold text-[var(--text-main)] cursor-pointer"
-                >
-                  Close
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={confirmDeleteChat}
+                className="flex-1 min-h-[44px] py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold cursor-pointer"
+              >
+                Delete Chat
+              </button>
             </div>
           </div>
         </div>

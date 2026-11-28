@@ -14,9 +14,24 @@ import {
 import { useTheme, THEMES } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { EmojiKeyboard, LIVE_STICKERS } from '../common/EmojiKeyboard';
-import { parseStickerToken, StickerIllustration } from '../common/CustomStickers';
+import { parseStickerToken, StickerIllustration, toStickerToken } from '../common/CustomStickers';
+import { parseCustomStickerMessage, encodeCustomStickerMessage } from '../../lib/customStickerStore';
+import { CreatedStickerView } from '../common/CreatedStickerView';
+import { StickerSaveModal, ChatStickerTapTarget } from '../common/StickerSaveModal';
+import { StickerCreatorModal, StickerCreatorDraft } from '../common/StickerCreatorModal';
 import { AvatarPreviewModal, AvatarPreviewTarget } from '../common/AvatarPreviewModal';
 import { AvatarCropModal } from '../common/AvatarCropModal';
+import {
+  WALLPAPER_PRESETS,
+  ChatWallpaperConfig,
+  getChatWallpaper,
+  setChatWallpaper,
+  setGlobalChatWallpaper,
+  clearChatWallpaper,
+  clearGlobalChatWallpaper,
+  compressWallpaperImage,
+  isImageWallpaper
+} from '../../lib/chatWallpaper';
 import {
   Send,
   Smile,
@@ -36,8 +51,6 @@ import {
   Volume2,
   Info,
   User,
-  AtSign,
-  FileText,
   Settings,
   Palette,
   Eye,
@@ -53,7 +66,11 @@ import {
   AlertTriangle,
   UserPlus,
   Clock,
-  Crop
+  Crop,
+  MoreVertical,
+  Ban,
+  Upload,
+  RotateCcw
 } from 'lucide-react';
 
 const HERALDIC_AVATARS = [
@@ -230,14 +247,114 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   // Delete message modal state (Delete for everyone vs Delete for me)
   const [messageToDelete, setMessageToDelete] = useState<ChatMessage | null>(null);
   const [dpPreviewTarget, setDpPreviewTarget] = useState<AvatarPreviewTarget | null>(null);
+  const [stickerTapTarget, setStickerTapTarget] = useState<ChatStickerTapTarget | null>(null);
+  const [remixStickerDraft, setRemixStickerDraft] = useState<StickerCreatorDraft | null>(null);
 
   // WhatsApp Privacy settings inside in-chat settings
   const [privacy, setPrivacy] = useState<PrivacySettings>(() => chatStore.getPrivacySettings());
   const [privacySavedNotice, setPrivacySavedNotice] = useState(false);
 
-  // Chat-specific options
-  const [isMuted, setIsMuted] = useState(false);
+  // Chat-specific options & in-chat 3-dot menu + Wallpaper modal state
+  const [isChatMenuOpen, setIsChatMenuOpen] = useState(false);
+  const [isWallpaperModalOpen, setIsWallpaperModalOpen] = useState(false);
+  const [isClearChatModalOpen, setIsClearChatModalOpen] = useState(false);
   const [clearChatConfirm, setClearChatConfirm] = useState(false);
+  const [wallpaperConfig, setWallpaperConfig] = useState<ChatWallpaperConfig | null>(() =>
+    getChatWallpaper(conversation.id)
+  );
+  const [wallpaperDraft, setWallpaperDraft] = useState<ChatWallpaperConfig>(() =>
+    getChatWallpaper(conversation.id) || {
+      url: WALLPAPER_PRESETS[0].value,
+      dimOpacity: WALLPAPER_PRESETS[0].dimOpacity
+    }
+  );
+  const [wallpaperError, setWallpaperError] = useState<string | null>(null);
+  const [isProcessingWallpaper, setIsProcessingWallpaper] = useState(false);
+  const [wallpaperCropSrc, setWallpaperCropSrc] = useState<string | null>(null);
+  const chatMenuRef = useRef<HTMLDivElement>(null);
+  const wallpaperFileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const saved = getChatWallpaper(conversation.id);
+    setWallpaperConfig(saved);
+    setWallpaperDraft(
+      saved || {
+        url: WALLPAPER_PRESETS[0].value,
+        dimOpacity: WALLPAPER_PRESETS[0].dimOpacity
+      }
+    );
+    setIsChatMenuOpen(false);
+  }, [conversation.id]);
+
+  useEffect(() => {
+    if (!isChatMenuOpen) return;
+    const handleOutside = (e: PointerEvent) => {
+      if (chatMenuRef.current && !chatMenuRef.current.contains(e.target as Node)) {
+        setIsChatMenuOpen(false);
+      }
+    };
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsChatMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', handleOutside);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('pointerdown', handleOutside);
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, [isChatMenuOpen]);
+
+  const handleOpenWallpaperModal = () => {
+    const current = getChatWallpaper(conversation.id);
+    setWallpaperDraft(
+      current || {
+        url: WALLPAPER_PRESETS[0].value,
+        dimOpacity: WALLPAPER_PRESETS[0].dimOpacity
+      }
+    );
+    setWallpaperError(null);
+    setIsChatMenuOpen(false);
+    setIsWallpaperModalOpen(true);
+  };
+
+  const handleWallpaperFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setWallpaperError(null);
+    setIsProcessingWallpaper(true);
+    try {
+      const compressed = await compressWallpaperImage(file);
+      setWallpaperCropSrc(compressed);
+    } catch {
+      setWallpaperError('Could not load that image. Please try another photo.');
+    } finally {
+      setIsProcessingWallpaper(false);
+    }
+  };
+
+  const handleApplyWallpaper = (scope: 'chat' | 'all') => {
+    try {
+      setWallpaperError(null);
+      if (scope === 'all') {
+        setGlobalChatWallpaper(wallpaperDraft);
+      } else {
+        setChatWallpaper(conversation.id, wallpaperDraft);
+      }
+      setWallpaperConfig({ ...wallpaperDraft });
+      setIsWallpaperModalOpen(false);
+    } catch {
+      setWallpaperError('Storage limit reached for large photos. Try a smaller photo or a preset wallpaper.');
+    }
+  };
+
+  const handleResetWallpaper = () => {
+    clearChatWallpaper(conversation.id);
+    clearGlobalChatWallpaper();
+    setWallpaperConfig(null);
+    setWallpaperError(null);
+    setIsWallpaperModalOpen(false);
+  };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -286,6 +403,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     chatStore.clearMessages(conversation.id);
     setMessages([]);
     setClearChatConfirm(false);
+    setIsClearChatModalOpen(false);
   };
 
   // Voice recording state
@@ -670,7 +788,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   return (
     <div className="flex-1 min-w-0 h-full flex flex-col bg-[var(--bg-window)] text-[var(--text-main)] relative select-none transition-colors">
       {/* Top Header: Contact Details, Live Net Status, and Encrypted Badge */}
-      <div className="py-2.5 px-3 sm:px-4 bg-[var(--bg-sidebar)] border-b border-[var(--accent-border)] flex items-center justify-between gap-2 z-10 shrink-0 shadow-sm">
+      <div className="py-2.5 px-3 sm:px-4 bg-[var(--bg-sidebar)] border-b border-[var(--accent-border)] flex items-center justify-between gap-2 relative z-30 shrink-0 shadow-sm">
         <div
           onClick={() => setIsContactInfoOpen(true)}
           className="flex items-center gap-2.5 sm:gap-3 cursor-pointer group flex-1 min-w-0"
@@ -750,8 +868,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           </div>
         </div>
 
-        {/* Clean Header: Encrypted Badge */}
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Header Right: Encrypted Badge + In-Chat 3-Dot Menu (Wallpaper, Clear Chat, Block, Mute, Info) */}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <button
             type="button"
             onClick={() => setIsContactInfoOpen(true)}
@@ -762,6 +880,101 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             <ShieldCheck className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
             <span className="hidden sm:inline">Encrypted</span>
           </button>
+
+          <div className="relative" ref={chatMenuRef}>
+            <button
+              type="button"
+              onClick={() => setIsChatMenuOpen(prev => !prev)}
+              aria-label="Chat options menu"
+              aria-expanded={isChatMenuOpen}
+              className={`min-w-[40px] min-h-[40px] rounded-xl border flex items-center justify-center transition-all shadow-sm cursor-pointer ${
+                isChatMenuOpen
+                  ? 'bg-[var(--accent-surface)] border-[var(--accent-primary)] text-[var(--accent-primary)]'
+                  : 'bg-[var(--bg-card)] border-[var(--accent-border)] text-[var(--text-main)] hover:border-[var(--accent-primary)] hover:text-[var(--accent-primary)]'
+              }`}
+              title="Chat Options (Wallpaper, Clear Chat, Block)"
+            >
+              <MoreVertical className="w-4 h-4" />
+            </button>
+
+            {isChatMenuOpen && (
+              <div
+                onClick={e => e.stopPropagation()}
+                className="absolute right-0 top-12 w-52 max-w-[calc(100vw-2rem)] rounded-2xl bg-[var(--bg-sidebar)] border border-[var(--accent-border)] gold-glow shadow-2xl py-1.5 z-50 text-[var(--text-main)]"
+              >
+                <button
+                  type="button"
+                  onClick={handleOpenWallpaperModal}
+                  className="w-full px-3.5 py-2.5 text-xs flex items-center gap-2.5 hover:bg-[var(--accent-surface)] hover:text-[var(--accent-primary)] text-left transition-colors cursor-pointer font-medium"
+                >
+                  <ImageIcon className="w-4 h-4 text-[var(--accent-primary)] shrink-0" />
+                  <span>Chat Wallpaper</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsChatMenuOpen(false);
+                    setIsClearChatModalOpen(true);
+                  }}
+                  className="w-full px-3.5 py-2.5 text-xs flex items-center gap-2.5 hover:bg-[var(--accent-surface)] hover:text-[var(--accent-primary)] text-left transition-colors cursor-pointer font-medium"
+                >
+                  <Trash2 className="w-4 h-4 text-[var(--accent-primary)] shrink-0" />
+                  <span>Clear Chat</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    chatStore.toggleMute(conversation.id);
+                    setIsChatMenuOpen(false);
+                  }}
+                  className="w-full px-3.5 py-2.5 text-xs flex items-center gap-2.5 hover:bg-[var(--accent-surface)] hover:text-[var(--accent-primary)] text-left transition-colors cursor-pointer"
+                >
+                  {conversation.isMuted ? (
+                    <>
+                      <Bell className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>Unmute Notifications</span>
+                    </>
+                  ) : (
+                    <>
+                      <BellOff className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>Mute Notifications</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsChatMenuOpen(false);
+                    setIsContactInfoOpen(true);
+                  }}
+                  className="w-full px-3.5 py-2.5 text-xs flex items-center gap-2.5 hover:bg-[var(--accent-surface)] hover:text-[var(--accent-primary)] text-left transition-colors cursor-pointer"
+                >
+                  <Info className="w-4 h-4 text-[var(--accent-primary)] shrink-0" />
+                  <span>Contact Info</span>
+                </button>
+
+                {!isVaultOrGroup && (
+                  <>
+                    <div className="h-px bg-neutral-200 dark:bg-white/10 my-1" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        chatStore.toggleBlock(conversation.id);
+                        setIsChatMenuOpen(false);
+                      }}
+                      className="w-full px-3.5 py-2.5 text-xs flex items-center gap-2.5 hover:bg-rose-500/15 text-rose-500 dark:text-rose-400 text-left transition-colors cursor-pointer font-semibold"
+                    >
+                      <Ban className="w-4 h-4 shrink-0" />
+                      <span>{conversation.isBlocked ? 'Unblock User' : 'Block User'}</span>
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -772,21 +985,49 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         </div>
       )}
 
-      {/* Messages Scroll Area */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3.5 chat-scroll-area">
-        {/* Encryption Safety Banner */}
-        <div className="max-w-md mx-auto my-1 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-center">
-          <p className="text-[10px] text-amber-500 dark:text-amber-400 flex items-center justify-center gap-1.5 font-mono">
-            <Lock className="w-3 h-3 shrink-0" />
-            <span>Messages and voice memos are end-to-end encrypted. No one outside of this chat can read or listen to them.</span>
-          </p>
-        </div>
+      {/* Messages Wrapper with Optional Custom Photo / Gradient Wallpaper */}
+      <div className="flex-1 min-h-0 relative flex flex-col overflow-hidden">
+        {wallpaperConfig && (
+          <>
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 z-0 bg-cover bg-center transition-all duration-300"
+              style={
+                isImageWallpaper(wallpaperConfig.url)
+                  ? { backgroundImage: `url("${wallpaperConfig.url}")` }
+                  : { background: wallpaperConfig.url }
+              }
+            />
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 z-0 transition-opacity duration-200"
+              style={{ backgroundColor: `rgba(0, 0, 0, ${wallpaperConfig.dimOpacity})` }}
+            />
+          </>
+        )}
+
+        {/* Messages Scroll Area */}
+        <div className="relative z-10 flex-1 min-h-0 overflow-y-auto p-4 space-y-3.5 chat-scroll-area">
+          {/* Encryption Safety Banner */}
+          <div className="max-w-md mx-auto my-1 p-2.5 rounded-xl bg-amber-500/15 backdrop-blur-sm border border-amber-500/25 text-center">
+            <p className="text-[10px] text-amber-500 dark:text-amber-400 flex items-center justify-center gap-1.5 font-mono">
+              <Lock className="w-3 h-3 shrink-0" />
+              <span>Messages and voice memos are end-to-end encrypted. No one outside of this chat can read or listen to them.</span>
+            </p>
+          </div>
 
         {messages
           .filter(msg => !msg.deletedFor?.includes(currentUserId))
           .map(msg => {
             const isOwn = msg.senderId === currentUserId;
             const isMsgDeleted = Boolean(msg.isDeleted || msg.deletedForEveryone);
+            const trimmedText = (msg.text || '').trim();
+            const parsedCustomSticker = !isMsgDeleted ? parseStickerToken(trimmedText) : null;
+            const parsedCreatedSticker = !isMsgDeleted ? parseCustomStickerMessage(trimmedText) : null;
+            const isFloatingSticker = Boolean(
+              !isMsgDeleted &&
+                (parsedCustomSticker || (parsedCreatedSticker && msg.mediaUrl))
+            );
             return (
               <div
                 key={msg.id}
@@ -805,18 +1046,22 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   </div>
                 )}
 
-                {/* Message Bubble with Sender @username and DP identification */}
+                {/* Message Bubble (transparent/borderless for pure stickers) */}
                 <div
-                  className={`relative max-w-[88%] sm:max-w-md lg:max-w-lg xl:max-w-xl p-3 rounded-2xl text-[13px] leading-relaxed shadow-md ${
-                    isMsgDeleted
-                      ? 'bg-[var(--bg-card)] border border-[var(--accent-border)] text-[var(--text-muted)] italic rounded-2xl'
-                      : isOwn
-                      ? 'bg-gradient-to-br from-[var(--accent-surface)] to-[var(--bg-card)] border border-[var(--accent-border)] text-[var(--text-main)] rounded-br-xs'
-                      : 'bg-[var(--bg-bubble-in)] border border-[var(--border-bubble-in)] text-[var(--text-main)] rounded-bl-xs'
+                  className={`relative max-w-[88%] sm:max-w-md lg:max-w-lg xl:max-w-xl text-[13px] leading-relaxed ${
+                    isFloatingSticker
+                      ? 'p-1 bg-transparent'
+                      : `p-3 rounded-2xl shadow-md ${
+                          isMsgDeleted
+                            ? 'bg-[var(--bg-card)] border border-[var(--accent-border)] text-[var(--text-muted)] italic rounded-2xl'
+                            : isOwn
+                            ? 'bg-gradient-to-br from-[var(--accent-surface)] to-[var(--bg-card)] border border-[var(--accent-border)] text-[var(--text-main)] rounded-br-xs'
+                            : 'bg-[var(--bg-bubble-in)] border border-[var(--border-bubble-in)] text-[var(--text-main)] rounded-bl-xs'
+                        }`
                   }`}
                 >
                   {/* Incoming message: Show Sender's username tag */}
-                  {!isOwn && !isMsgDeleted && (
+                  {!isOwn && !isMsgDeleted && !isFloatingSticker && (
                     <div className="mb-1 flex items-center gap-1 text-[10px] font-mono text-[var(--accent-primary)] font-bold">
                       <span>@{chatUsername}</span>
                     </div>
@@ -828,6 +1073,43 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       <span className="text-sm opacity-70">🚫</span>
                       <span className="text-xs">This message was deleted</span>
                     </div>
+                  ) : parsedCreatedSticker && msg.mediaUrl ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setStickerTapTarget({
+                          type: 'media',
+                          kind: parsedCreatedSticker.kind,
+                          mediaUrl: msg.mediaUrl!,
+                          meta: parsedCreatedSticker.meta,
+                          senderLabel: isOwn ? 'You' : `@${chatUsername}`
+                        })
+                      }
+                      className="py-1 flex flex-col items-center cursor-pointer hover:scale-[1.03] active:scale-95 transition-transform focus:outline-none"
+                      title="Tap to save sticker to keyboard"
+                    >
+                      <CreatedStickerView
+                        kind={parsedCreatedSticker.kind}
+                        mediaUrl={msg.mediaUrl}
+                        meta={parsedCreatedSticker.meta}
+                        size="md"
+                      />
+                    </button>
+                  ) : parsedCustomSticker ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setStickerTapTarget({
+                          type: 'builtin',
+                          sticker: parsedCustomSticker,
+                          senderLabel: isOwn ? 'You' : `@${chatUsername}`
+                        })
+                      }
+                      className="py-1 flex flex-col items-center cursor-pointer hover:scale-[1.03] active:scale-95 transition-transform focus:outline-none"
+                      title="Tap to save sticker to keyboard"
+                    >
+                      <StickerIllustration sticker={parsedCustomSticker} size="lg" />
+                    </button>
                   ) : (
                     <>
                       {/* Media Attachment if present */}
@@ -858,18 +1140,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         </div>
                       )}
 
-                      {/* Text or Custom Sticker Content */}
+                      {/* Text or Live Emoji Content */}
                       {msg.mediaType !== 'audio' && (() => {
-                        const trimmed = msg.text.trim();
-                        const customSticker = parseStickerToken(trimmed);
-                        if (customSticker) {
-                          return (
-                            <div className="py-1 flex flex-col items-center">
-                              <StickerIllustration sticker={customSticker} size="lg" />
-                            </div>
-                          );
-                        }
-                        const matchedLiveSticker = LIVE_STICKERS.find(s => s.emoji === trimmed);
+                        const matchedLiveSticker = LIVE_STICKERS.find(s => s.emoji === trimmedText);
                         if (matchedLiveSticker) {
                           return (
                             <div className="py-1 flex items-center gap-2">
@@ -1004,6 +1277,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           );
         })}
         <div ref={messagesEndRef} />
+        </div>
       </div>
 
       {/* Quote reply banner */}
@@ -1059,6 +1333,23 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               stickerToken,
               undefined,
               'none',
+              reply
+            );
+            setReplyingTo(null);
+            setShowEmojiPicker(false);
+          }}
+          onSendMediaSticker={({ text, mediaUrl, mediaType }) => {
+            if (conversation.isBlocked || !isAcceptedFriend) return;
+            const reply = replyingTo
+              ? { id: replyingTo.id, text: replyingTo.text.slice(0, 80) }
+              : undefined;
+            chatStore.sendMessage(
+              conversation.id,
+              currentUserId,
+              currentUserName || 'User',
+              text,
+              mediaUrl,
+              mediaType,
               reply
             );
             setReplyingTo(null);
@@ -1337,7 +1628,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     Chat & App Settings
                   </h2>
                   <p className="text-[11px] text-[var(--text-muted)]">
-                    Profile, Privacy, 3 modes & 14 themes
+                    Profile, Privacy, Modes & Theme Colors
                   </p>
                 </div>
               </div>
@@ -1390,7 +1681,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 }`}
               >
                 <Palette className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
-                <span>Themes & 8 Colors</span>
+                <span>Theme Colors</span>
               </button>
 
               <button
@@ -1548,14 +1839,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
                     {/* Bio / About */}
                     <div>
-                      <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">
-                        About / Bio Status (Changeable)
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-semibold text-[var(--text-main)]">
+                          About / Bio Status (Changeable)
+                        </label>
+                        <span className="text-[10px] text-neutral-500 font-mono tabular-nums">
+                          {myBio.length}/80
+                        </span>
+                      </div>
                       <textarea
                         rows={2}
+                        maxLength={80}
                         value={myBio}
-                        onChange={e => setMyBio(e.target.value)}
-                        placeholder="Tell contacts about yourself..."
+                        onChange={e => setMyBio(e.target.value.slice(0, 80))}
+                        placeholder="Tell contacts about yourself (max 80 chars)..."
                         className="w-full px-3.5 py-2.5 sm:py-2 text-base sm:text-xs rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] focus:outline-none"
                       />
 
@@ -1567,7 +1864,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                             <button
                               key={idx}
                               type="button"
-                              onClick={() => setMyBio(preset)}
+                              onClick={() => setMyBio(preset.slice(0, 80))}
                               className={`py-1 px-2.5 rounded-lg text-[11px] sm:text-[10px] border transition-colors ${
                                 myBio === preset
                                   ? 'bg-[var(--accent-surface)] border-[var(--accent-primary)] text-[var(--accent-primary)] font-semibold'
@@ -1761,13 +2058,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       </h3>
                     </div>
 
-                    <div className="grid grid-cols-5 gap-2">
+                    <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
                       {THEMES.map(th => {
                         const isSelected = theme === th.id;
                         const swatchBg =
-                          th.id === 'rainbow'
+                          th.isRainbow || th.id === 'rainbow'
                             ? 'linear-gradient(135deg, #FF0055 0%, #FF7700 25%, #FFDD00 50%, #00CC66 75%, #0099FF 100%)'
-                            : th.primaryHex;
+                            : `linear-gradient(135deg, ${th.primaryHex} 0%, ${th.secondaryHex} 100%)`;
 
                         return (
                           <button
@@ -1789,7 +2086,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                               {isSelected && (
                                 <Check
                                   className={`w-3.5 h-3.5 stroke-[3] ${
-                                    th.id === 'white' ? 'text-black' : th.id === 'black' ? 'text-white' : 'text-black'
+                                    th.checkColor === 'light' ? 'text-white' : 'text-black'
                                   }`}
                                 />
                               )}
@@ -1809,25 +2106,25 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   <div className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--accent-border)] flex items-center justify-between shadow-sm">
                     <div className="flex items-center gap-3">
                       <div className="w-9 h-9 rounded-xl bg-neutral-200 dark:bg-neutral-900 border border-[var(--accent-border)] flex items-center justify-center text-[var(--accent-primary)]">
-                        {isMuted ? <BellOff className="w-4 h-4 text-rose-400" /> : <Bell className="w-4 h-4" />}
+                        {conversation.isMuted ? <BellOff className="w-4 h-4 text-rose-400" /> : <Bell className="w-4 h-4" />}
                       </div>
                       <div>
                         <h4 className="text-xs font-bold text-[var(--text-main)]">Mute Notifications</h4>
                         <p className="text-[10px] text-[var(--text-muted)]">
-                          {isMuted ? 'Muted for this private conversation' : 'Receive alerts for incoming messages'}
+                          {conversation.isMuted ? 'Muted for this private conversation' : 'Receive alerts for incoming messages'}
                         </p>
                       </div>
                     </div>
                     <button
                       type="button"
-                      onClick={() => setIsMuted(!isMuted)}
+                      onClick={() => chatStore.toggleMute(conversation.id)}
                       className={`w-11 h-6 rounded-full transition-colors relative ${
-                        isMuted ? 'bg-rose-600' : 'bg-neutral-300 dark:bg-neutral-800'
+                        conversation.isMuted ? 'bg-rose-600' : 'bg-neutral-300 dark:bg-neutral-800'
                       }`}
                     >
                       <div
                         className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-transform ${
-                          isMuted ? 'right-1' : 'left-1'
+                          conversation.isMuted ? 'right-1' : 'left-1'
                         }`}
                       />
                     </button>
@@ -2004,6 +2301,227 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           </div>
         </div>
       )}
+      {/* Clear Chat Confirmation Modal (from in-chat 3-dot menu) */}
+      {isClearChatModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm"
+          onClick={() => setIsClearChatModalOpen(false)}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl bg-[var(--bg-sidebar)] border-t sm:border border-[var(--accent-border)] p-5 sm:p-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] gold-glow shadow-2xl space-y-4 text-[var(--text-main)]"
+          >
+            <div className="sm:hidden w-10 h-1 rounded-full bg-neutral-400/40 mx-auto -mt-1" />
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-500 shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-[var(--text-main)]">Clear Chat History?</h3>
+                <p className="text-xs text-[var(--text-muted)]">
+                  Wipe all messages and voice memos in this chat with <strong>{chatTitle}</strong>?
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setIsClearChatModalOpen(false)}
+                className="flex-1 min-h-[44px] py-2.5 rounded-xl border border-[var(--accent-border)] text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-main)] cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleClearChatHistory}
+                className="flex-1 min-h-[44px] py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold cursor-pointer"
+              >
+                Clear Chat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Photo & Preset Chat Wallpaper Modal */}
+      {isWallpaperModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md"
+          onClick={() => setIsWallpaperModalOpen(false)}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="w-full sm:max-w-md max-h-[92dvh] rounded-t-3xl sm:rounded-3xl bg-[var(--bg-sidebar)] border-t sm:border border-[var(--accent-border)] gold-glow shadow-2xl flex flex-col overflow-hidden text-[var(--text-main)]"
+          >
+            <div className="p-4 sm:p-5 border-b border-neutral-200 dark:border-white/5 flex items-center justify-between bg-[var(--bg-card)] shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-[var(--accent-surface)] border border-[var(--accent-primary)] flex items-center justify-center text-[var(--accent-primary)]">
+                  <ImageIcon className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-[var(--text-main)]">Chat Wallpaper</h2>
+                  <p className="text-[11px] text-[var(--text-muted)]">Upload your own photo or pick a style</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsWallpaperModalOpen(false)}
+                aria-label="Close wallpaper picker"
+                className="w-9 h-9 rounded-full bg-neutral-200/50 dark:bg-neutral-800/50 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-main)] cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+              {wallpaperError && (
+                <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-400 text-xs">
+                  {wallpaperError}
+                </div>
+              )}
+
+              {/* Live Preview */}
+              <div className="relative h-40 rounded-2xl overflow-hidden border border-[var(--accent-border)] shadow-inner flex flex-col justify-end p-3 gap-2">
+                <div
+                  className="absolute inset-0 bg-cover bg-center"
+                  style={
+                    isImageWallpaper(wallpaperDraft.url)
+                      ? { backgroundImage: `url("${wallpaperDraft.url}")` }
+                      : { background: wallpaperDraft.url }
+                  }
+                />
+                <div
+                  className="absolute inset-0"
+                  style={{ backgroundColor: `rgba(0, 0, 0, ${wallpaperDraft.dimOpacity})` }}
+                />
+                <div className="relative z-10 self-start max-w-[75%] px-3 py-1.5 rounded-2xl rounded-bl-xs bg-[var(--bg-bubble-in)] border border-[var(--border-bubble-in)] text-[11px] text-[var(--text-main)] shadow">
+                  Hey! How does this wallpaper look?
+                </div>
+                <div className="relative z-10 self-end max-w-[75%] px-3 py-1.5 rounded-2xl rounded-br-xs bg-gradient-to-br from-[var(--accent-surface)] to-[var(--bg-card)] border border-[var(--accent-border)] text-[11px] text-[var(--text-main)] shadow">
+                  Looks crisp and easy to read ✨
+                </div>
+              </div>
+
+              {/* Upload Custom Photo from Gallery + Re-Crop */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="file"
+                  ref={wallpaperFileRef}
+                  onChange={handleWallpaperFileChange}
+                  accept="image/*"
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  disabled={isProcessingWallpaper}
+                  onClick={() => wallpaperFileRef.current?.click()}
+                  className="flex-1 min-h-[44px] py-2.5 px-4 rounded-xl gold-button border border-[var(--accent-border)] hover:border-[var(--accent-primary)] text-xs font-bold text-[var(--accent-primary)] flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-60"
+                >
+                  <Upload className="w-4 h-4" />
+                  <span>{isProcessingWallpaper ? 'Preparing photo...' : 'Choose Custom Photo from Gallery'}</span>
+                </button>
+                {isImageWallpaper(wallpaperDraft.url) && (
+                  <button
+                    type="button"
+                    onClick={() => setWallpaperCropSrc(wallpaperDraft.url)}
+                    className="min-h-[44px] py-2.5 px-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--accent-border)] hover:border-[var(--accent-primary)] text-xs font-bold text-[var(--text-main)] flex items-center justify-center gap-1.5 transition-all cursor-pointer shrink-0"
+                    title="Crop Wallpaper Photo"
+                  >
+                    <Crop className="w-4 h-4 text-[var(--accent-primary)]" />
+                    <span>Crop</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Dim Scrim Slider */}
+              <div className="p-3.5 rounded-2xl bg-[var(--bg-card)] border border-[var(--accent-border)] space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-[var(--text-main)]">Backdrop Darkness</span>
+                  <span className="font-mono text-[var(--accent-primary)] tabular-nums">
+                    {Math.round(wallpaperDraft.dimOpacity * 100)}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={15}
+                  max={85}
+                  value={Math.round(wallpaperDraft.dimOpacity * 100)}
+                  onChange={e =>
+                    setWallpaperDraft(prev => ({
+                      ...prev,
+                      dimOpacity: Number(e.target.value) / 100
+                    }))
+                  }
+                  className="w-full accent-[var(--accent-primary)] cursor-pointer"
+                />
+              </div>
+
+              {/* Preset Wallpapers */}
+              <div>
+                <p className="text-xs font-semibold text-[var(--text-muted)] mb-2">Curated Styles</p>
+                <div className="grid grid-cols-4 gap-2">
+                  {WALLPAPER_PRESETS.map(preset => {
+                    const isPicked = wallpaperDraft.url === preset.value;
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() =>
+                          setWallpaperDraft({
+                            url: preset.value,
+                            dimOpacity: preset.dimOpacity
+                          })
+                        }
+                        title={preset.label}
+                        className={`h-14 rounded-xl overflow-hidden border relative cursor-pointer transition-all ${
+                          isPicked
+                            ? 'border-2 border-[var(--accent-primary)] scale-105 shadow-md'
+                            : 'border-[var(--accent-border)] hover:border-[var(--accent-primary)]'
+                        }`}
+                        style={{ background: preset.value }}
+                      >
+                        {isPicked && (
+                          <span className="absolute inset-0 flex items-center justify-center bg-black/25">
+                            <Check className="w-4 h-4 text-white stroke-[3]" />
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Apply Actions */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => handleApplyWallpaper('chat')}
+                  className="min-h-[44px] py-2.5 px-3 rounded-xl gold-button-accent text-xs font-bold uppercase tracking-wide cursor-pointer"
+                >
+                  Apply to This Chat
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApplyWallpaper('all')}
+                  className="min-h-[44px] py-2.5 px-3 rounded-xl bg-[var(--bg-card)] border border-[var(--accent-border)] hover:border-[var(--accent-primary)] text-xs font-bold text-[var(--text-main)] cursor-pointer"
+                >
+                  Apply to All Chats
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleResetWallpaper}
+                className="w-full min-h-[40px] py-2 rounded-xl border border-neutral-300 dark:border-white/10 text-xs font-semibold text-[var(--text-muted)] hover:text-rose-400 flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Reset Default Background</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <AvatarPreviewModal target={dpPreviewTarget} onClose={() => setDpPreviewTarget(null)} />
       <AvatarCropModal
         imageSrc={cropSourceUrl}
@@ -2012,6 +2530,81 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           setCropSourceUrl(null);
         }}
         onCancel={() => setCropSourceUrl(null)}
+      />
+      <AvatarCropModal
+        imageSrc={wallpaperCropSrc}
+        title="Crop Chat Wallpaper"
+        subtitle="Drag, zoom or rotate to frame your chat background"
+        confirmLabel="Use Wallpaper"
+        shape="rect"
+        aspectRatio={9 / 16}
+        outputWidth={720}
+        outputHeight={1280}
+        onConfirm={cropped => {
+          setWallpaperDraft(prev => ({
+            url: cropped,
+            dimOpacity: prev.dimOpacity < 0.35 ? 0.45 : prev.dimOpacity
+          }));
+          setWallpaperCropSrc(null);
+        }}
+        onCancel={() => setWallpaperCropSrc(null)}
+      />
+      <StickerSaveModal
+        target={stickerTapTarget}
+        onClose={() => setStickerTapTarget(null)}
+        onEditMediaSticker={draft => setRemixStickerDraft(draft)}
+        onSendSticker={target => {
+          if (conversation.isBlocked || !isAcceptedFriend) return;
+          if (target.type === 'builtin') {
+            chatStore.sendMessage(
+              conversation.id,
+              currentUserId,
+              currentUserName || 'User',
+              toStickerToken(target.sticker.id),
+              undefined,
+              'none'
+            );
+          } else {
+            chatStore.sendMessage(
+              conversation.id,
+              currentUserId,
+              currentUserName || 'User',
+              encodeCustomStickerMessage(target.kind, target.meta),
+              target.mediaUrl,
+              target.kind
+            );
+          }
+        }}
+      />
+      <StickerCreatorModal
+        isOpen={Boolean(remixStickerDraft)}
+        initialDraft={remixStickerDraft}
+        onClose={() => setRemixStickerDraft(null)}
+        onCreated={(created, sendImmediately) => {
+          setRemixStickerDraft(null);
+          if (sendImmediately && !conversation.isBlocked && isAcceptedFriend && created.kind !== 'builtin') {
+            chatStore.sendMessage(
+              conversation.id,
+              currentUserId,
+              currentUserName || 'User',
+              encodeCustomStickerMessage(created.kind === 'video' ? 'video' : 'image', {
+                caption: created.caption,
+                captionColor: created.captionColor,
+                captionPos: created.captionPos,
+                captionX: created.captionX,
+                captionY: created.captionY,
+                captionSize: created.captionSize,
+                captionRotate: created.captionRotate,
+                captionStyle: created.captionStyle,
+                captionFont: created.captionFont,
+                shape: created.shape,
+                borderStyle: created.borderStyle
+              }),
+              created.mediaUrl,
+              created.kind === 'video' ? 'video' : 'image'
+            );
+          }
+        }}
       />
     </div>
   );

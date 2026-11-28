@@ -4,7 +4,6 @@ import { Sidebar, MobileBottomNav, MessengerTab } from './Sidebar';
 import { ChatList } from './ChatList';
 import { ChatWindow } from './ChatWindow';
 import { ContactsView } from './ContactsView';
-import { FriendsView } from './FriendsView';
 import { StatusView } from './StatusView';
 import { ErrorexAiView } from './ErrorexAiView';
 import { ProfileView } from './ProfileView';
@@ -599,23 +598,12 @@ export const MessengerDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Contacts Book View */}
-        {activeTab === 'contacts' && (
+        {/* Unified Contacts Book & Social Circle View */}
+        {(activeTab === 'contacts' ||
+          activeTab === 'friends' ||
+          activeTab === 'requests' ||
+          activeTab === 'directory') && (
           <ContactsView
-            onStartChatWithContact={contact => {
-              handleStartChatWithUser({
-                displayName: contact.displayName,
-                username: contact.username,
-                photoURL: contact.photoURL,
-                bio: contact.bio
-              });
-            }}
-          />
-        )}
-
-        {/* Friends & Directory View */}
-        {(activeTab === 'friends' || activeTab === 'requests' || activeTab === 'directory') && (
-          <FriendsView
             currentUserId={currentUserId}
             currentUserProfile={userProfile}
             onStartChatWithUser={handleStartChatWithUser}
@@ -624,7 +612,9 @@ export const MessengerDashboard: React.FC = () => {
                 ? 'directory'
                 : activeTab === 'requests'
                 ? 'requests'
-                : 'friends'
+                : activeTab === 'friends'
+                ? 'friends'
+                : 'saved'
             }
           />
         )}

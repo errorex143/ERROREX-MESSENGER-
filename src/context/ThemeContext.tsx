@@ -17,27 +17,57 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-export const THEMES: { id: ThemeName; name: string; primaryHex: string; description: string; isRainbow?: boolean }[] = [
-  { id: 'rainbow', name: 'Rainbow Prism', primaryHex: '#FF2E93', description: 'Vibrant multi-color rainbow spectrum with prism luster', isRainbow: true },
-  { id: 'gold', name: 'Imperial Gold', primaryHex: '#D4AF37', description: 'Classic regal gold with metallic luster' },
-  { id: 'white', name: 'Platinum White', primaryHex: '#F8FAFC', description: 'Pure diamond white with crystalline shine' },
-  { id: 'black', name: 'Obsidian Black', primaryHex: '#0A0A0C', description: 'Deep velvet onyx black with dark mirror luster' },
-  { id: 'crimson', name: 'Blood Crimson', primaryHex: '#DC2626', description: 'Dark wine ruby with deep metallic fire' },
-  { id: 'midnight', name: 'Midnight Indigo', primaryHex: '#6366F1', description: 'Dark cosmic violet with neon luster' },
-  { id: 'forest', name: 'Dark Forest', primaryHex: '#059669', description: 'Deep dark imperial emerald with jade shine' },
-  { id: 'bronze', name: 'Dark Bronze', primaryHex: '#D97706', description: 'Rich antique copper bronze with molten luster' },
-  { id: 'emerald', name: 'Royal Emerald', primaryHex: '#10B981', description: 'Deep imperial jade & emerald crystal' },
-  { id: 'ocean', name: 'Sapphire Blue', primaryHex: '#3B82F6', description: 'Monaco sapphire & deep marine blue' },
-  { id: 'purple', name: 'Velvet Purple', primaryHex: '#A855F7', description: 'Majestic royal purple gemstone' },
-  { id: 'rose', name: 'Crimson Ruby', primaryHex: '#F43F5E', description: 'Precious metallic rose & ruby fire' },
-  { id: 'sunset', name: 'Solar Amber', primaryHex: '#F97316', description: 'Radiant warm solar amber horizon' },
-  { id: 'electric', name: 'Electric Cyan', primaryHex: '#06B6D4', description: 'High-tech cyber platinum & cyan' },
-  { id: 'teal', name: 'Midnight Teal', primaryHex: '#14B8A6', description: 'Lustrous titanium teal mineral' }
+export interface ThemeOption {
+  id: ThemeName;
+  name: string;
+  primaryHex: string;
+  secondaryHex: string;
+  description: string;
+  isRainbow?: boolean;
+  checkColor?: 'dark' | 'light';
+}
+
+export const THEMES: ThemeOption[] = [
+  { id: 'rainbow', name: 'Rainbow Prism', primaryHex: '#FF007F', secondaryHex: '#00E5FF', description: 'Vibrant multi-color rainbow spectrum', isRainbow: true, checkColor: 'light' },
+  { id: 'gold', name: 'Royal Gold', primaryHex: '#EAB308', secondaryHex: '#CA8A04', description: 'Classic regal gold with warm metallic luster', checkColor: 'dark' },
+  { id: 'amber', name: 'Solar Orange', primaryHex: '#FF6B00', secondaryHex: '#EA580C', description: 'Vibrant solar tangerine orange', checkColor: 'dark' },
+  { id: 'coral', name: 'Warm Coral', primaryHex: '#FF5A5F', secondaryHex: '#E11D48', description: 'Bright coral peach glow', checkColor: 'light' },
+  { id: 'crimson', name: 'Ruby Red', primaryHex: '#DC2626', secondaryHex: '#991B1B', description: 'Deep ruby crimson fire', checkColor: 'light' },
+  { id: 'magenta', name: 'Hot Magenta', primaryHex: '#EC4899', secondaryHex: '#BE185D', description: 'Vivid neon magenta rose', checkColor: 'light' },
+  { id: 'orchid', name: 'Electric Orchid', primaryHex: '#D946EF', secondaryHex: '#A21CAF', description: 'Luminous ultraviolet orchid', checkColor: 'light' },
+  { id: 'purple', name: 'Deep Amethyst', primaryHex: '#8B5CF6', secondaryHex: '#6D28D9', description: 'Majestic violet amethyst', checkColor: 'light' },
+  { id: 'indigo', name: 'Cosmic Indigo', primaryHex: '#6366F1', secondaryHex: '#4338CA', description: 'Electric cobalt indigo', checkColor: 'light' },
+  { id: 'cobalt', name: 'Sapphire Blue', primaryHex: '#2563EB', secondaryHex: '#1D4ED8', description: 'Rich royal sapphire blue', checkColor: 'light' },
+  { id: 'sky', name: 'Sky Azure', primaryHex: '#0EA5E9', secondaryHex: '#0284C7', description: 'Crisp high-altitude azure sky', checkColor: 'dark' },
+  { id: 'cyan', name: 'Cyber Aqua', primaryHex: '#06B6D4', secondaryHex: '#0891B2', description: 'Neon glacier cyan aqua', checkColor: 'dark' },
+  { id: 'emerald', name: 'Mint Emerald', primaryHex: '#10B981', secondaryHex: '#047857', description: 'Fresh vibrant emerald jade', checkColor: 'dark' },
+  { id: 'lime', name: 'Electric Lime', primaryHex: '#84CC16', secondaryHex: '#4D7C0F', description: 'High-contrast electric lime', checkColor: 'dark' },
+  { id: 'copper', name: 'Molten Copper', primaryHex: '#B45309', secondaryHex: '#78350F', description: 'Rich antique bronze copper', checkColor: 'light' },
+  { id: 'platinum', name: 'Ice Platinum', primaryHex: '#94A3B8', secondaryHex: '#475569', description: 'Sleek metallic titanium silver', checkColor: 'dark' }
 ];
+
+const LEGACY_THEME_MAP: Record<string, ThemeName> = {
+  ocean: 'cobalt',
+  rose: 'magenta',
+  sunset: 'amber',
+  electric: 'cyan',
+  teal: 'emerald',
+  midnight: 'indigo',
+  forest: 'emerald',
+  bronze: 'copper',
+  white: 'platinum',
+  black: 'platinum'
+};
+
+function resolveValidTheme(raw: string | null): ThemeName {
+  if (!raw) return 'gold';
+  if (THEMES.some(t => t.id === raw)) return raw as ThemeName;
+  return LEGACY_THEME_MAP[raw] || 'gold';
+}
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setThemeState] = useState<ThemeName>(() => {
-    return (localStorage.getItem('errorex_theme') as ThemeName) || 'gold';
+    return resolveValidTheme(localStorage.getItem('errorex_theme'));
   });
 
   const [mode, setModeState] = useState<ColorMode>(() => {

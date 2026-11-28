@@ -1,19 +1,13 @@
 import React from 'react';
 import { CrownLogo } from '../common/CrownLogo';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
 import {
   MessageSquare,
   Users,
-  UserPlus,
-  Compass,
   Sparkles,
-  Bell,
-  User,
   Settings,
   Lock,
   LogOut,
-  Layers,
   Bot
 } from 'lucide-react';
 
@@ -46,15 +40,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenSettingsModal
 }) => {
   const { userProfile, lockMessenger, logout } = useAuth();
-  const { mode } = useTheme();
-
-  const handleOpenSettings = () => {
-    if (onOpenSettingsModal) {
-      onOpenSettingsModal();
-    } else {
-      onSelectTab('settings');
-    }
-  };
 
   const navItems: Array<{
     id: MessengerTab;
@@ -64,9 +49,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     badge?: number;
   }> = [
     { id: 'chats', label: 'All Chats', mobileLabel: 'Chats', icon: MessageSquare, badge: unreadMessagesCount },
-    { id: 'contacts', label: 'Contacts Book', mobileLabel: 'Contacts', icon: Users },
+    { id: 'contacts', label: 'Contacts & Circle', mobileLabel: 'Contacts', icon: Users, badge: pendingRequestsCount },
     { id: 'status', label: 'Status & Groups', mobileLabel: 'Status', icon: Sparkles },
-    { id: 'friends', label: 'Social Circle', mobileLabel: 'Circle', icon: UserPlus, badge: pendingRequestsCount },
     { id: 'errorex_ai', label: 'ERROREX AI', mobileLabel: 'AI', icon: Bot },
     { id: 'settings', label: 'Settings', mobileLabel: 'Settings', icon: Settings }
   ];
@@ -98,7 +82,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             const Icon = item.icon;
             const isActive =
               activeTab === item.id ||
-              (item.id === 'friends' && (activeTab === 'requests' || activeTab === 'directory'));
+              (item.id === 'contacts' &&
+                (activeTab === 'friends' || activeTab === 'requests' || activeTab === 'directory'));
             return (
               <button
                 type="button"
@@ -200,9 +185,8 @@ export const MobileBottomNav: React.FC<SidebarProps> = ({
     badge?: number;
   }> = [
     { id: 'chats', label: 'Chats', icon: MessageSquare, badge: unreadMessagesCount },
-    { id: 'contacts', label: 'Contacts', icon: Users },
+    { id: 'contacts', label: 'Contacts', icon: Users, badge: pendingRequestsCount },
     { id: 'status', label: 'Status', icon: Sparkles },
-    { id: 'friends', label: 'Circle', icon: UserPlus, badge: pendingRequestsCount },
     { id: 'errorex_ai', label: 'AI', icon: Bot },
     { id: 'settings', label: 'Settings', icon: Settings }
   ];
@@ -210,13 +194,14 @@ export const MobileBottomNav: React.FC<SidebarProps> = ({
   return (
     <nav
       aria-label="Mobile Navigation"
-      className="md:hidden w-full bg-[var(--bg-sidebar)]/95 backdrop-blur-xl border-t border-[var(--accent-border)] grid grid-cols-6 items-center px-1.5 pt-1 pb-[max(0.4rem,env(safe-area-inset-bottom))] shrink-0 z-30 shadow-[0_-8px_24px_rgba(0,0,0,0.12)] select-none"
+      className="md:hidden w-full bg-[var(--bg-sidebar)]/95 backdrop-blur-xl border-t border-[var(--accent-border)] grid grid-cols-5 items-center px-1.5 pt-1 pb-[max(0.4rem,env(safe-area-inset-bottom))] shrink-0 z-30 shadow-[0_-8px_24px_rgba(0,0,0,0.12)] select-none"
     >
       {navItems.map(item => {
         const Icon = item.icon;
         const isActive =
           activeTab === item.id ||
-          (item.id === 'friends' && (activeTab === 'requests' || activeTab === 'directory'));
+          (item.id === 'contacts' &&
+            (activeTab === 'friends' || activeTab === 'requests' || activeTab === 'directory'));
         return (
           <button
             type="button"

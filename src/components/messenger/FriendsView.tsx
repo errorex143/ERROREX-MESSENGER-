@@ -37,21 +37,35 @@ interface FriendsViewProps {
   currentUserProfile: UserProfile | null;
   onStartChatWithUser: (targetUser: UserProfile) => void;
   initialSubTab?: 'friends' | 'requests' | 'directory';
+  externalSubTab?: 'friends' | 'requests' | 'directory';
+  embedded?: boolean;
+  onCountsChange?: (counts: {
+    friendsCount: number;
+    incomingCount: number;
+    membersCount: number;
+  }) => void;
 }
 
 export const FriendsView: React.FC<FriendsViewProps> = ({
   currentUserId,
   currentUserProfile,
   onStartChatWithUser,
-  initialSubTab
+  initialSubTab,
+  externalSubTab,
+  embedded = false,
+  onCountsChange
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'friends' | 'requests' | 'directory'>(initialSubTab || 'friends');
+  const [activeSubTab, setActiveSubTab] = useState<'friends' | 'requests' | 'directory'>(
+    externalSubTab || initialSubTab || 'friends'
+  );
 
   useEffect(() => {
-    if (initialSubTab) {
+    if (externalSubTab) {
+      setActiveSubTab(externalSubTab);
+    } else if (initialSubTab) {
       setActiveSubTab(initialSubTab);
     }
-  }, [initialSubTab]);
+  }, [externalSubTab, initialSubTab]);
 
   const [friends, setFriends] = useState<UserProfile[]>([]);
   const [incomingRequests, setIncomingRequests] = useState<FriendRequest[]>([]);
@@ -72,6 +86,14 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
     const tick = setInterval(() => setPresenceTick(t => t + 1), 20000);
     return () => clearInterval(tick);
   }, []);
+
+  useEffect(() => {
+    onCountsChange?.({
+      friendsCount: friends.length,
+      incomingCount: incomingRequests.length,
+      membersCount: allMembers.length
+    });
+  }, [friends.length, incomingRequests.length, allMembers.length, onCountsChange]);
 
   // Load incoming friend requests
   useEffect(() => {
@@ -339,61 +361,67 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
   };
 
   return (
-    <div className="flex-1 min-w-0 h-full flex flex-col bg-[var(--bg-window)] text-[var(--text-main)] select-none p-3 sm:p-5 md:p-6 overflow-y-auto transition-colors">
-      <div className="w-full max-w-6xl mx-auto flex flex-col flex-1 min-w-0">
-      {/* View Header with Sub-tabs */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4 pb-4 border-b border-neutral-200 dark:border-white/5">
-        <div className="min-w-0">
-          <h1 className="text-base sm:text-lg font-display font-bold gold-gradient-text">
-            Social Circle & Network
-          </h1>
-          <p className="text-xs text-[var(--text-muted)]">
-            Manage your verified contacts, pending authorizations, and user directory.
-          </p>
-        </div>
+    <div
+      className={
+        embedded
+          ? 'flex-1 min-w-0 flex flex-col select-none'
+          : 'flex-1 min-w-0 h-full flex flex-col bg-[var(--bg-window)] text-[var(--text-main)] select-none p-3 sm:p-5 md:p-6 overflow-y-auto transition-colors'
+      }
+    >
+      <div className={embedded ? 'w-full flex flex-col flex-1 min-w-0' : 'w-full max-w-6xl mx-auto flex flex-col flex-1 min-w-0'}>
+      {!embedded && (
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4 pb-4 border-b border-neutral-200 dark:border-white/5">
+          <div className="min-w-0">
+            <h1 className="text-base sm:text-lg font-display font-bold gold-gradient-text">
+              Social Circle & Network
+            </h1>
+            <p className="text-xs text-[var(--text-muted)]">
+              Manage your verified contacts, pending authorizations, and user directory.
+            </p>
+          </div>
 
-        {/* Sub-tabs */}
-        <div className="flex items-center gap-1 p-1 bg-neutral-200/70 dark:bg-black/60 rounded-xl border border-neutral-300 dark:border-white/5 overflow-x-auto scrollbar-none w-full lg:w-auto shrink-0">
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('friends')}
-            className={`min-h-[40px] py-2 px-3 rounded-lg text-xs font-semibold transition-all whitespace-nowrap shrink-0 flex-1 lg:flex-initial tabular-nums cursor-pointer ${
-              activeSubTab === 'friends'
-                ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--text-main)] shadow-sm'
-                : 'text-neutral-600 dark:text-neutral-400 hover:text-[var(--text-main)]'
-            }`}
-          >
-            Friends ({friends.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('requests')}
-            className={`min-h-[40px] py-2 px-3 rounded-lg text-xs font-semibold transition-all relative whitespace-nowrap shrink-0 flex-1 lg:flex-initial tabular-nums cursor-pointer ${
-              activeSubTab === 'requests'
-                ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--text-main)] shadow-sm'
-                : 'text-neutral-600 dark:text-neutral-400 hover:text-[var(--text-main)]'
-            }`}
-          >
-            <span>Requests</span>
-            {incomingRequests.length > 0 && (
-              <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[var(--accent-primary)] text-black">
-                {incomingRequests.length}
-              </span>
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('directory')}
-            className={`min-h-[40px] py-2 px-3 rounded-lg text-xs font-semibold transition-all whitespace-nowrap shrink-0 flex-1 lg:flex-initial tabular-nums cursor-pointer ${
-              activeSubTab === 'directory'
-                ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--text-main)] shadow-sm'
-                : 'text-neutral-600 dark:text-neutral-400 hover:text-[var(--text-main)]'
-            }`}
-          >
-            Find Members ({allMembers.length})
-          </button>
+          <div className="flex items-center gap-1 p-1 bg-neutral-200/70 dark:bg-black/60 rounded-xl border border-neutral-300 dark:border-white/5 overflow-x-auto scrollbar-none w-full lg:w-auto shrink-0">
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('friends')}
+              className={`min-h-[40px] py-2 px-3 rounded-lg text-xs font-semibold transition-all whitespace-nowrap shrink-0 flex-1 lg:flex-initial tabular-nums cursor-pointer ${
+                activeSubTab === 'friends'
+                  ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--text-main)] shadow-sm'
+                  : 'text-neutral-600 dark:text-neutral-400 hover:text-[var(--text-main)]'
+              }`}
+            >
+              Friends ({friends.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('requests')}
+              className={`min-h-[40px] py-2 px-3 rounded-lg text-xs font-semibold transition-all relative whitespace-nowrap shrink-0 flex-1 lg:flex-initial tabular-nums cursor-pointer ${
+                activeSubTab === 'requests'
+                  ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--text-main)] shadow-sm'
+                  : 'text-neutral-600 dark:text-neutral-400 hover:text-[var(--text-main)]'
+              }`}
+            >
+              <span>Requests</span>
+              {incomingRequests.length > 0 && (
+                <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[var(--accent-primary)] text-black">
+                  {incomingRequests.length}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('directory')}
+              className={`min-h-[40px] py-2 px-3 rounded-lg text-xs font-semibold transition-all whitespace-nowrap shrink-0 flex-1 lg:flex-initial tabular-nums cursor-pointer ${
+                activeSubTab === 'directory'
+                  ? 'bg-[var(--accent-surface)] border border-[var(--accent-primary)] text-[var(--text-main)] shadow-sm'
+                  : 'text-neutral-600 dark:text-neutral-400 hover:text-[var(--text-main)]'
+              }`}
+            >
+              Find Members ({allMembers.length})
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {actionNotice && (
         <div className="my-3 p-3 rounded-xl bg-[var(--accent-surface)] border border-[var(--accent-border)] text-xs text-[var(--accent-primary)] flex items-center justify-between gap-2">

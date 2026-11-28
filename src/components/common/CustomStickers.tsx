@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 
 export type StickerCategory = 'love' | 'funny' | 'sad' | 'moods' | 'greetings' | 'fun';
 
@@ -822,6 +822,10 @@ const STICKER_BY_ID = new Map<string, CustomStickerItem>(
   CUSTOM_STICKERS.map(item => [item.id, item])
 );
 
+export function getStickerById(id: string): CustomStickerItem | null {
+  return STICKER_BY_ID.get(id) || null;
+}
+
 export function toStickerToken(id: string): string {
   return `${STICKER_TOKEN_PREFIX}${id}${STICKER_TOKEN_SUFFIX}`;
 }
@@ -837,434 +841,817 @@ export function parseStickerToken(text: string): CustomStickerItem | null {
 
 export function formatChatPreviewText(text?: string): string {
   if (!text) return 'Tap to open chat';
-  const sticker = parseStickerToken(text);
+  const trimmed = text.trim();
+  const sticker = parseStickerToken(trimmed);
   if (sticker) {
     return `Sticker · ${sticker.label}`;
+  }
+  if (trimmed.startsWith('[PHOTO_STICKER]')) {
+    try {
+      const parsed = JSON.parse(trimmed.slice('[PHOTO_STICKER]'.length).trim() || '{}');
+      return parsed?.caption ? `Sticker · ${parsed.caption}` : 'Sticker';
+    } catch {
+      return 'Sticker';
+    }
+  }
+  if (trimmed.startsWith('[VIDEO_STICKER]')) {
+    try {
+      const parsed = JSON.parse(trimmed.slice('[VIDEO_STICKER]'.length).trim() || '{}');
+      return parsed?.caption ? `Video Sticker · ${parsed.caption}` : 'Video Sticker';
+    } catch {
+      return 'Video Sticker';
+    }
   }
   return text;
 }
 
-function renderMotifArtwork(motif: StickerMotif, sticker: CustomStickerItem): React.ReactNode {
+function getLiveAnimationClass(category: StickerCategory, motif: StickerMotif): string {
+  if (
+    motif === 'heart' ||
+    motif === 'double_heart' ||
+    motif === 'heart_wings' ||
+    motif === 'kiss_mark' ||
+    motif === 'ribbon_heart'
+  ) {
+    return 'sticker-anim-beat';
+  }
+  if (
+    motif === 'face_laugh' ||
+    motif === 'face_goofy' ||
+    motif === 'face_shock' ||
+    motif === 'ghost_boo' ||
+    motif === 'rocket' ||
+    motif === 'lightning' ||
+    motif === 'fire'
+  ) {
+    return 'sticker-anim-boing';
+  }
+  if (
+    motif === 'face_sad' ||
+    motif === 'face_cry' ||
+    motif === 'cloud_rain' ||
+    motif === 'wilted_rose' ||
+    motif === 'broken_heart' ||
+    motif === 'umbrella'
+  ) {
+    return 'sticker-anim-sway';
+  }
+  if (
+    motif === 'sun' ||
+    motif === 'flower' ||
+    motif === 'speech' ||
+    motif === 'butterfly' ||
+    motif === 'music' ||
+    motif === 'tea_cup'
+  ) {
+    return 'sticker-anim-wave';
+  }
+  if (category === 'love') return 'sticker-anim-beat';
+  if (category === 'funny') return 'sticker-anim-boing';
+  if (category === 'sad') return 'sticker-anim-sway';
+  if (category === 'greetings') return 'sticker-anim-wave';
+  return 'sticker-anim-float';
+}
+
+type MascotSpecies = 'bunny' | 'bear' | 'kitty' | 'panda' | 'chibi';
+
+function getMascotForSticker(id: string): MascotSpecies {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  }
+  const species: MascotSpecies[] = ['bunny', 'bear', 'kitty', 'panda', 'chibi'];
+  return species[hash % species.length];
+}
+
+// Crisp kawaii cartoon eyes helper
+function renderCartoonEyes(
+  variant: 'happy' | 'blush' | 'wink' | 'laugh' | 'goofy' | 'shock' | 'sleep' | 'sad' | 'cry' | 'cool' | 'heartEyes',
+  ink: string,
+  accent: string
+) {
+  switch (variant) {
+    case 'cool':
+      return (
+        <g>
+          <rect x="18.5" y="24" width="11.5" height="7" rx="3" fill="#0F172A" stroke="#FFFFFF" strokeWidth="1.1" />
+          <rect x="34" y="24" width="11.5" height="7" rx="3" fill="#0F172A" stroke="#FFFFFF" strokeWidth="1.1" />
+          <line x1="30" y1="26.5" x2="34" y2="26.5" stroke="#0F172A" strokeWidth="2.4" />
+          <line x1="20.5" y1="25.8" x2="25" y2="25.8" stroke="#FFFFFF" strokeWidth="1.2" strokeLinecap="round" opacity="0.7" />
+          <line x1="36" y1="25.8" x2="40.5" y2="25.8" stroke="#FFFFFF" strokeWidth="1.2" strokeLinecap="round" opacity="0.7" />
+        </g>
+      );
+    case 'laugh':
+      return (
+        <g>
+          <path d="M21 25.5 L27.5 28.2 L21.5 30.8" fill="none" stroke={ink} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M43 25.5 L36.5 28.2 L42.5 30.8" fill="none" stroke={ink} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+        </g>
+      );
+    case 'wink':
+      return (
+        <g>
+          <circle cx="25" cy="27.5" r="3" fill={ink} />
+          <circle cx="26" cy="26.3" r="1.1" fill="#FFFFFF" />
+          <circle cx="24" cy="28.6" r="0.6" fill="#FFFFFF" />
+          <path d="M35.5 28 Q39 24 42.5 28" fill="none" stroke={ink} strokeWidth="2.4" strokeLinecap="round" />
+        </g>
+      );
+    case 'goofy':
+      return (
+        <g>
+          <circle cx="25" cy="26.5" r="3.4" fill="#FFFFFF" stroke={ink} strokeWidth="1.6" />
+          <circle cx="25.7" cy="26.8" r="1.9" fill={ink} />
+          <circle cx="26.3" cy="25.8" r="0.7" fill="#FFFFFF" />
+          <circle cx="39" cy="28.5" r="2.7" fill="#FFFFFF" stroke={ink} strokeWidth="1.6" />
+          <circle cx="38.2" cy="28.2" r="1.5" fill={ink} />
+        </g>
+      );
+    case 'sleep':
+      return (
+        <g>
+          <path d="M21.5 28 Q25 31.2 28.5 28" fill="none" stroke={ink} strokeWidth="2.2" strokeLinecap="round" />
+          <path d="M35.5 28 Q39 31.2 42.5 28" fill="none" stroke={ink} strokeWidth="2.2" strokeLinecap="round" />
+        </g>
+      );
+    case 'sad':
+    case 'cry':
+      return (
+        <g>
+          <path d="M21 23 Q24.5 21.5 27.5 23.8" fill="none" stroke={ink} strokeWidth="1.7" strokeLinecap="round" />
+          <path d="M43 23 Q39.5 21.5 36.5 23.8" fill="none" stroke={ink} strokeWidth="1.7" strokeLinecap="round" />
+          <circle cx="25" cy="28" r="2.8" fill={ink} />
+          <circle cx="26" cy="26.8" r="1.1" fill="#FFFFFF" />
+          <circle cx="39" cy="28" r="2.8" fill={ink} />
+          <circle cx="40" cy="26.8" r="1.1" fill="#FFFFFF" />
+          {variant === 'cry' && (
+            <>
+              <path d="M22.5 31.5 C24.5 35 24 39 21.8 39 C19.6 39 19.6 35 22.5 31.5 Z" fill="#38BDF8" stroke="#FFFFFF" strokeWidth="1.1" />
+              <path d="M41.5 31.5 C43.5 35 43 39 40.8 39 C38.6 39 38.6 35 41.5 31.5 Z" fill="#38BDF8" stroke="#FFFFFF" strokeWidth="1.1" />
+            </>
+          )}
+        </g>
+      );
+    case 'heartEyes':
+      return (
+        <g>
+          <path d="M25 30.5 C25 30.5 21 27.8 21 25.4 C21 24 22.2 23 23.5 23 C24.2 23 24.7 23.5 25 24.1 C25.3 23.5 25.8 23 26.5 23 C27.8 23 29 24 29 25.4 C29 27.8 25 30.5 25 30.5 Z" fill={accent} stroke="#FFFFFF" strokeWidth="0.9" />
+          <path d="M39 30.5 C39 30.5 35 27.8 35 25.4 C35 24 36.2 23 37.5 23 C38.2 23 38.7 23.5 39 24.1 C39.3 23.5 39.8 23 40.5 23 C41.8 23 43 24 43 25.4 C43 27.8 39 30.5 39 30.5 Z" fill={accent} stroke="#FFFFFF" strokeWidth="0.9" />
+        </g>
+      );
+    default:
+      return (
+        <g>
+          <circle cx="25" cy="27.5" r="2.9" fill={ink} />
+          <circle cx="26" cy="26.3" r="1.15" fill="#FFFFFF" />
+          <circle cx="24" cy="28.7" r="0.6" fill="#FFFFFF" />
+          <circle cx="39" cy="27.5" r="2.9" fill={ink} />
+          <circle cx="40" cy="26.3" r="1.15" fill="#FFFFFF" />
+          <circle cx="38" cy="28.7" r="0.6" fill="#FFFFFF" />
+        </g>
+      );
+  }
+}
+
+// Chibi cartoon mascot head shell with thick white die-cut contour
+function renderMascotHead(
+  species: MascotSpecies,
+  fillUrl: string,
+  accent: string,
+  ink: string
+) {
+  const headR = 17.5;
+  switch (species) {
+    case 'bunny':
+      return (
+        <g>
+          {/* Outer white die-cut silhouette */}
+          <ellipse cx="22.5" cy="14" rx="5.5" ry="11.5" transform="rotate(-12 22.5 14)" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4.8" />
+          <ellipse cx="41.5" cy="14" rx="5.5" ry="11.5" transform="rotate(12 41.5 14)" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4.8" />
+          <circle cx="32" cy="31" r={headR} fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="5" />
+          {/* Colored ears & head */}
+          <ellipse cx="22.5" cy="14" rx="5.2" ry="11" transform="rotate(-12 22.5 14)" fill="#FFF1F2" stroke={ink} strokeWidth="2" />
+          <ellipse cx="22.5" cy="14.5" rx="2.6" ry="6.8" transform="rotate(-12 22.5 14.5)" fill="#FDA4AF" />
+          <ellipse cx="41.5" cy="14" rx="5.2" ry="11" transform="rotate(12 41.5 14)" fill="#FFF1F2" stroke={ink} strokeWidth="2" />
+          <ellipse cx="41.5" cy="14.5" rx="2.6" ry="6.8" transform="rotate(12 41.5 14.5)" fill="#FDA4AF" />
+          <circle cx="32" cy="31" r={headR} fill={fillUrl} stroke={ink} strokeWidth="2.1" />
+        </g>
+      );
+    case 'kitty':
+      return (
+        <g>
+          <polygon points="15,24 17.5,9.5 27.5,17" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4.8" strokeLinejoin="round" />
+          <polygon points="49,24 46.5,9.5 36.5,17" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4.8" strokeLinejoin="round" />
+          <circle cx="32" cy="31.5" r={headR} fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="5" />
+          <polygon points="15,24 17.5,9.5 27.5,17" fill={fillUrl} stroke={ink} strokeWidth="2" strokeLinejoin="round" />
+          <polygon points="17.5,21.5 19,13.2 24.8,17.5" fill="#FDA4AF" />
+          <polygon points="49,24 46.5,9.5 36.5,17" fill={fillUrl} stroke={ink} strokeWidth="2" strokeLinejoin="round" />
+          <polygon points="46.5,21.5 45,13.2 39.2,17.5" fill="#FDA4AF" />
+          <circle cx="32" cy="31.5" r={headR} fill={fillUrl} stroke={ink} strokeWidth="2.1" />
+          {/* Tiny whiskers */}
+          <line x1="13" y1="30.5" x2="18.5" y2="31.5" stroke={ink} strokeWidth="1.4" strokeLinecap="round" opacity="0.7" />
+          <line x1="13" y1="34" x2="18.5" y2="34" stroke={ink} strokeWidth="1.4" strokeLinecap="round" opacity="0.7" />
+          <line x1="51" y1="30.5" x2="45.5" y2="31.5" stroke={ink} strokeWidth="1.4" strokeLinecap="round" opacity="0.7" />
+          <line x1="51" y1="34" x2="45.5" y2="34" stroke={ink} strokeWidth="1.4" strokeLinecap="round" opacity="0.7" />
+        </g>
+      );
+    case 'bear':
+      return (
+        <g>
+          <circle cx="17.5" cy="17.5" r="6.8" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4.5" />
+          <circle cx="46.5" cy="17.5" r="6.8" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4.5" />
+          <circle cx="32" cy="31" r={headR} fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="5" />
+          <circle cx="17.5" cy="17.5" r="6.5" fill={fillUrl} stroke={ink} strokeWidth="2" />
+          <circle cx="17.5" cy="17.5" r="3.2" fill={accent} opacity="0.45" />
+          <circle cx="46.5" cy="17.5" r="6.5" fill={fillUrl} stroke={ink} strokeWidth="2" />
+          <circle cx="46.5" cy="17.5" r="3.2" fill={accent} opacity="0.45" />
+          <circle cx="32" cy="31" r={headR} fill={fillUrl} stroke={ink} strokeWidth="2.1" />
+          <ellipse cx="32" cy="35" rx="7" ry="5.2" fill="#FFFFFF" opacity="0.75" />
+        </g>
+      );
+    case 'panda':
+      return (
+        <g>
+          <circle cx="17.5" cy="17" r="6.6" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4.5" />
+          <circle cx="46.5" cy="17" r="6.6" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4.5" />
+          <circle cx="32" cy="31" r={headR} fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="5" />
+          <circle cx="17.5" cy="17" r="6.3" fill={ink} />
+          <circle cx="46.5" cy="17" r="6.3" fill={ink} />
+          <circle cx="32" cy="31" r={headR} fill="#FFFFFF" stroke={ink} strokeWidth="2.1" />
+          <ellipse cx="24.5" cy="27.5" rx="5.2" ry="4.4" transform="rotate(-18 24.5 27.5)" fill={ink} opacity="0.18" />
+          <ellipse cx="39.5" cy="27.5" rx="5.2" ry="4.4" transform="rotate(18 39.5 27.5)" fill={ink} opacity="0.18" />
+        </g>
+      );
+    case 'chibi':
+    default:
+      return (
+        <g>
+          <circle cx="32" cy="30.5" r={headR + 0.5} fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="5" />
+          <path d="M29 13 Q32 7 35 12.5" fill="none" stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" />
+          <circle cx="32" cy="30.5" r={headR + 0.5} fill={fillUrl} stroke={ink} strokeWidth="2.1" />
+          <path d="M29.5 13 Q32 7.5 35.5 12.5" fill="none" stroke={ink} strokeWidth="2.1" strokeLinecap="round" />
+        </g>
+      );
+  }
+}
+
+function renderMotifArtwork(
+  motif: StickerMotif,
+  sticker: CustomStickerItem,
+  uid: string
+): React.ReactNode {
   const hasCaption = Boolean(sticker.caption);
   const yShift = hasCaption ? -5 : 0;
+  const motifGrad = `url(#${uid}_mg)`;
+  const goldGrad = `url(#${uid}_gg)`;
+  const pastelGrad = `url(#${uid}_bg)`;
+  const ink = '#1E293B';
+  const mascot = getMascotForSticker(sticker.id);
 
   switch (motif) {
     case 'heart':
       return (
         <g transform={`translate(0 ${yShift})`}>
+          {/* Cute heart buddy with kawaii face & die-cut white outline */}
           <path
-            d="M32 45 C32 45 16 34 16 23 C16 18 20 14 25 14 C28.5 14 31 16.5 32 19 C33 16.5 35.5 14 39 14 C44 14 48 18 48 23 C48 34 32 45 32 45 Z"
-            fill={sticker.accent}
+            d="M32 51 C32 51 11 36.5 11 22 C11 14.5 17 9.5 23.8 9.5 C27.8 9.5 30.8 12 32 15.2 C33.2 12 36.2 9.5 40.2 9.5 C47 9.5 53 14.5 53 22 C53 36.5 32 51 32 51 Z"
+            fill="#FFFFFF"
             stroke="#FFFFFF"
-            strokeWidth="2.2"
+            strokeWidth="5.2"
             strokeLinejoin="round"
           />
-          <path d="M22 20 Q24 17 27 18" fill="none" stroke="#FFFFFF" strokeWidth="1.8" strokeLinecap="round" opacity="0.85" />
+          <path
+            d="M32 51 C32 51 11 36.5 11 22 C11 14.5 17 9.5 23.8 9.5 C27.8 9.5 30.8 12 32 15.2 C33.2 12 36.2 9.5 40.2 9.5 C47 9.5 53 14.5 53 22 C53 36.5 32 51 32 51 Z"
+            fill={motifGrad}
+            stroke={ink}
+            strokeWidth="2"
+            strokeLinejoin="round"
+          />
+          <path d="M17 19 Q20.5 13.5 26 15" fill="none" stroke="#FFFFFF" strokeWidth="2.3" strokeLinecap="round" opacity="0.82" />
+          <circle cx="25.5" cy="27" r="2.3" fill="#FFFFFF" />
+          <circle cx="25.5" cy="27" r="1.4" fill={ink} />
+          <circle cx="38.5" cy="27" r="2.3" fill="#FFFFFF" />
+          <circle cx="38.5" cy="27" r="1.4" fill={ink} />
+          <ellipse cx="21" cy="30.5" rx="2.7" ry="1.6" fill="#FDA4AF" opacity="0.85" />
+          <ellipse cx="43" cy="30.5" rx="2.7" ry="1.6" fill="#FDA4AF" opacity="0.85" />
+          <path d="M29 31.5 Q32 35 35 31.5" fill="none" stroke="#FFFFFF" strokeWidth="2.1" strokeLinecap="round" />
         </g>
       );
     case 'double_heart':
       return (
         <g transform={`translate(0 ${yShift})`}>
           <path
-            d="M25 40 C25 40 13 32 13 24 C13 20 16 17 20 17 C22.5 17 24.5 19 25 20.5 C25.5 19 27.5 17 30 17 C34 17 37 20 37 24 C37 32 25 40 25 40 Z"
-            fill={sticker.accent}
-            opacity="0.8"
+            d="M23 43 C23 43 9 33.5 9 23 C9 17.8 13.2 13.8 18.2 13.8 C21 13.8 22.8 16 23 18 C23.2 16 25 13.8 27.8 13.8 C32.8 13.8 37 17.8 37 23 C37 33.5 23 43 23 43 Z"
+            fill="#FFFFFF"
             stroke="#FFFFFF"
-            strokeWidth="1.8"
+            strokeWidth="4.8"
+            strokeLinejoin="round"
           />
           <path
-            d="M38 43 C38 43 26 35 26 27 C26 23 29 20 33 20 C35.5 20 37.5 22 38 23.5 C38.5 22 40.5 20 43 20 C47 20 50 23 50 27 C50 35 38 43 38 43 Z"
-            fill={sticker.accent}
+            d="M41 47 C41 47 25 36.5 25 25.5 C25 20.2 29.5 16 34.8 16 C37.8 16 40 18.4 41 20.8 C42 18.4 44.2 16 47.2 16 C52.5 16 57 20.2 57 25.5 C57 36.5 41 47 41 47 Z"
+            fill="#FFFFFF"
             stroke="#FFFFFF"
+            strokeWidth="4.8"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M23 43 C23 43 9 33.5 9 23 C9 17.8 13.2 13.8 18.2 13.8 C21 13.8 22.8 16 23 18 C23.2 16 25 13.8 27.8 13.8 C32.8 13.8 37 17.8 37 23 C37 33.5 23 43 23 43 Z"
+            fill={sticker.bg}
+            stroke={ink}
+            strokeWidth="1.9"
+          />
+          <path
+            d="M41 47 C41 47 25 36.5 25 25.5 C25 20.2 29.5 16 34.8 16 C37.8 16 40 18.4 41 20.8 C42 18.4 44.2 16 47.2 16 C52.5 16 57 20.2 57 25.5 C57 36.5 41 47 41 47 Z"
+            fill={motifGrad}
+            stroke={ink}
             strokeWidth="2"
           />
+          <circle cx="37" cy="28" r="1.6" fill="#FFFFFF" />
+          <circle cx="45" cy="28" r="1.6" fill="#FFFFFF" />
+          <path d="M38.5 32 Q41 34.5 43.5 32" fill="none" stroke="#FFFFFF" strokeWidth="1.8" strokeLinecap="round" />
         </g>
       );
     case 'heart_wings':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <path d="M21 26 C14 21 10 23 12 29 C14 32 18 33 22 31" fill="#FFFFFF" stroke={sticker.accent} strokeWidth="2" strokeLinejoin="round" />
-          <path d="M43 26 C50 21 54 23 52 29 C50 32 46 33 42 31" fill="#FFFFFF" stroke={sticker.accent} strokeWidth="2" strokeLinejoin="round" />
-          <path
-            d="M32 42 C32 42 20 34 20 26 C20 22 23 19 27 19 C29.5 19 31 20.8 32 22.5 C33 20.8 34.5 19 37 19 C41 19 44 22 44 26 C44 34 32 42 32 42 Z"
-            fill={sticker.accent}
-            stroke="#FFFFFF"
-            strokeWidth="2"
-          />
+          <path d="M21 25 C11 16 5 20.5 8 29 C10 34.5 16 35 21.5 32.5" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4.5" strokeLinejoin="round" />
+          <path d="M43 25 C53 16 59 20.5 56 29 C54 34.5 48 35 42.5 32.5" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4.5" strokeLinejoin="round" />
+          <path d="M32 47 C32 47 17 36.5 17 25.5 C17 20 21.2 16 26.2 16 C29.2 16 31.2 18.2 32 20.8 C32.8 18.2 34.8 16 37.8 16 C42.8 16 47 20 47 25.5 C47 36.5 32 47 32 47 Z" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="5" />
+          <path d="M21 25 C11 16 5 20.5 8 29 C10 34.5 16 35 21.5 32.5" fill="#F8FAFC" stroke={ink} strokeWidth="2" strokeLinejoin="round" />
+          <path d="M43 25 C53 16 59 20.5 56 29 C54 34.5 48 35 42.5 32.5" fill="#F8FAFC" stroke={ink} strokeWidth="2" strokeLinejoin="round" />
+          <path d="M32 47 C32 47 17 36.5 17 25.5 C17 20 21.2 16 26.2 16 C29.2 16 31.2 18.2 32 20.8 C32.8 18.2 34.8 16 37.8 16 C42.8 16 47 20 47 25.5 C47 36.5 32 47 32 47 Z" fill={motifGrad} stroke={ink} strokeWidth="2" />
+          <path d="M23 22 Q25.5 19 28 20" fill="none" stroke="#FFFFFF" strokeWidth="1.9" strokeLinecap="round" />
+          <path d="M28.5 31.5 Q32 34.5 35.5 31.5" fill="none" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
         </g>
       );
     case 'love_letter':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <rect x="15" y="20" width="34" height="23" rx="4" fill="#FFFFFF" stroke={sticker.accent} strokeWidth="2.2" />
-          <path d="M16 21 L32 33 L48 21" fill="none" stroke={sticker.accent} strokeWidth="2.1" strokeLinejoin="round" />
-          <path d="M32 37 C32 37 27 33.5 27 30.5 C27 28.8 28.5 27.5 30 27.5 C31 27.5 31.7 28.2 32 29 C32.3 28.2 33 27.5 34 27.5 C35.5 27.5 37 28.8 37 30.5 C37 33.5 32 37 32 37 Z" fill={sticker.accent} />
+          <rect x="11" y="16" width="42" height="30" rx="7" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4.8" />
+          <rect x="11" y="16" width="42" height="30" rx="7" fill="#FFFDF9" stroke={ink} strokeWidth="2.1" />
+          <path d="M12.5 18 L32 33.5 L51.5 18" fill="none" stroke={ink} strokeWidth="2" strokeLinejoin="round" />
+          <path d="M32 41 C32 41 25 36 25 31.8 C25 29.4 27 27.6 29.2 27.6 C30.5 27.6 31.5 28.4 32 29.5 C32.5 28.4 33.5 27.6 34.8 27.6 C37 27.6 39 29.4 39 31.8 C39 36 32 41 32 41 Z" fill={motifGrad} stroke="#FFFFFF" strokeWidth="1.5" />
         </g>
       );
     case 'rose':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <line x1="32" y1="31" x2="32" y2="47" stroke="#16A34A" strokeWidth="2.6" strokeLinecap="round" />
-          <path d="M32 40 Q40 37 41 42 Q36 44 32 40" fill="#22C55E" />
-          <circle cx="32" cy="23" r="9" fill={sticker.accent} stroke="#FFFFFF" strokeWidth="1.8" />
-          <path d="M27.5 22.5 Q32 17.5 36.5 22.5 Q32 27.5 27.5 22.5" fill="none" stroke="#FFFFFF" strokeWidth="1.8" />
+          <line x1="32" y1="31" x2="32" y2="52" stroke="#FFFFFF" strokeWidth="6" strokeLinecap="round" />
+          <circle cx="32" cy="21" r="12.5" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4.5" />
+          <line x1="32" y1="31" x2="32" y2="52" stroke="#16A34A" strokeWidth="3.4" strokeLinecap="round" />
+          <path d="M32 42 Q43 37 44.5 43.5 Q38.5 47 32 42" fill="#4ADE80" stroke={ink} strokeWidth="1.6" />
+          <path d="M32 37.5 Q22 34 20.5 39.5 Q26.5 42.5 32 37.5" fill="#22C55E" stroke={ink} strokeWidth="1.6" />
+          <circle cx="32" cy="21" r="12" fill={motifGrad} stroke={ink} strokeWidth="2" />
+          <path d="M24.5 20.5 Q32 13 39.5 20.5 Q32 28 24.5 20.5" fill="none" stroke="#FFFFFF" strokeWidth="2.1" strokeLinecap="round" />
+          <circle cx="32" cy="21" r="2.6" fill="#FFFFFF" opacity="0.88" />
         </g>
       );
     case 'wilted_rose':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <path d="M32 47 Q32 33 38 27" fill="none" stroke="#64748B" strokeWidth="2.4" strokeLinecap="round" />
-          <ellipse cx="40" cy="27" rx="6" ry="5" transform="rotate(28 40 27)" fill={sticker.accent} opacity="0.85" />
-          <path d="M30 43 C32 46 31 48 29.5 48 C28 48 28 46 30 43 Z" fill="#60A5FA" />
+          <path d="M32 51 Q32 34 40 26" fill="none" stroke="#FFFFFF" strokeWidth="6" strokeLinecap="round" />
+          <ellipse cx="42.5" cy="26" rx="8.5" ry="6.5" transform="rotate(28 42.5 26)" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4" />
+          <path d="M32 51 Q32 34 40 26" fill="none" stroke="#64748B" strokeWidth="3" strokeLinecap="round" />
+          <ellipse cx="42.5" cy="26" rx="8" ry="6" transform="rotate(28 42.5 26)" fill={motifGrad} stroke={ink} strokeWidth="1.8" />
+          <path d="M27.5 43 C30 47 29.2 50 27 50 C24.8 50 24.8 47 27.5 43 Z" fill="#38BDF8" stroke="#FFFFFF" strokeWidth="1.2" />
         </g>
       );
     case 'ring':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <circle cx="32" cy="34" r="10.5" fill="none" stroke="#F59E0B" strokeWidth="3.2" />
-          <polygon points="32,16 37,21 32,26 27,21" fill="#FFFFFF" stroke={sticker.accent} strokeWidth="2" />
+          <circle cx="32" cy="37" r="13" fill="none" stroke="#FFFFFF" strokeWidth="7.5" />
+          <polygon points="32,11 41,19 32,27 23,19" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4.5" strokeLinejoin="round" />
+          <circle cx="32" cy="37" r="12.5" fill="none" stroke={goldGrad} strokeWidth="4.2" />
+          <polygon points="32,11 41,19 32,27 23,19" fill="#BAE6FD" stroke={ink} strokeWidth="2" strokeLinejoin="round" />
+          <polyline points="23.5,19 40.5,19" stroke="#FFFFFF" strokeWidth="1.8" />
         </g>
       );
     case 'infinity':
       return (
         <g transform={`translate(0 ${yShift})`}>
           <path
-            d="M23 30 C17 30 14 25 17 21 C20 17 26 20 32 27 C38 34 44 37 47 33 C50 29 47 24 41 24 C36 24 34 26 32 28 C30 30 28 30 23 30 Z"
+            d="M21 34 C13 34 9.5 27.5 14 21.5 C18.5 15.5 25.5 20 32 29 C38.5 38 45.5 42.5 50 36.5 C54.5 30.5 51 24 43 24 C36.5 24 34 26.5 32 29 C30 31.5 27.5 34 21 34 Z"
             fill="none"
-            stroke={sticker.accent}
-            strokeWidth="3.4"
+            stroke="#FFFFFF"
+            strokeWidth="9.5"
             strokeLinecap="round"
           />
-          <circle cx="32" cy="27" r="2.6" fill="#FFFFFF" stroke={sticker.accent} strokeWidth="1.6" />
+          <path
+            d="M21 34 C13 34 9.5 27.5 14 21.5 C18.5 15.5 25.5 20 32 29 C38.5 38 45.5 42.5 50 36.5 C54.5 30.5 51 24 43 24 C36.5 24 34 26.5 32 29 C30 31.5 27.5 34 21 34 Z"
+            fill="none"
+            stroke={motifGrad}
+            strokeWidth="4.8"
+            strokeLinecap="round"
+          />
+          <circle cx="32" cy="29" r="3.6" fill="#FFFFFF" stroke={ink} strokeWidth="1.8" />
         </g>
       );
     case 'butterfly':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <ellipse cx="23" cy="25" rx="8" ry="6.5" transform="rotate(-22 23 25)" fill={sticker.accent} opacity="0.85" stroke="#FFFFFF" strokeWidth="1.5" />
-          <ellipse cx="41" cy="25" rx="8" ry="6.5" transform="rotate(22 41 25)" fill={sticker.accent} opacity="0.85" stroke="#FFFFFF" strokeWidth="1.5" />
-          <ellipse cx="25" cy="35" rx="5.5" ry="4.5" transform="rotate(20 25 35)" fill={sticker.accent} opacity="0.7" />
-          <ellipse cx="39" cy="35" rx="5.5" ry="4.5" transform="rotate(-20 39 35)" fill={sticker.accent} opacity="0.7" />
-          <line x1="32" y1="21" x2="32" y2="39" stroke={sticker.text} strokeWidth="2.5" strokeLinecap="round" />
+          <ellipse cx="20.5" cy="23.5" rx="10.5" ry="8.5" transform="rotate(-24 20.5 23.5)" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4.2" />
+          <ellipse cx="43.5" cy="23.5" rx="10.5" ry="8.5" transform="rotate(24 43.5 23.5)" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4.2" />
+          <ellipse cx="23" cy="36.5" rx="7.5" ry="5.8" transform="rotate(20 23 36.5)" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4.2" />
+          <ellipse cx="41" cy="36.5" rx="7.5" ry="5.8" transform="rotate(-20 41 36.5)" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4.2" />
+          <ellipse cx="20.5" cy="23.5" rx="10" ry="8" transform="rotate(-24 20.5 23.5)" fill={motifGrad} stroke={ink} strokeWidth="1.8" />
+          <ellipse cx="43.5" cy="23.5" rx="10" ry="8" transform="rotate(24 43.5 23.5)" fill={motifGrad} stroke={ink} strokeWidth="1.8" />
+          <ellipse cx="23" cy="36.5" rx="7.2" ry="5.5" transform="rotate(20 23 36.5)" fill={sticker.accent} opacity="0.88" stroke={ink} strokeWidth="1.6" />
+          <ellipse cx="41" cy="36.5" rx="7.2" ry="5.5" transform="rotate(-20 41 36.5)" fill={sticker.accent} opacity="0.88" stroke={ink} strokeWidth="1.6" />
+          <circle cx="19" cy="23" r="2.2" fill="#FFFFFF" opacity="0.85" />
+          <circle cx="45" cy="23" r="2.2" fill="#FFFFFF" opacity="0.85" />
+          <line x1="32" y1="18" x2="32" y2="42" stroke={ink} strokeWidth="3.2" strokeLinecap="round" />
         </g>
       );
     case 'moon_heart':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <path d="M35 16 A14 14 0 1 0 44 40 A11 11 0 1 1 35 16 Z" fill="#FBBF24" stroke={sticker.accent} strokeWidth="1.8" />
-          <path d="M39 30 C39 30 33 26 33 22.5 C33 20.5 34.5 19 36.5 19 C37.8 19 38.6 19.8 39 20.8 C39.4 19.8 40.2 19 41.5 19 C43.5 19 45 20.5 45 22.5 C45 26 39 30 39 30 Z" fill={sticker.accent} stroke="#FFFFFF" strokeWidth="1.4" />
+          <path d="M36 12 A17 17 0 1 0 47 43 A13.5 13.5 0 1 1 36 12 Z" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="5" />
+          <path d="M36 12 A17 17 0 1 0 47 43 A13.5 13.5 0 1 1 36 12 Z" fill={goldGrad} stroke={ink} strokeWidth="1.9" />
+          <path d="M41.5 32.5 C41.5 32.5 33.5 27.2 33.5 22.6 C33.5 20 35.6 18 38.2 18 C39.8 18 40.9 19 41.5 20.2 C42.1 19 43.2 18 44.8 18 C47.4 18 49.5 20 49.5 22.6 C49.5 27.2 41.5 32.5 41.5 32.5 Z" fill={motifGrad} stroke="#FFFFFF" strokeWidth="1.8" />
         </g>
       );
     case 'candle_heart':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <rect x="25" y="27" width="14" height="17" rx="3" fill="#FFFFFF" stroke={sticker.accent} strokeWidth="2" />
-          <path d="M32 14 C35 18 36 21 32 24 C28 21 29 18 32 14 Z" fill="#FB923C" stroke="#EA580C" strokeWidth="1.4" />
-          <circle cx="32" cy="35" r="2.8" fill={sticker.accent} />
+          <rect x="22" y="25" width="20" height="24" rx="5" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4.8" />
+          <path d="M32 9 C37 15.5 38 20 32 24 C26 20 27 15.5 32 9 Z" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4" />
+          <rect x="22" y="25" width="20" height="24" rx="5" fill="#FFFDF9" stroke={ink} strokeWidth="2.1" />
+          <path d="M32 9 C37 15.5 38 20 32 24 C26 20 27 15.5 32 9 Z" fill="#FB923C" stroke={ink} strokeWidth="1.6" />
+          <circle cx="32" cy="36.5" r="4" fill={motifGrad} />
         </g>
       );
     case 'lock_heart':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <path d="M25 27 V22 A7 7 0 0 1 39 22 V27" fill="none" stroke={sticker.accent} strokeWidth="2.6" strokeLinecap="round" />
-          <rect x="21" y="26" width="22" height="17" rx="4.5" fill="#FFFFFF" stroke={sticker.accent} strokeWidth="2.2" />
-          <circle cx="32" cy="34" r="2.6" fill={sticker.accent} />
+          <path d="M22.5 27 V20 A9.5 9.5 0 0 1 41.5 20 V27" fill="none" stroke="#FFFFFF" strokeWidth="7" strokeLinecap="round" />
+          <rect x="17.5" y="25" width="29" height="22" rx="6.5" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4.8" />
+          <path d="M22.5 27 V20 A9.5 9.5 0 0 1 41.5 20 V27" fill="none" stroke={ink} strokeWidth="3.2" strokeLinecap="round" />
+          <rect x="17.5" y="25" width="29" height="22" rx="6.5" fill={pastelGrad} stroke={ink} strokeWidth="2.1" />
+          <path d="M32 41 C32 41 26.5 37 26.5 33.4 C26.5 31.4 28.2 30 30 30 C31 30 31.7 30.6 32 31.5 C32.3 30.6 33 30 34 30 C35.8 30 37.5 31.4 37.5 33.4 C37.5 37 32 41 32 41 Z" fill={motifGrad} stroke="#FFFFFF" strokeWidth="1.2" />
         </g>
       );
     case 'ribbon_heart':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <path d="M18 30 L26 24 L32 30 L38 24 L46 30 L39 36 L32 31 L25 36 Z" fill={sticker.accent} stroke="#FFFFFF" strokeWidth="1.8" strokeLinejoin="round" />
-          <path d="M27 33 L23 44 L29 40 Z M37 33 L41 44 L35 40 Z" fill={sticker.accent} opacity="0.85" />
+          <path d="M13 28 L25 19 L32 28 L39 19 L51 28 L42 38 L32 30 L22 38 Z" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4.8" strokeLinejoin="round" />
+          <path d="M26 32 L20 48 L29 42 Z M38 32 L44 48 L35 42 Z" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4.2" strokeLinejoin="round" />
+          <path d="M26 32 L20 48 L29 42 Z M38 32 L44 48 L35 42 Z" fill={sticker.text} opacity="0.88" stroke={ink} strokeWidth="1.6" />
+          <path d="M13 28 L25 19 L32 28 L39 19 L51 28 L42 38 L32 30 L22 38 Z" fill={motifGrad} stroke={ink} strokeWidth="2" strokeLinejoin="round" />
+          <circle cx="32" cy="29" r="4.2" fill="#FFFFFF" stroke={ink} strokeWidth="1.8" />
         </g>
       );
     case 'kiss_mark':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <path d="M18 31 Q25 23 32 27 Q39 23 46 31 Q39 34 32 32 Q25 34 18 31 Z" fill={sticker.accent} />
-          <path d="M19 32 Q32 42 45 32 Q32 36 19 32 Z" fill={sticker.accent} opacity="0.88" />
+          <path d="M14 30 Q23 19 32 25 Q41 19 50 30 Q41 35 32 32 Q23 35 14 30 Z" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="5" />
+          <path d="M15 32 Q32 46 49 32 Q32 38 15 32 Z" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="5" />
+          <path d="M14 30 Q23 19 32 25 Q41 19 50 30 Q41 35 32 32 Q23 35 14 30 Z" fill={motifGrad} stroke={ink} strokeWidth="1.8" />
+          <path d="M15 32 Q32 46 49 32 Q32 38 15 32 Z" fill={motifGrad} stroke={ink} strokeWidth="1.8" />
+          <path d="M25 36 Q32 39 39 36" fill="none" stroke="#FFFFFF" strokeWidth="1.6" strokeLinecap="round" opacity="0.8" />
         </g>
       );
     case 'broken_heart':
       return (
         <g transform={`translate(0 ${yShift})`}>
           <path
-            d="M32 44 C32 44 17 34 17 24 C17 19 21 15 25 15 C28 15 30.5 17 32 19.5 C33.5 17 36 15 39 15 C43 15 47 19 47 24 C47 34 32 44 32 44 Z"
-            fill={sticker.accent}
+            d="M32 49 C32 49 12.5 36 12.5 22.5 C12.5 16 17.8 11.5 23.5 11.5 C27.2 11.5 30.2 14 32 17.5 C33.8 14 36.8 11.5 40.5 11.5 C46.2 11.5 51.5 16 51.5 22.5 C51.5 36 32 49 32 49 Z"
+            fill="#FFFFFF"
             stroke="#FFFFFF"
+            strokeWidth="5"
+          />
+          <path
+            d="M32 49 C32 49 12.5 36 12.5 22.5 C12.5 16 17.8 11.5 23.5 11.5 C27.2 11.5 30.2 14 32 17.5 C33.8 14 36.8 11.5 40.5 11.5 C46.2 11.5 51.5 16 51.5 22.5 C51.5 36 32 49 32 49 Z"
+            fill={motifGrad}
+            stroke={ink}
             strokeWidth="2"
           />
-          <polyline points="32,19 29,26 35,31 31,42" fill="none" stroke="#FFFFFF" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+          <polyline points="32,16 28,25 36,31 30.5,46" fill="none" stroke="#FFFFFF" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
         </g>
       );
     case 'bandage_heart':
       return (
         <g transform={`translate(0 ${yShift})`}>
           <path
-            d="M32 44 C32 44 17 34 17 24 C17 19 21 15 25 15 C28 15 30.5 17 32 19.5 C33.5 17 36 15 39 15 C43 15 47 19 47 24 C47 34 32 44 32 44 Z"
-            fill={sticker.accent}
+            d="M32 49 C32 49 12.5 36 12.5 22.5 C12.5 16 17.8 11.5 23.5 11.5 C27.2 11.5 30.2 14 32 17.5 C33.8 14 36.8 11.5 40.5 11.5 C46.2 11.5 51.5 16 51.5 22.5 C51.5 36 32 49 32 49 Z"
+            fill="#FFFFFF"
             stroke="#FFFFFF"
+            strokeWidth="5"
+          />
+          <path
+            d="M32 49 C32 49 12.5 36 12.5 22.5 C12.5 16 17.8 11.5 23.5 11.5 C27.2 11.5 30.2 14 32 17.5 C33.8 14 36.8 11.5 40.5 11.5 C46.2 11.5 51.5 16 51.5 22.5 C51.5 36 32 49 32 49 Z"
+            fill={motifGrad}
+            stroke={ink}
             strokeWidth="2"
           />
-          <rect x="24" y="26" width="16" height="6" rx="2.5" transform="rotate(-18 32 29)" fill="#FFFFFF" stroke={sticker.text} strokeWidth="1.4" />
+          <rect x="21" y="25" width="22" height="8" rx="4" transform="rotate(-18 32 29)" fill="#FFFFFF" stroke={ink} strokeWidth="1.8" />
         </g>
       );
     case 'cloud_rain':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <path d="M22 33 H43 A6 6 0 0 0 43 21 A8 8 0 0 0 27 19 A6.5 6.5 0 0 0 22 33 Z" fill="#FFFFFF" stroke={sticker.accent} strokeWidth="2.2" />
-          <line x1="25" y1="37" x2="23" y2="43" stroke={sticker.accent} strokeWidth="2.2" strokeLinecap="round" />
-          <line x1="32" y1="37" x2="30" y2="44" stroke={sticker.accent} strokeWidth="2.2" strokeLinecap="round" />
-          <line x1="39" y1="37" x2="37" y2="43" stroke={sticker.accent} strokeWidth="2.2" strokeLinecap="round" />
+          <path d="M18 35 H46.5 A7.5 7.5 0 0 0 46.5 20 A10 10 0 0 0 26.5 17 A8.2 8.2 0 0 0 18 35 Z" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="5" />
+          <path d="M18 35 H46.5 A7.5 7.5 0 0 0 46.5 20 A10 10 0 0 0 26.5 17 A8.2 8.2 0 0 0 18 35 Z" fill="#F1F5F9" stroke={ink} strokeWidth="2.1" />
+          <circle cx="27.5" cy="26.5" r="1.8" fill={ink} />
+          <circle cx="36.5" cy="26.5" r="1.8" fill={ink} />
+          <path d="M29.5 31 Q32 29 34.5 31" fill="none" stroke={ink} strokeWidth="1.8" strokeLinecap="round" />
+          <line x1="23.5" y1="39.5" x2="21" y2="47" stroke="#38BDF8" strokeWidth="2.8" strokeLinecap="round" />
+          <line x1="32" y1="39.5" x2="29.5" y2="48" stroke="#38BDF8" strokeWidth="2.8" strokeLinecap="round" />
+          <line x1="40.5" y1="39.5" x2="38" y2="47" stroke="#38BDF8" strokeWidth="2.8" strokeLinecap="round" />
         </g>
       );
     case 'umbrella':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <path d="M17 31 A15 14 0 0 1 47 31 Z" fill={sticker.accent} stroke="#FFFFFF" strokeWidth="2" />
-          <path d="M32 31 V42 A3 3 0 0 1 26 42" fill="none" stroke={sticker.text} strokeWidth="2.4" strokeLinecap="round" />
+          <path d="M13 31 A19 17 0 0 1 51 31 Z" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="5" />
+          <path d="M13 31 A19 17 0 0 1 51 31 Z" fill={motifGrad} stroke={ink} strokeWidth="2.1" />
+          <path d="M32 31 V46 A3.5 3.5 0 0 1 25 46" fill="none" stroke={ink} strokeWidth="2.8" strokeLinecap="round" />
         </g>
       );
     case 'face_happy':
     case 'face_blush':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <circle cx="32" cy="30" r="14.5" fill="#FFFFFF" stroke={sticker.accent} strokeWidth="2.3" />
-          <circle cx="27" cy="27.5" r="2" fill={sticker.text} />
-          <circle cx="37" cy="27.5" r="2" fill={sticker.text} />
-          {motif === 'face_blush' && (
-            <>
-              <circle cx="23" cy="32" r="2.5" fill="#FDA4AF" opacity="0.85" />
-              <circle cx="41" cy="32" r="2.5" fill="#FDA4AF" opacity="0.85" />
-            </>
-          )}
-          <path d="M26 34 Q32 39.5 38 34" fill="none" stroke={sticker.text} strokeWidth="2.2" strokeLinecap="round" />
+          {renderMascotHead(mascot, motif === 'face_blush' ? '#FCE7F3' : '#FEF08A', sticker.accent, ink)}
+          {renderCartoonEyes(motif === 'face_blush' ? 'blush' : 'happy', ink, sticker.accent)}
+          <ellipse cx="19.5" cy="33" rx="3.4" ry="2" fill="#FB7185" opacity={motif === 'face_blush' ? 0.78 : 0.45} />
+          <ellipse cx="44.5" cy="33" rx="3.4" ry="2" fill="#FB7185" opacity={motif === 'face_blush' ? 0.78 : 0.45} />
+          <path d="M26 35.5 Q32 42 38 35.5" fill="none" stroke={ink} strokeWidth="2.4" strokeLinecap="round" />
         </g>
       );
     case 'face_wink':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <circle cx="32" cy="30" r="14.5" fill="#FFFFFF" stroke={sticker.accent} strokeWidth="2.3" />
-          <circle cx="26.5" cy="27.5" r="2" fill={sticker.text} />
-          <path d="M34.5 27.5 Q37.5 25 40 27.5" fill="none" stroke={sticker.text} strokeWidth="2.1" strokeLinecap="round" />
-          <path d="M26 34 Q32 39 38 33.5" fill="none" stroke={sticker.text} strokeWidth="2.2" strokeLinecap="round" />
+          {renderMascotHead(mascot, '#FEF08A', sticker.accent, ink)}
+          {renderCartoonEyes('wink', ink, sticker.accent)}
+          <ellipse cx="19.5" cy="33" rx="3.1" ry="1.8" fill="#FB7185" opacity="0.58" />
+          <path d="M26 35.5 Q32 41.5 38 35" fill="none" stroke={ink} strokeWidth="2.4" strokeLinecap="round" />
         </g>
       );
     case 'face_laugh':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <circle cx="32" cy="30" r="14.5" fill="#FFFFFF" stroke={sticker.accent} strokeWidth="2.3" />
-          <path d="M24 27 L29 29 L24 30" fill="none" stroke={sticker.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M40 27 L35 29 L40 30" fill="none" stroke={sticker.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M25 33 Q32 41 39 33 Z" fill={sticker.accent} stroke={sticker.text} strokeWidth="1.6" />
+          {renderMascotHead(mascot, '#FDE047', sticker.accent, ink)}
+          {renderCartoonEyes('laugh', ink, sticker.accent)}
+          <ellipse cx="19" cy="33" rx="3" ry="1.8" fill="#FB7185" opacity="0.52" />
+          <ellipse cx="45" cy="33" rx="3" ry="1.8" fill="#FB7185" opacity="0.52" />
+          <path d="M23.5 34 Q32 44.5 40.5 34 Z" fill="#FB7185" stroke={ink} strokeWidth="1.9" />
+          <path d="M25.5 34.8 H38.5" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
         </g>
       );
     case 'face_goofy':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <circle cx="32" cy="30" r="14.5" fill="#FFFFFF" stroke={sticker.accent} strokeWidth="2.3" />
-          <circle cx="26.5" cy="26.5" r="2.4" fill={sticker.text} />
-          <circle cx="37.5" cy="28.5" r="1.7" fill={sticker.text} />
-          <path d="M25 34 Q32 38 39 33" fill="none" stroke={sticker.text} strokeWidth="2.1" strokeLinecap="round" />
-          <path d="M31 36 V40 A2.5 2.5 0 0 0 36 40 V35" fill="#FB7185" />
+          {renderMascotHead(mascot, '#FEF08A', sticker.accent, ink)}
+          {renderCartoonEyes('goofy', ink, sticker.accent)}
+          <path d="M24 35.5 Q32 40 40 34.5" fill="none" stroke={ink} strokeWidth="2.3" strokeLinecap="round" />
+          <path d="M30 37.5 V43 A3 3 0 0 0 36 43 V36.8" fill="#F43F5E" stroke={ink} strokeWidth="1.5" />
         </g>
       );
     case 'face_shock':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <circle cx="32" cy="30" r="14.5" fill="#FFFFFF" stroke={sticker.accent} strokeWidth="2.3" />
-          <circle cx="27" cy="26.5" r="2.2" fill={sticker.text} />
-          <circle cx="37" cy="26.5" r="2.2" fill={sticker.text} />
-          <ellipse cx="32" cy="35.5" rx="3.4" ry="4.4" fill={sticker.accent} />
+          {renderMascotHead(mascot, '#FEF08A', sticker.accent, ink)}
+          {renderCartoonEyes('shock', ink, sticker.accent)}
+          <ellipse cx="32" cy="38" rx="4.2" ry="5.2" fill="#FB7185" stroke={ink} strokeWidth="1.8" />
         </g>
       );
     case 'face_cool':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <circle cx="32" cy="30" r="14.5" fill="#FFFFFF" stroke={sticker.accent} strokeWidth="2.3" />
-          <rect x="21" y="24" width="9.5" height="5.5" rx="2" fill={sticker.text} />
-          <rect x="33.5" y="24" width="9.5" height="5.5" rx="2" fill={sticker.text} />
-          <line x1="30.5" y1="26" x2="33.5" y2="26" stroke={sticker.text} strokeWidth="2" />
-          <path d="M27 35 Q32 38.5 37 34" fill="none" stroke={sticker.text} strokeWidth="2.1" strokeLinecap="round" />
+          {renderMascotHead(mascot, '#FEF08A', sticker.accent, ink)}
+          {renderCartoonEyes('cool', ink, sticker.accent)}
+          <path d="M26.5 36.5 Q32 40.5 37.5 35.5" fill="none" stroke={ink} strokeWidth="2.3" strokeLinecap="round" />
         </g>
       );
     case 'face_sleep':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <circle cx="32" cy="30" r="14.5" fill="#FFFFFF" stroke={sticker.accent} strokeWidth="2.3" />
-          <path d="M24 28 Q27 30.5 30 28 M34 28 Q37 30.5 40 28" fill="none" stroke={sticker.text} strokeWidth="2" strokeLinecap="round" />
-          <circle cx="32" cy="35.5" r="2.3" fill={sticker.accent} />
+          {renderMascotHead(mascot, '#E0E7FF', sticker.accent, ink)}
+          {renderCartoonEyes('sleep', ink, sticker.accent)}
+          <circle cx="32" cy="37" r="2.8" fill="#FB7185" stroke={ink} strokeWidth="1.4" />
         </g>
       );
     case 'face_sad':
     case 'face_cry':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <circle cx="32" cy="30" r="14.5" fill="#FFFFFF" stroke={sticker.accent} strokeWidth="2.3" />
-          <circle cx="27" cy="27.5" r="2" fill={sticker.text} />
-          <circle cx="37" cy="27.5" r="2" fill={sticker.text} />
-          <path d="M26 37 Q32 32.5 38 37" fill="none" stroke={sticker.text} strokeWidth="2.2" strokeLinecap="round" />
-          {motif === 'face_cry' && (
-            <>
-              <path d="M24 31 C26 34 25.5 37 23.5 37 C21.5 37 21.5 34 24 31 Z" fill="#60A5FA" />
-              <path d="M40 31 C42 34 41.5 37 39.5 37 C37.5 37 37.5 34 40 31 Z" fill="#60A5FA" />
-            </>
-          )}
+          {renderMascotHead(mascot, '#E2E8F0', sticker.accent, ink)}
+          {renderCartoonEyes(motif === 'face_cry' ? 'cry' : 'sad', ink, sticker.accent)}
+          <path d="M25.5 39 Q32 33.5 38.5 39" fill="none" stroke={ink} strokeWidth="2.4" strokeLinecap="round" />
         </g>
       );
     case 'star':
       return (
         <g transform={`translate(0 ${yShift})`}>
           <path
-            d="M32 14 L36.5 25 L48.5 26 L39.5 33.5 L42 45 L32 38.5 L22 45 L24.5 33.5 L15.5 26 L27.5 25 Z"
-            fill="#FBBF24"
-            stroke={sticker.accent}
-            strokeWidth="2.2"
+            d="M32 10 L38 23.5 L53 25 L41.5 35 L45 49.5 L32 41.5 L19 49.5 L22.5 35 L11 25 L26 23.5 Z"
+            fill="#FFFFFF"
+            stroke="#FFFFFF"
+            strokeWidth="5"
             strokeLinejoin="round"
           />
+          <path
+            d="M32 10 L38 23.5 L53 25 L41.5 35 L45 49.5 L32 41.5 L19 49.5 L22.5 35 L11 25 L26 23.5 Z"
+            fill={goldGrad}
+            stroke={ink}
+            strokeWidth="2.1"
+            strokeLinejoin="round"
+          />
+          <circle cx="28" cy="29" r="1.9" fill={ink} />
+          <circle cx="36" cy="29" r="1.9" fill={ink} />
+          <path d="M29.5 33 Q32 35.5 34.5 33" fill="none" stroke={ink} strokeWidth="1.8" strokeLinecap="round" />
         </g>
       );
     case 'sparkle_burst':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <path d="M32 14 L35.5 26.5 L48 30 L35.5 33.5 L32 46 L28.5 33.5 L16 30 L28.5 26.5 Z" fill="#FFFFFF" stroke={sticker.accent} strokeWidth="2.2" strokeLinejoin="round" />
-          <circle cx="44" cy="19" r="2.2" fill={sticker.accent} />
-          <circle cx="20" cy="41" r="2.2" fill={sticker.accent} />
+          <path d="M32 9 L36.5 25 L52 30 L36.5 35 L32 51 L27.5 35 L12 30 L27.5 25 Z" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4.8" strokeLinejoin="round" />
+          <path d="M32 9 L36.5 25 L52 30 L36.5 35 L32 51 L27.5 35 L12 30 L27.5 25 Z" fill={motifGrad} stroke={ink} strokeWidth="2" strokeLinejoin="round" />
+          <path d="M47 13 L48.3 16 L51.3 17.3 L48.3 18.6 L47 21.6 L45.7 18.6 L42.7 17.3 L45.7 16 Z" fill={goldGrad} />
+          <path d="M17 40 L18.2 42.5 L20.7 43.7 L18.2 44.9 L17 47.4 L15.8 44.9 L13.3 43.7 L15.8 42.5 Z" fill={goldGrad} />
         </g>
       );
     case 'crown':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <path
-            d="M17 38 L20 22 L28 29 L32 18 L36 29 L44 22 L47 38 Z"
-            fill="#FBBF24"
-            stroke={sticker.accent}
-            strokeWidth="2.2"
-            strokeLinejoin="round"
-          />
-          <rect x="18" y="40" width="28" height="4.5" rx="2" fill={sticker.accent} />
+          <path d="M13 40 L17 19 L27 28 L32 13 L37 28 L47 19 L51 40 Z" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="5" strokeLinejoin="round" />
+          <rect x="14" y="42" width="36" height="6.5" rx="3" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4.5" />
+          <path d="M13 40 L17 19 L27 28 L32 13 L37 28 L47 19 L51 40 Z" fill={goldGrad} stroke={ink} strokeWidth="2.1" strokeLinejoin="round" />
+          <rect x="14" y="42" width="36" height="6.5" rx="3" fill={motifGrad} stroke={ink} strokeWidth="1.9" />
+          <circle cx="32" cy="13" r="2.7" fill="#F43F5E" stroke="#FFFFFF" strokeWidth="1.1" />
+          <circle cx="17.5" cy="19" r="2.2" fill="#38BDF8" stroke="#FFFFFF" strokeWidth="1" />
+          <circle cx="46.5" cy="19" r="2.2" fill="#10B981" stroke="#FFFFFF" strokeWidth="1" />
         </g>
       );
     case 'fire':
       return (
         <g transform={`translate(0 ${yShift})`}>
           <path
-            d="M33 14 C39 21 45 25 45 34 C45 41 39.5 46 32 46 C24.5 46 19 41 19 34 C19 28 23 24 25.5 22 C25.5 25.5 27.5 27 29 27 C27.5 22 29.5 17 33 14 Z"
-            fill="#FB923C"
-            stroke={sticker.accent}
-            strokeWidth="2.1"
+            d="M33.5 9.5 C41 18.5 49 24.5 49 35.5 C49 44.5 41.8 50.5 32 50.5 C22.2 50.5 15 44.5 15 35.5 C15 28 20.5 22.5 24 20 C24 24.5 26.5 26.5 28.5 26.5 C26.5 20 29 14 33.5 9.5 Z"
+            fill="#FFFFFF"
+            stroke="#FFFFFF"
+            strokeWidth="5"
           />
+          <path
+            d="M33.5 9.5 C41 18.5 49 24.5 49 35.5 C49 44.5 41.8 50.5 32 50.5 C22.2 50.5 15 44.5 15 35.5 C15 28 20.5 22.5 24 20 C24 24.5 26.5 26.5 28.5 26.5 C26.5 20 29 14 33.5 9.5 Z"
+            fill={motifGrad}
+            stroke={ink}
+            strokeWidth="2"
+          />
+          <path d="M32 29 C35.8 34 37.5 38.5 36.2 42.5 C35 45.5 29.5 45.5 28 42.5 C26.5 39 29 33.5 32 29 Z" fill="#FDE047" />
         </g>
       );
     case 'tea_cup':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <path d="M19 26 H41 V35 C41 40.5 36.5 44 30 44 C23.5 44 19 40.5 19 35 Z" fill="#FFFFFF" stroke={sticker.accent} strokeWidth="2.2" />
-          <path d="M41 28 H44.5 C46.5 28 47.5 29.5 47.5 31.5 C47.5 34 45.5 35.5 43 35.5 H41" fill="none" stroke={sticker.accent} strokeWidth="2.2" />
-          <path d="M25 20 Q27 16 25 13 M31 20 Q33 16 31 13 M37 20 Q39 16 37 13" fill="none" stroke={sticker.accent} strokeWidth="1.9" strokeLinecap="round" />
+          <path d="M16 25 H44 V37 C44 43.5 38.2 48 30 48 C21.8 48 16 43.5 16 37 Z" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="5" />
+          <path d="M44 27.5 H48 C50.5 27.5 52 29.5 52 32.5 C52 35.5 49.5 37.5 46 37.5 H44" fill="none" stroke="#FFFFFF" strokeWidth="5.5" />
+          <path d="M16 25 H44 V37 C44 43.5 38.2 48 30 48 C21.8 48 16 43.5 16 37 Z" fill="#FFFDF9" stroke={ink} strokeWidth="2.1" />
+          <path d="M44 27.5 H48 C50.5 27.5 52 29.5 52 32.5 C52 35.5 49.5 37.5 46 37.5 H44" fill="none" stroke={ink} strokeWidth="2.4" />
+          <path d="M23 19 Q25.5 14 23 10.5 M30 19 Q32.5 14 30 10.5 M37 19 Q39.5 14 37 10.5" fill="none" stroke={sticker.accent} strokeWidth="2.2" strokeLinecap="round" opacity="0.88" />
+          <circle cx="25.5" cy="34.5" r="1.7" fill={ink} />
+          <circle cx="34.5" cy="34.5" r="1.7" fill={ink} />
+          <path d="M28 38.5 Q30 40.5 32 38.5" fill="none" stroke={ink} strokeWidth="1.7" strokeLinecap="round" />
         </g>
       );
     case 'music':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <path d="M27 38 V20 L43 16 V34" fill="none" stroke={sticker.accent} strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
-          <circle cx="23.5" cy="39" r="4.5" fill={sticker.accent} />
-          <circle cx="39.5" cy="35" r="4.5" fill={sticker.accent} />
+          <path d="M25 40 V17 L46 12 V35" fill="none" stroke="#FFFFFF" strokeWidth="7.5" strokeLinecap="round" strokeLinejoin="round" />
+          <circle cx="20.5" cy="41.5" r="6" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4" />
+          <circle cx="41.5" cy="36.5" r="6" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4" />
+          <path d="M25 40 V17 L46 12 V35" fill="none" stroke={ink} strokeWidth="3.6" strokeLinecap="round" strokeLinejoin="round" />
+          <circle cx="20.5" cy="41.5" r="5.6" fill={motifGrad} stroke={ink} strokeWidth="1.9" />
+          <circle cx="41.5" cy="36.5" r="5.6" fill={motifGrad} stroke={ink} strokeWidth="1.9" />
         </g>
       );
     case 'rocket':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <path d="M32 13 C39 20 41 29 38 38 H26 C23 29 25 20 32 13 Z" fill="#FFFFFF" stroke={sticker.accent} strokeWidth="2.2" />
-          <circle cx="32" cy="26" r="3.5" fill={sticker.accent} />
-          <path d="M26 35 L20.5 40 L26 39 Z M38 35 L43.5 40 L38 39 Z" fill={sticker.accent} />
-          <path d="M29.5 40 L32 47 L34.5 40 Z" fill="#F97316" />
+          <path d="M32 9.5 C41.5 18.5 43.5 30 40 41 H24 C20.5 30 22.5 18.5 32 9.5 Z" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="5" />
+          <path d="M24 36 L16.5 43.5 L24 41.8 Z M40 36 L47.5 43.5 L40 41.8 Z" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4" />
+          <path d="M32 9.5 C41.5 18.5 43.5 30 40 41 H24 C20.5 30 22.5 18.5 32 9.5 Z" fill="#F8FAFC" stroke={ink} strokeWidth="2.1" />
+          <circle cx="32" cy="25" r="4.6" fill={motifGrad} stroke={ink} strokeWidth="1.8" />
+          <path d="M24 36 L16.5 43.5 L24 41.8 Z M40 36 L47.5 43.5 L40 41.8 Z" fill={motifGrad} stroke={ink} strokeWidth="1.5" />
+          <path d="M28 42.5 L32 52 L36 42.5 Z" fill="#FB923C" stroke="#FDE047" strokeWidth="1.2" />
         </g>
       );
     case 'lightning':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <polygon points="35,14 21,32 31,32 28,46 43,27 33,27" fill="#FACC15" stroke={sticker.accent} strokeWidth="2.2" strokeLinejoin="round" />
+          <polygon points="36.5,10 18.5,33 30.5,33 26.5,51 45.5,27 33.5,27" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="5" strokeLinejoin="round" />
+          <polygon points="36.5,10 18.5,33 30.5,33 26.5,51 45.5,27 33.5,27" fill={goldGrad} stroke={ink} strokeWidth="2.1" strokeLinejoin="round" />
         </g>
       );
     case 'ghost_boo':
       return (
         <g transform={`translate(0 ${yShift})`}>
           <path
-            d="M21 43 V27 A11 11 0 0 1 43 27 V43 L38.5 39.5 L34 43 L29.5 39.5 L25 43 Z"
+            d="M17.5 47 V27 A14.5 14.5 0 0 1 46.5 27 V47 L40.5 42.5 L34.8 47 L29.2 42.5 L23.5 47 Z"
             fill="#FFFFFF"
-            stroke={sticker.accent}
-            strokeWidth="2.2"
+            stroke="#FFFFFF"
+            strokeWidth="5"
             strokeLinejoin="round"
           />
-          <circle cx="28" cy="27" r="2" fill={sticker.text} />
-          <circle cx="36" cy="27" r="2" fill={sticker.text} />
-          <ellipse cx="32" cy="33" rx="2.6" ry="2" fill={sticker.accent} />
+          <path
+            d="M17.5 47 V27 A14.5 14.5 0 0 1 46.5 27 V47 L40.5 42.5 L34.8 47 L29.2 42.5 L23.5 47 Z"
+            fill="#F8FAFC"
+            stroke={ink}
+            strokeWidth="2.1"
+            strokeLinejoin="round"
+          />
+          <circle cx="27" cy="26.5" r="2.6" fill={ink} />
+          <circle cx="37" cy="26.5" r="2.6" fill={ink} />
+          <circle cx="27.8" cy="25.5" r="0.9" fill="#FFFFFF" />
+          <circle cx="37.8" cy="25.5" r="0.9" fill="#FFFFFF" />
+          <ellipse cx="22.5" cy="30.5" rx="2.5" ry="1.5" fill="#FB7185" opacity="0.6" />
+          <ellipse cx="41.5" cy="30.5" rx="2.5" ry="1.5" fill="#FB7185" opacity="0.6" />
+          <ellipse cx="32" cy="33.5" rx="3.2" ry="2.8" fill="#FB7185" stroke={ink} strokeWidth="1.4" />
         </g>
       );
     case 'trophy':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <path d="M23 18 H41 V27 A9 9 0 0 1 23 27 Z" fill="#FBBF24" stroke={sticker.accent} strokeWidth="2.1" />
-          <path d="M23 21 H18.5 C18.5 26 20.5 28 23 28 M41 21 H45.5 C45.5 26 43.5 28 41 28" fill="none" stroke={sticker.accent} strokeWidth="2" />
-          <line x1="32" y1="36" x2="32" y2="42" stroke={sticker.accent} strokeWidth="2.6" />
-          <rect x="25" y="42" width="14" height="3.5" rx="1.5" fill={sticker.accent} />
+          <path d="M20 15 H44 V27 A12 12 0 0 1 20 27 Z" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="5" />
+          <rect x="22" y="43.5" width="20" height="5" rx="2.2" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4.2" />
+          <path d="M20 15 H44 V27 A12 12 0 0 1 20 27 Z" fill={goldGrad} stroke={ink} strokeWidth="2.1" />
+          <path d="M20 18.5 H14.5 C14.5 25.5 17 28.5 20 28.5 M44 18.5 H49.5 C49.5 25.5 47 28.5 44 28.5" fill="none" stroke={ink} strokeWidth="2.3" />
+          <line x1="32" y1="39" x2="32" y2="43.5" stroke={ink} strokeWidth="3.2" />
+          <rect x="22" y="43.5" width="20" height="5" rx="2.2" fill={motifGrad} stroke={ink} strokeWidth="1.8" />
         </g>
       );
     case 'diamond':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <polygon points="24,18 40,18 47,26 32,44 17,26" fill="#FFFFFF" stroke={sticker.accent} strokeWidth="2.2" strokeLinejoin="round" />
-          <polyline points="17,26 47,26" stroke={sticker.accent} strokeWidth="1.8" />
-          <polyline points="24,18 32,26 40,18" fill="none" stroke={sticker.accent} strokeWidth="1.6" />
+          <polygon points="21,15 43,15 52,26.5 32,49 12,26.5" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="5" strokeLinejoin="round" />
+          <polygon points="21,15 43,15 52,26.5 32,49 12,26.5" fill="#BAE6FD" stroke={ink} strokeWidth="2.1" strokeLinejoin="round" />
+          <polyline points="12,26.5 52,26.5" stroke={ink} strokeWidth="1.8" />
+          <polyline points="21,15 32,26.5 43,15" fill="none" stroke="#FFFFFF" strokeWidth="2" />
+          <polygon points="26.5,26.5 37.5,26.5 32,47.5" fill={sticker.accent} opacity="0.24" />
         </g>
       );
     case 'flower':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <circle cx="32" cy="20" r="5" fill={sticker.accent} opacity="0.85" />
-          <circle cx="40" cy="27" r="5" fill={sticker.accent} opacity="0.85" />
-          <circle cx="37" cy="36" r="5" fill={sticker.accent} opacity="0.85" />
-          <circle cx="27" cy="36" r="5" fill={sticker.accent} opacity="0.85" />
-          <circle cx="24" cy="27" r="5" fill={sticker.accent} opacity="0.85" />
-          <circle cx="32" cy="29" r="5" fill="#FBBF24" stroke="#FFFFFF" strokeWidth="1.6" />
+          <circle cx="32" cy="17.5" r="6.8" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4" />
+          <circle cx="43" cy="26" r="6.8" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4" />
+          <circle cx="39" cy="38.5" r="6.8" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4" />
+          <circle cx="25" cy="38.5" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4" r="6.8" />
+          <circle cx="21" cy="26" r="6.8" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4" />
+          <circle cx="32" cy="17.5" r="6.4" fill={motifGrad} stroke={ink} strokeWidth="1.8" />
+          <circle cx="43" cy="26" r="6.4" fill={motifGrad} stroke={ink} strokeWidth="1.8" />
+          <circle cx="39" cy="38.5" r="6.4" fill={motifGrad} stroke={ink} strokeWidth="1.8" />
+          <circle cx="25" cy="38.5" r="6.4" fill={motifGrad} stroke={ink} strokeWidth="1.8" />
+          <circle cx="21" cy="26" r="6.4" fill={motifGrad} stroke={ink} strokeWidth="1.8" />
+          <circle cx="32" cy="29" r="6.6" fill={goldGrad} stroke={ink} strokeWidth="1.9" />
+          <circle cx="29.8" cy="28" r="1.2" fill={ink} />
+          <circle cx="34.2" cy="28" r="1.2" fill={ink} />
+          <path d="M30 30.8 Q32 32.5 34 30.8" fill="none" stroke={ink} strokeWidth="1.5" strokeLinecap="round" />
         </g>
       );
     case 'sun':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <circle cx="32" cy="29" r="8.5" fill="#FBBF24" stroke={sticker.accent} strokeWidth="2" />
-          <line x1="32" y1="15" x2="32" y2="18" stroke={sticker.accent} strokeWidth="2.2" strokeLinecap="round" />
-          <line x1="32" y1="40" x2="32" y2="43" stroke={sticker.accent} strokeWidth="2.2" strokeLinecap="round" />
-          <line x1="18" y1="29" x2="21" y2="29" stroke={sticker.accent} strokeWidth="2.2" strokeLinecap="round" />
-          <line x1="43" y1="29" x2="46" y2="29" stroke={sticker.accent} strokeWidth="2.2" strokeLinecap="round" />
+          <circle cx="32" cy="29" r="12" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="5" />
+          <circle cx="32" cy="29" r="11.5" fill={goldGrad} stroke={ink} strokeWidth="2.1" />
+          <line x1="32" y1="10.5" x2="32" y2="14.5" stroke={sticker.accent} strokeWidth="2.8" strokeLinecap="round" />
+          <line x1="32" y1="43.5" x2="32" y2="47.5" stroke={sticker.accent} strokeWidth="2.8" strokeLinecap="round" />
+          <line x1="13.5" y1="29" x2="17.5" y2="29" stroke={sticker.accent} strokeWidth="2.8" strokeLinecap="round" />
+          <line x1="46.5" y1="29" x2="50.5" y2="29" stroke={sticker.accent} strokeWidth="2.8" strokeLinecap="round" />
+          <circle cx="28" cy="28" r="1.7" fill={ink} />
+          <circle cx="36" cy="28" r="1.7" fill={ink} />
+          <path d="M28.5 32 Q32 35 35.5 32" fill="none" stroke={ink} strokeWidth="1.8" strokeLinecap="round" />
         </g>
       );
     case 'moon_crescent':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <path d="M36 16 A13 13 0 1 0 45 39 A10 10 0 1 1 36 16 Z" fill="#FDE047" stroke={sticker.accent} strokeWidth="2" />
-          <circle cx="42" cy="23" r="1.8" fill={sticker.accent} />
+          <path d="M37 12 A16.5 16.5 0 1 0 49 42 A13 13 0 1 1 37 12 Z" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="5" />
+          <path d="M37 12 A16.5 16.5 0 1 0 49 42 A13 13 0 1 1 37 12 Z" fill={goldGrad} stroke={ink} strokeWidth="2" />
+          <path d="M44.5 18 L45.8 21.2 L49 22.5 L45.8 23.8 L44.5 27 L43.2 23.8 L40 22.5 L43.2 21.2 Z" fill="#FDE047" stroke="#FFFFFF" strokeWidth="0.9" />
         </g>
       );
     case 'gift':
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <rect x="20" y="25" width="24" height="18" rx="3" fill="#FFFFFF" stroke={sticker.accent} strokeWidth="2.2" />
-          <line x1="32" y1="25" x2="32" y2="43" stroke={sticker.accent} strokeWidth="2.4" />
-          <line x1="20" y1="32" x2="44" y2="32" stroke={sticker.accent} strokeWidth="2.4" />
-          <path d="M32 25 C27 19 22 21 25 25 M32 25 C37 19 42 21 39 25" fill="none" stroke={sticker.accent} strokeWidth="2" strokeLinecap="round" />
+          <rect x="17" y="23" width="30" height="23" rx="5" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="5" />
+          <rect x="17" y="23" width="30" height="23" rx="5" fill="#FFFDF9" stroke={ink} strokeWidth="2.1" />
+          <line x1="32" y1="23" x2="32" y2="46" stroke={motifGrad} strokeWidth="3.8" />
+          <line x1="17" y1="32.5" x2="47" y2="32.5" stroke={motifGrad} strokeWidth="3.8" />
+          <path d="M32 23 C25 14.5 18.5 18 23 23 M32 23 C39 14.5 45.5 18 41 23" fill="none" stroke={ink} strokeWidth="2.4" strokeLinecap="round" />
         </g>
       );
     case 'speech':
     default:
       return (
         <g transform={`translate(0 ${yShift})`}>
-          <rect x="14" y="18" width="36" height="24" rx="10" fill="#FFFFFF" stroke={sticker.accent} strokeWidth="2.2" />
-          <path d="M24 41 L20 47 L30 42" fill="#FFFFFF" stroke={sticker.accent} strokeWidth="2.2" strokeLinejoin="round" />
-          <circle cx="26" cy="30" r="2" fill={sticker.accent} />
-          <circle cx="32" cy="30" r="2" fill={sticker.accent} />
-          <circle cx="38" cy="30" r="2" fill={sticker.accent} />
+          <rect x="11" y="16" width="42" height="27" rx="13" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="5" />
+          <path d="M23 42 L17.5 50.5 L31 43" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="4.8" strokeLinejoin="round" />
+          <rect x="11" y="16" width="42" height="27" rx="13" fill={pastelGrad} stroke={ink} strokeWidth="2.1" />
+          <path d="M23 42 L17.5 50.5 L31 43" fill={pastelGrad} stroke={ink} strokeWidth="2.1" strokeLinejoin="round" />
+          <circle cx="24" cy="29.5" r="2.5" fill={motifGrad} />
+          <circle cx="32" cy="29.5" r="2.5" fill={motifGrad} />
+          <circle cx="40" cy="29.5" r="2.5" fill={motifGrad} />
         </g>
       );
   }
@@ -1273,133 +1660,30 @@ function renderMotifArtwork(motif: StickerMotif, sticker: CustomStickerItem): Re
 export const StickerIllustration: React.FC<{
   sticker: CustomStickerItem;
   size?: 'sm' | 'md' | 'lg';
-}> = ({ sticker, size = 'md' }) => {
-  const dim = size === 'sm' ? 'w-10 h-10' : size === 'lg' ? 'w-24 h-24' : 'w-12 h-12';
-  const frame = sticker.frame || 'rounded';
+  animated?: boolean;
+}> = ({ sticker, size = 'md', animated = true }) => {
+  const rawUid = useId();
+  const uid = rawUid.replace(/[^a-zA-Z0-9_-]/g, '');
+  const dim = size === 'sm' ? 'w-11 h-11' : size === 'lg' ? 'w-28 h-28 sm:w-32 sm:h-32' : 'w-14 h-14';
   const motif = sticker.motif || 'speech';
-
-  const renderFrame = () => {
-    switch (frame) {
-      case 'circle':
-        return (
-          <circle
-            cx="32"
-            cy="32"
-            r="28"
-            fill={sticker.bg}
-            stroke={sticker.accent}
-            strokeWidth="2.2"
-            strokeOpacity="0.55"
-          />
-        );
-      case 'stamp':
-        return (
-          <rect
-            x="5"
-            y="5"
-            width="54"
-            height="54"
-            rx="12"
-            fill={sticker.bg}
-            stroke={sticker.accent}
-            strokeWidth="2.2"
-            strokeDasharray="4 2.5"
-            strokeOpacity="0.65"
-          />
-        );
-      case 'pill':
-        return (
-          <rect
-            x="4"
-            y="6"
-            width="56"
-            height="52"
-            rx="24"
-            fill={sticker.bg}
-            stroke={sticker.accent}
-            strokeWidth="2.2"
-            strokeOpacity="0.5"
-          />
-        );
-      case 'diamond':
-        return (
-          <g>
-            <rect
-              x="4"
-              y="4"
-              width="56"
-              height="56"
-              rx="18"
-              fill={sticker.bg}
-              stroke={sticker.accent}
-              strokeWidth="2"
-              strokeOpacity="0.45"
-            />
-            <polygon
-              points="32,8 56,32 32,56 8,32"
-              fill="none"
-              stroke={sticker.accent}
-              strokeWidth="1.2"
-              strokeOpacity="0.25"
-            />
-          </g>
-        );
-      default:
-        return (
-          <rect
-            x="4"
-            y="4"
-            width="56"
-            height="56"
-            rx="18"
-            fill={sticker.bg}
-            stroke={sticker.accent}
-            strokeWidth="2"
-            strokeOpacity="0.48"
-          />
-        );
-    }
-  };
+  const animClass = animated ? getLiveAnimationClass(sticker.category, motif) : '';
 
   const renderDecor = () => {
-    if (sticker.decor === 'sparkles') {
+    const twinkleCls = animated ? 'sticker-twinkle' : '';
+    if (sticker.decor === 'sparkles' || sticker.decor === 'hearts') {
       return (
-        <g fill={sticker.accent} opacity="0.55">
-          <circle cx="14" cy="14" r="1.4" />
-          <circle cx="50" cy="15" r="1.7" />
-          <circle cx="13" cy="48" r="1.2" />
+        <g fill={sticker.accent}>
+          <path className={twinkleCls} d="M10 9.5 L11.2 12.2 L14 13.4 L11.2 14.6 L10 17.3 L8.8 14.6 L6 13.4 L8.8 12.2 Z" opacity="0.9" />
+          <path className={twinkleCls} style={{ animationDelay: '0.55s' }} d="M54 10.5 L55.1 13 L57.6 14.1 L55.1 15.2 L54 17.7 L52.9 15.2 L50.4 14.1 L52.9 13 Z" opacity="0.85" />
         </g>
       );
     }
     if (sticker.decor === 'dots') {
       return (
-        <g fill={sticker.accent} opacity="0.32">
-          <circle cx="12" cy="18" r="1.3" />
-          <circle cx="52" cy="20" r="1.3" />
-          <circle cx="50" cy="47" r="1.3" />
+        <g fill={sticker.accent} opacity="0.6">
+          <circle className={twinkleCls} cx="10" cy="14" r="2" />
+          <circle className={twinkleCls} style={{ animationDelay: '0.5s' }} cx="54" cy="16" r="2" />
         </g>
-      );
-    }
-    if (sticker.decor === 'hearts') {
-      return (
-        <g fill={sticker.accent} opacity="0.45">
-          <circle cx="13" cy="15" r="1.5" />
-          <circle cx="16" cy="15" r="1.5" />
-          <circle cx="50" cy="16" r="1.5" />
-        </g>
-      );
-    }
-    if (sticker.decor === 'rings') {
-      return (
-        <circle
-          cx="32"
-          cy="32"
-          r="24"
-          fill="none"
-          stroke={sticker.accent}
-          strokeWidth="1"
-          strokeOpacity="0.22"
-        />
       );
     }
     return null;
@@ -1408,42 +1692,65 @@ export const StickerIllustration: React.FC<{
   return (
     <svg
       viewBox="0 0 64 64"
-      className={`${dim} select-none drop-shadow-sm`}
+      className={`${dim} select-none overflow-visible drop-shadow-[0_4px_10px_rgba(0,0,0,0.22)]`}
       role="img"
       aria-label={sticker.label}
     >
-      {renderFrame()}
+      <defs>
+        <linearGradient id={`${uid}_bg`} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#FFFFFF" />
+          <stop offset="65%" stopColor={sticker.bg} />
+          <stop offset="100%" stopColor={sticker.accent} stopOpacity="0.32" />
+        </linearGradient>
+        <linearGradient id={`${uid}_mg`} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor={sticker.accent} />
+          <stop offset="100%" stopColor={sticker.text} />
+        </linearGradient>
+        <linearGradient id={`${uid}_gg`} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#FEF08A" />
+          <stop offset="100%" stopColor="#F59E0B" />
+        </linearGradient>
+      </defs>
+
       {renderDecor()}
-      {renderMotifArtwork(motif, sticker)}
+      <g className={animClass}>
+        {renderMotifArtwork(motif, sticker, uid)}
+      </g>
       {sticker.caption && (
         <g>
           <rect
-            x="10"
-            y="43"
-            width="44"
-            height="13"
-            rx="6.5"
+            x="7"
+            y="45.5"
+            width="50"
+            height="14.5"
+            rx="7.25"
             fill="#FFFFFF"
-            fillOpacity="0.92"
-            stroke={sticker.accent}
-            strokeWidth="1.2"
-            strokeOpacity="0.5"
+            stroke="#1E293B"
+            strokeWidth="1.7"
+          />
+          <rect
+            x="9"
+            y="47.2"
+            width="46"
+            height="11.1"
+            rx="5.5"
+            fill={sticker.bg}
           />
           <text
             x="32"
-            y="52"
+            y="55.3"
             textAnchor="middle"
             fill={sticker.text}
             fontSize={
               sticker.caption.length > 8
                 ? '6.8'
                 : sticker.caption.length > 6
-                ? '7.5'
+                ? '7.6'
                 : sticker.caption.length > 4
-                ? '8.4'
+                ? '8.6'
                 : '9.4'
             }
-            fontWeight="800"
+            fontWeight="900"
             fontFamily="system-ui, -apple-system, sans-serif"
             letterSpacing="0.35"
           >
@@ -1454,3 +1761,4 @@ export const StickerIllustration: React.FC<{
     </svg>
   );
 };
+

@@ -276,16 +276,22 @@ export const ProfileView: React.FC = () => {
 
             {/* 3. Bio / About Status */}
             <div>
-              <label className="block text-xs font-semibold text-[var(--text-main)] mb-1.5">
-                About / Bio Status
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-semibold text-[var(--text-main)]">
+                  About / Bio Status
+                </label>
+                <span className="text-[10px] text-neutral-500 font-mono tabular-nums">
+                  {bio.length}/80
+                </span>
+              </div>
               <div className="relative mb-2">
                 <FileText className="w-4 h-4 absolute left-3.5 top-3.5 sm:top-3 text-neutral-500" />
                 <textarea
                   rows={2}
+                  maxLength={80}
                   value={bio}
-                  onChange={e => setBio(e.target.value)}
-                  placeholder="Tell your contacts about yourself..."
+                  onChange={e => setBio(e.target.value.slice(0, 80))}
+                  placeholder="Tell your contacts about yourself (max 80 chars)..."
                   className="w-full pl-10 pr-4 py-2.5 text-base sm:text-xs rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] focus:outline-none transition-colors"
                 />
               </div>
@@ -298,7 +304,7 @@ export const ProfileView: React.FC = () => {
                     <button
                       key={idx}
                       type="button"
-                      onClick={() => setBio(preset)}
+                      onClick={() => setBio(preset.slice(0, 80))}
                       className={`py-1 px-2.5 rounded-lg text-[11px] border transition-colors cursor-pointer ${
                         bio === preset
                           ? 'bg-[var(--accent-surface)] border-[var(--accent-primary)] text-[var(--accent-primary)] font-semibold'

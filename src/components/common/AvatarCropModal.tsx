@@ -5,15 +5,26 @@ interface AvatarCropModalProps {
   imageSrc: string | null;
   onConfirm: (croppedDataUrl: string) => void;
   onCancel: () => void;
+  title?: string;
+  subtitle?: string;
+  confirmLabel?: string;
+  shape?: 'circle' | 'rect';
+  aspectRatio?: number;
+  outputWidth?: number;
+  outputHeight?: number;
 }
-
-const CROP_VIEW_SIZE = 260;
-const OUTPUT_SIZE = 400;
 
 export const AvatarCropModal: React.FC<AvatarCropModalProps> = ({
   imageSrc,
   onConfirm,
-  onCancel
+  onCancel,
+  title = 'Crop Profile Picture',
+  subtitle = 'Drag to position, zoom or rotate before saving',
+  confirmLabel = 'Apply DP',
+  shape = 'circle',
+  aspectRatio = 1,
+  outputWidth,
+  outputHeight
 }) => {
   const [imgEl, setImgEl] = useState<HTMLImageElement | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -23,6 +34,12 @@ export const AvatarCropModal: React.FC<AvatarCropModalProps> = ({
   const [isDragging, setIsDragging] = useState(false);
 
   const dragStartRef = useRef<{ x: number; y: number; origX: number; origY: number } | null>(null);
+
+  const safeRatio = Math.max(0.4, Math.min(2, aspectRatio || 1));
+  const stageW = safeRatio === 1 ? 260 : safeRatio < 1 ? Math.round(310 * safeRatio) : 280;
+  const stageH = safeRatio === 1 ? 260 : safeRatio < 1 ? 310 : Math.round(280 / safeRatio);
+  const outW = outputWidth ?? (shape === 'circle' ? 400 : 720);
+  const outH = outputHeight ?? Math.round(outW / safeRatio);
 
   useEffect(() => {
     if (!imageSrc) {
@@ -45,19 +62,22 @@ export const AvatarCropModal: React.FC<AvatarCropModalProps> = ({
 
   if (!imageSrc) return null;
 
-  const baseScale = imgEl
-    ? Math.max(CROP_VIEW_SIZE / imgEl.naturalWidth, CROP_VIEW_SIZE / imgEl.naturalHeight)
-    : 1;
-
+  const swapped = rotation % 180 !== 0;
+  const orientedW = imgEl ? (swapped ? imgEl.naturalHeight : imgEl.naturalWidth) : 1;
+  const orientedH = imgEl ? (swapped ? imgEl.naturalWidth : imgEl.naturalHeight) : 1;
+  const baseScale = imgEl ? Math.max(stageW / orientedW, stageH / orientedH) : 1;
   const effectiveScale = baseScale * zoom;
 
-  const clampOffset = (nx: number, ny: number, currentZoom = zoom) => {
+  const clampOffset = (nx: number, ny: number, currentZoom = zoom, nextRot = rotation) => {
     if (!imgEl) return { x: nx, y: ny };
-    const swapped = rotation % 180 !== 0;
-    const w = (swapped ? imgEl.naturalHeight : imgEl.naturalWidth) * baseScale * currentZoom;
-    const h = (swapped ? imgEl.naturalWidth : imgEl.naturalHeight) * baseScale * currentZoom;
-    const maxX = Math.max(0, (w - CROP_VIEW_SIZE) / 2);
-    const maxY = Math.max(0, (h - CROP_VIEW_SIZE) / 2);
+    const isSwapped = nextRot % 180 !== 0;
+    const ow = isSwapped ? imgEl.naturalHeight : imgEl.naturalWidth;
+    const oh = isSwapped ? imgEl.naturalWidth : imgEl.naturalHeight;
+    const bs = Math.max(stageW / ow, stageH / oh);
+    const w = ow * bs * currentZoom;
+    const h = oh * bs * currentZoom;
+    const maxX = Math.max(0, (w - stageW) / 2);
+    const maxY = Math.max(0, (h - stageH) / 2);
     return {
       x: Math.min(maxX, Math.max(-maxX, nx)),
       y: Math.min(maxY, Math.max(-maxY, ny))
@@ -94,6 +114,12 @@ export const AvatarCropModal: React.FC<AvatarCropModalProps> = ({
     setOffset(prev => clampOffset(prev.x, prev.y, clampedZoom));
   };
 
+  const handleRotate = () => {
+    const nextRot = (rotation + 90) % 360;
+    setRotation(nextRot);
+    setOffset(prev => clampOffset(prev.x, prev.y, zoom, nextRot));
+  };
+
   const handleReset = () => {
     setZoom(1);
     setRotation(0);
@@ -104,24 +130,25 @@ export const AvatarCropModal: React.FC<AvatarCropModalProps> = ({
     if (!imgEl) return;
     try {
       const canvas = document.createElement('canvas');
-      canvas.width = OUTPUT_SIZE;
-      canvas.height = OUTPUT_SIZE;
+      canvas.width = outW;
+      canvas.height = outH;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      const ratio = OUTPUT_SIZE / CROP_VIEW_SIZE;
+      const scaleX = outW / stageW;
+      const scaleY = outH / stageH;
       ctx.fillStyle = '#0a0a0c';
-      ctx.fillRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
+      ctx.fillRect(0, 0, outW, outH);
 
       ctx.save();
-      ctx.translate(OUTPUT_SIZE / 2 + offset.x * ratio, OUTPUT_SIZE / 2 + offset.y * ratio);
+      ctx.translate(outW / 2 + offset.x * scaleX, outH / 2 + offset.y * scaleY);
       ctx.rotate((rotation * Math.PI) / 180);
-      const drawW = imgEl.naturalWidth * effectiveScale * ratio;
-      const drawH = imgEl.naturalHeight * effectiveScale * ratio;
+      const drawW = imgEl.naturalWidth * effectiveScale * scaleX;
+      const drawH = imgEl.naturalHeight * effectiveScale * scaleY;
       ctx.drawImage(imgEl, -drawW / 2, -drawH / 2, drawW, drawH);
       ctx.restore();
 
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+      const dataUrl = canvas.toDataURL('image/jpeg', shape === 'rect' ? 0.86 : 0.9);
       onConfirm(dataUrl);
     } catch {
       setLoadError('This photo cannot be cropped due to browser security rules. Please upload a photo from your device.');
@@ -135,16 +162,16 @@ export const AvatarCropModal: React.FC<AvatarCropModalProps> = ({
     >
       <div
         onClick={e => e.stopPropagation()}
-        className="w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl bg-[var(--bg-sidebar)] border-t sm:border border-[var(--accent-border)] gold-glow shadow-2xl overflow-hidden text-[var(--text-main)]"
+        className="w-full sm:max-w-md max-h-[94dvh] flex flex-col rounded-t-3xl sm:rounded-3xl bg-[var(--bg-sidebar)] border-t sm:border border-[var(--accent-border)] gold-glow shadow-2xl overflow-hidden text-[var(--text-main)]"
       >
-        <div className="sm:hidden pt-2.5 pb-1 bg-[var(--bg-card)] flex justify-center">
+        <div className="sm:hidden pt-2.5 pb-1 bg-[var(--bg-card)] flex justify-center shrink-0">
           <div className="w-10 h-1 rounded-full bg-neutral-400/40" />
         </div>
 
-        <div className="px-4 py-3.5 border-b border-neutral-200 dark:border-white/5 bg-[var(--bg-card)] flex items-center justify-between">
+        <div className="px-4 py-3.5 border-b border-neutral-200 dark:border-white/5 bg-[var(--bg-card)] flex items-center justify-between shrink-0">
           <div>
-            <h3 className="text-sm font-bold text-[var(--text-main)]">Crop Profile Picture</h3>
-            <p className="text-[11px] text-[var(--text-muted)]">Drag to position, zoom or rotate before saving</p>
+            <h3 className="text-sm font-bold text-[var(--text-main)]">{title}</h3>
+            <p className="text-[11px] text-[var(--text-muted)]">{subtitle}</p>
           </div>
           <button
             type="button"
@@ -156,21 +183,21 @@ export const AvatarCropModal: React.FC<AvatarCropModalProps> = ({
           </button>
         </div>
 
-        <div className="p-5 flex flex-col items-center gap-4">
+        <div className="p-4 sm:p-5 flex flex-col items-center gap-4 overflow-y-auto flex-1">
           {loadError ? (
             <div className="w-full p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-400 text-center">
               {loadError}
             </div>
           ) : (
             <>
-              {/* Square Crop Stage with Circular Guide */}
+              {/* Interactive Crop Stage */}
               <div
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
                 onPointerCancel={handlePointerUp}
-                style={{ width: CROP_VIEW_SIZE, height: CROP_VIEW_SIZE }}
-                className="relative rounded-2xl overflow-hidden bg-neutral-950 border border-[var(--accent-border)] touch-none select-none cursor-grab active:cursor-grabbing shadow-inner"
+                style={{ width: stageW, height: stageH }}
+                className="relative rounded-2xl overflow-hidden bg-neutral-950 border border-[var(--accent-border)] touch-none select-none cursor-grab active:cursor-grabbing shadow-inner shrink-0"
               >
                 {imgEl && (
                   <img
@@ -188,15 +215,26 @@ export const AvatarCropModal: React.FC<AvatarCropModalProps> = ({
                   />
                 )}
 
-                {/* Dimmed overlay outside circular DP frame */}
-                <div
-                  className="absolute inset-0 pointer-events-none"
-                  style={{
-                    background:
-                      'radial-gradient(circle at center, transparent 48%, rgba(0, 0, 0, 0.58) 49%)'
-                  }}
-                />
-                <div className="absolute inset-2 rounded-full border-2 border-dashed border-[var(--accent-primary)]/85 pointer-events-none" />
+                {shape === 'circle' ? (
+                  <>
+                    <div
+                      className="absolute inset-0 pointer-events-none"
+                      style={{
+                        background:
+                          'radial-gradient(circle at center, transparent 48%, rgba(0, 0, 0, 0.58) 49%)'
+                      }}
+                    />
+                    <div className="absolute inset-2 rounded-full border-2 border-dashed border-[var(--accent-primary)]/85 pointer-events-none" />
+                  </>
+                ) : (
+                  <div className="absolute inset-0 pointer-events-none">
+                    <div className="absolute inset-1.5 rounded-xl border-2 border-dashed border-[var(--accent-primary)]/85" />
+                    <div className="absolute inset-x-0 top-1/3 h-px bg-white/20" />
+                    <div className="absolute inset-x-0 top-2/3 h-px bg-white/20" />
+                    <div className="absolute inset-y-0 left-1/3 w-px bg-white/20" />
+                    <div className="absolute inset-y-0 left-2/3 w-px bg-white/20" />
+                  </div>
+                )}
               </div>
 
               {/* Zoom & Rotate Controls */}
@@ -235,7 +273,7 @@ export const AvatarCropModal: React.FC<AvatarCropModalProps> = ({
                 <div className="flex items-center justify-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setRotation(r => (r + 90) % 360)}
+                    onClick={handleRotate}
                     className="min-h-[40px] px-3.5 py-2 rounded-xl bg-[var(--bg-card)] border border-[var(--accent-border)] hover:border-[var(--accent-primary)] text-xs font-semibold text-[var(--text-main)] flex items-center gap-1.5 cursor-pointer"
                   >
                     <RotateCw className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
@@ -255,7 +293,7 @@ export const AvatarCropModal: React.FC<AvatarCropModalProps> = ({
           )}
         </div>
 
-        <div className="px-4 py-3.5 pb-[max(0.9rem,env(safe-area-inset-bottom))] border-t border-neutral-200 dark:border-white/5 bg-[var(--bg-card)] flex items-center gap-2.5">
+        <div className="px-4 py-3.5 pb-[max(0.9rem,env(safe-area-inset-bottom))] border-t border-neutral-200 dark:border-white/5 bg-[var(--bg-card)] flex items-center gap-2.5 shrink-0">
           <button
             type="button"
             onClick={onCancel}
@@ -270,7 +308,7 @@ export const AvatarCropModal: React.FC<AvatarCropModalProps> = ({
             className="flex-1 min-h-[44px] py-2.5 rounded-xl gold-button-accent text-xs font-bold text-black flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
           >
             <Check className="w-4 h-4 stroke-[2.5]" />
-            <span>Apply DP</span>
+            <span>{confirmLabel}</span>
           </button>
         </div>
       </div>

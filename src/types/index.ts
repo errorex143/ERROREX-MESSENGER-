@@ -1,19 +1,20 @@
 export type ThemeName =
-  | 'gold'
   | 'rainbow'
-  | 'emerald'
-  | 'ocean'
-  | 'purple'
-  | 'rose'
-  | 'sunset'
-  | 'electric'
-  | 'teal'
-  | 'white'
-  | 'black'
+  | 'gold'
+  | 'amber'
+  | 'coral'
   | 'crimson'
-  | 'midnight'
-  | 'forest'
-  | 'bronze';
+  | 'magenta'
+  | 'orchid'
+  | 'purple'
+  | 'indigo'
+  | 'cobalt'
+  | 'sky'
+  | 'cyan'
+  | 'emerald'
+  | 'lime'
+  | 'copper'
+  | 'platinum';
 
 export type ColorMode = 'dark' | 'light' | 'system';
 

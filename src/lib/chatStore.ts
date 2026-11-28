@@ -164,9 +164,14 @@ export const chatStore = {
       const idx = allConvs.findIndex(c => c.id === conversationId);
       if (idx !== -1) {
         const conv = allConvs[idx];
+        const isCustomMediaSticker =
+          last.text?.trim().startsWith('[PHOTO_STICKER]') ||
+          last.text?.trim().startsWith('[VIDEO_STICKER]');
         const preview =
           last.isDeleted || last.deletedForEveryone
             ? '🚫 This message was deleted'
+            : isCustomMediaSticker
+            ? last.text
             : last.mediaType === 'image'
             ? '📷 Photo'
             : last.mediaType === 'audio'
@@ -525,8 +530,17 @@ export const chatStore = {
     this.saveMessages(conversationId, messages);
 
     if (targetConv) {
+      const isCustomMediaSticker =
+        text.trim().startsWith('[PHOTO_STICKER]') ||
+        text.trim().startsWith('[VIDEO_STICKER]');
       targetConv.lastMessageText =
-        mediaType === 'image' ? '📷 Photo' : mediaType === 'audio' ? '🎤 Voice Memo' : text;
+        isCustomMediaSticker
+          ? text
+          : mediaType === 'image'
+          ? '📷 Photo'
+          : mediaType === 'audio'
+          ? '🎤 Voice Memo'
+          : text;
       targetConv.lastMessageSenderId = senderId;
       targetConv.lastMessageAt = nowIso;
       targetConv.updatedAt = nowIso;

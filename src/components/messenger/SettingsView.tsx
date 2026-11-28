@@ -426,13 +426,12 @@ export const SettingsView: React.FC = () => {
               </h2>
             </div>
 
-            <div className="grid grid-cols-5 sm:grid-cols-5 md:grid-cols-8 gap-2.5 sm:gap-3">
+            <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2.5 sm:gap-3">
               {THEMES.map(th => {
                 const isSelected = theme === th.id;
-                const swatchBg =
-                  th.id === 'rainbow'
-                    ? 'linear-gradient(135deg, #FF0055 0%, #FF7700 25%, #FFDD00 50%, #00CC66 75%, #0099FF 100%)'
-                    : th.primaryHex;
+                const swatchBg = th.isRainbow
+                  ? 'linear-gradient(135deg, #FF0055 0%, #FF7700 25%, #FFDD00 50%, #00CC66 75%, #0099FF 100%)'
+                  : `linear-gradient(135deg, ${th.primaryHex} 0%, ${th.secondaryHex} 100%)`;
 
                 return (
                   <button
@@ -454,7 +453,7 @@ export const SettingsView: React.FC = () => {
                       {isSelected && (
                         <Check
                           className={`w-4 h-4 stroke-[3] ${
-                            th.id === 'white' ? 'text-black' : th.id === 'black' ? 'text-white' : 'text-black'
+                            th.checkColor === 'light' ? 'text-white' : 'text-black'
                           }`}
                         />
                       )}
@@ -733,14 +732,20 @@ export const SettingsView: React.FC = () => {
 
               {/* Bio */}
               <div>
-                <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">
-                  About / Bio Status (Changeable)
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-[var(--text-main)]">
+                    About / Bio Status (Changeable)
+                  </label>
+                  <span className="text-[10px] text-neutral-500 font-mono tabular-nums">
+                    {bio.length}/80
+                  </span>
+                </div>
                 <textarea
                   rows={2}
+                  maxLength={80}
                   value={bio}
-                  onChange={e => setBio(e.target.value)}
-                  placeholder="Tell contacts about yourself..."
+                  onChange={e => setBio(e.target.value.slice(0, 80))}
+                  placeholder="Tell contacts about yourself (max 80 chars)..."
                   className="w-full px-3.5 py-2 text-xs rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--accent-primary)] text-[var(--text-main)] focus:outline-none"
                 />
 
@@ -752,7 +757,7 @@ export const SettingsView: React.FC = () => {
                       <button
                         key={idx}
                         type="button"
-                        onClick={() => setBio(preset)}
+                        onClick={() => setBio(preset.slice(0, 80))}
                         className={`py-0.5 px-2 rounded-lg text-[10px] border transition-colors ${
                           bio === preset
                             ? 'bg-[var(--accent-surface)] border-[var(--accent-primary)] text-[var(--accent-primary)] font-semibold'
