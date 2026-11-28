@@ -230,7 +230,6 @@ export const EmojiKeyboard: React.FC<EmojiKeyboardProps> = ({
             >
               <Smile className="w-3.5 h-3.5" />
               <span>Emojis</span>
-              <span className="text-[10px] opacity-75 font-mono tabular-nums">({STANDARD_EMOJIS.length})</span>
             </button>
 
             <button
@@ -247,9 +246,6 @@ export const EmojiKeyboard: React.FC<EmojiKeyboardProps> = ({
             >
               <Sticker className="w-3.5 h-3.5" />
               <span>Live Stickers</span>
-              <span className="text-[10px] opacity-75 font-mono tabular-nums">
-                ({CUSTOM_STICKERS.length + userStickers.length})
-              </span>
             </button>
 
             {activeMode === 'stickers' && (
